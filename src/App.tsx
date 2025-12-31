@@ -20,6 +20,7 @@ import TermsOfService from "./pages/TermsOfService";
 import RefundPolicy from "./pages/RefundPolicy";
 import SubjectSelection from "./pages/SubjectSelection";
 import PaidSignup from "./pages/PaidSignup";
+import Signup from "./pages/Signup";
 import CreatorSignup from "./pages/CreatorSignup";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
 import CMODashboard from "./pages/cmo/CMODashboard";
@@ -61,6 +62,7 @@ const App = () => (
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/refund" element={<RefundPolicy />} />
             <Route path="/paid-signup" element={<PaidSignup />} />
+            <Route path="/signup" element={<Signup />} />
             <Route path="/creator_signup" element={<CreatorSignup />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
