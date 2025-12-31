@@ -1,0 +1,75 @@
+import { Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requireAdmin?: boolean;
+  requireEnrollment?: boolean;
+  requireSubjects?: boolean;
+  requireCMO?: boolean;
+  requireCreator?: boolean;
+}
+
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  requireAdmin = false,
+  requireEnrollment = false,
+  requireSubjects = false,
+  requireCMO = false,
+  requireCreator = false,
+}) => {
+  const { user, isLoading, isAdmin, isCMO, isCreator, enrollment, hasSelectedSubjects } = useAuth();
+  const location = useLocation();
+
+  // IMPORTANT: Never unmount protected pages for same-session loading (mobile camera/file picker can
+  // cause transient auth refresh events). Only block rendering when we *don't yet know* the user.
+  if (isLoading) {
+    if (!user) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+
+    // If we already have a user, avoid redirects while loading. Keep SPA mounted.
+    if (requireAdmin || requireEnrollment || requireSubjects || requireCMO || requireCreator) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (requireCMO && !isCMO && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (requireCreator && !isCreator && !isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (requireEnrollment && !enrollment) {
+    // Admins, CMOs, and Creators don't need student enrollment
+    if (isAdmin) return <Navigate to="/admin" replace />;
+    if (isCMO) return <Navigate to="/cmo/dashboard" replace />;
+    if (isCreator) return <Navigate to="/creator/dashboard" replace />;
+    return <Navigate to="/activate" replace />;
+  }
+
+  // Require subject selection for students with enrollment
+  if (requireSubjects && enrollment && !isAdmin && !hasSelectedSubjects) {
+    return <Navigate to="/select-subjects" replace />;
+  }
+
+  return <>{children}</>;
+};
