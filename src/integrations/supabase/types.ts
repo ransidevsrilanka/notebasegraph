@@ -14,16 +14,938 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      access_codes: {
+        Row: {
+          activated_at: string | null
+          activated_by: string | null
+          activation_limit: number | null
+          activations_used: number | null
+          bound_device: string | null
+          bound_email: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          duration_days: number | null
+          grade: string | null
+          id: string
+          ip_history: Json | null
+          medium: string | null
+          status: string
+          stream: string | null
+          tier: string
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          activated_at?: string | null
+          activated_by?: string | null
+          activation_limit?: number | null
+          activations_used?: number | null
+          bound_device?: string | null
+          bound_email?: string | null
+          code: string
+          created_at?: string
+          created_by?: string | null
+          duration_days?: number | null
+          grade?: string | null
+          id?: string
+          ip_history?: Json | null
+          medium?: string | null
+          status?: string
+          stream?: string | null
+          tier?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          activated_at?: string | null
+          activated_by?: string | null
+          activation_limit?: number | null
+          activations_used?: number | null
+          bound_device?: string | null
+          bound_email?: string | null
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          duration_days?: number | null
+          grade?: string | null
+          id?: string
+          ip_history?: Json | null
+          medium?: string | null
+          status?: string
+          stream?: string | null
+          tier?: string
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
+      }
+      cmo_payouts: {
+        Row: {
+          amount: number | null
+          base_commission_amount: number | null
+          bonus_amount: number | null
+          cmo_id: string | null
+          created_at: string
+          id: string
+          paid_at: string | null
+          payout_month: string | null
+          status: string | null
+          total_commission: number | null
+          total_paid_users: number | null
+        }
+        Insert: {
+          amount?: number | null
+          base_commission_amount?: number | null
+          bonus_amount?: number | null
+          cmo_id?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payout_month?: string | null
+          status?: string | null
+          total_commission?: number | null
+          total_paid_users?: number | null
+        }
+        Update: {
+          amount?: number | null
+          base_commission_amount?: number | null
+          bonus_amount?: number | null
+          cmo_id?: string | null
+          created_at?: string
+          id?: string
+          paid_at?: string | null
+          payout_month?: string | null
+          status?: string | null
+          total_commission?: number | null
+          total_paid_users?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cmo_payouts_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cmo_profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          id: string
+          is_active: boolean | null
+          referral_code: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          referral_code?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          referral_code?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      content: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number | null
+          file_path: string | null
+          file_type: string | null
+          id: string
+          is_active: boolean | null
+          tier_required: string | null
+          title: string
+          topic_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          tier_required?: string | null
+          title: string
+          topic_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          file_path?: string | null
+          file_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          tier_required?: string | null
+          title?: string
+          topic_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_payouts: {
+        Row: {
+          commission_amount: number | null
+          created_at: string
+          creator_id: string | null
+          id: string
+          paid_at: string | null
+          paid_users_count: number | null
+          payout_month: string | null
+          status: string | null
+        }
+        Insert: {
+          commission_amount?: number | null
+          created_at?: string
+          creator_id?: string | null
+          id?: string
+          paid_at?: string | null
+          paid_users_count?: number | null
+          payout_month?: string | null
+          status?: string | null
+        }
+        Update: {
+          commission_amount?: number | null
+          created_at?: string
+          creator_id?: string | null
+          id?: string
+          paid_at?: string | null
+          paid_users_count?: number | null
+          payout_month?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_payouts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_profiles: {
+        Row: {
+          cmo_id: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          is_active: boolean | null
+          lifetime_paid_users: number | null
+          monthly_paid_users: number | null
+          referral_code: string
+          user_id: string
+        }
+        Insert: {
+          cmo_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          lifetime_paid_users?: number | null
+          monthly_paid_users?: number | null
+          referral_code: string
+          user_id: string
+        }
+        Update: {
+          cmo_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          lifetime_paid_users?: number | null
+          monthly_paid_users?: number | null
+          referral_code?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discount_codes: {
+        Row: {
+          code: string
+          created_at: string
+          creator_id: string | null
+          discount_percent: number | null
+          id: string
+          is_active: boolean | null
+          paid_conversions: number | null
+          usage_count: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          creator_id?: string | null
+          discount_percent?: number | null
+          id?: string
+          is_active?: boolean | null
+          paid_conversions?: number | null
+          usage_count?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          creator_id?: string | null
+          discount_percent?: number | null
+          id?: string
+          is_active?: boolean | null
+          paid_conversions?: number | null
+          usage_count?: number | null
+        }
+        Relationships: []
+      }
+      download_logs: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          ip_address: string | null
+          note_id: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          ip_address?: string | null
+          note_id?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          ip_address?: string | null
+          note_id?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "download_logs_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrollments: {
+        Row: {
+          access_code_id: string | null
+          created_at: string
+          expires_at: string | null
+          grade: string | null
+          id: string
+          is_active: boolean | null
+          medium: string | null
+          stream: string | null
+          tier: string
+          updated_at: string
+          upgrade_celebrated: boolean | null
+          user_id: string
+        }
+        Insert: {
+          access_code_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          grade?: string | null
+          id?: string
+          is_active?: boolean | null
+          medium?: string | null
+          stream?: string | null
+          tier?: string
+          updated_at?: string
+          upgrade_celebrated?: boolean | null
+          user_id: string
+        }
+        Update: {
+          access_code_id?: string | null
+          created_at?: string
+          expires_at?: string | null
+          grade?: string | null
+          id?: string
+          is_active?: boolean | null
+          medium?: string | null
+          stream?: string | null
+          tier?: string
+          updated_at?: string
+          upgrade_celebrated?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_access_code_id_fkey"
+            columns: ["access_code_id"]
+            isOneToOne: false
+            referencedRelation: "access_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notes: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          download_count: number | null
+          file_size: number | null
+          file_url: string | null
+          id: string
+          is_active: boolean | null
+          min_tier: string | null
+          title: string
+          topic_id: string | null
+          updated_at: string
+          view_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          download_count?: number | null
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          title: string
+          topic_id?: string | null
+          updated_at?: string
+          view_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          download_count?: number | null
+          file_size?: number | null
+          file_url?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          title?: string
+          topic_id?: string | null
+          updated_at?: string
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_attributions: {
+        Row: {
+          amount: number | null
+          created_at: string
+          creator_id: string | null
+          id: string
+          order_id: string | null
+          tier: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          creator_id?: string | null
+          id?: string
+          order_id?: string | null
+          tier?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          creator_id?: string | null
+          id?: string
+          order_id?: string | null
+          tier?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          abuse_flags: number | null
+          avatar_url: string | null
+          created_at: string
+          device_fingerprint: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          is_locked: boolean | null
+          max_devices: number | null
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          abuse_flags?: number | null
+          avatar_url?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_locked?: boolean | null
+          max_devices?: number | null
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          abuse_flags?: number | null
+          avatar_url?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          is_locked?: boolean | null
+          max_devices?: number | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
+      stream_subjects: {
+        Row: {
+          basket: string | null
+          created_at: string
+          display_order: number | null
+          id: string
+          is_mandatory: boolean | null
+          sort_order: number | null
+          stream: string
+          subject_code: string
+          subject_name: string
+        }
+        Insert: {
+          basket?: string | null
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_mandatory?: boolean | null
+          sort_order?: number | null
+          stream: string
+          subject_code: string
+          subject_name: string
+        }
+        Update: {
+          basket?: string | null
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_mandatory?: boolean | null
+          sort_order?: number | null
+          stream?: string
+          subject_code?: string
+          subject_name?: string
+        }
+        Relationships: []
+      }
+      subjects: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          display_order: number | null
+          grade: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          medium: string | null
+          name: string
+          sort_order: number | null
+          stream: string | null
+          streams: Json | null
+          subject_code: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          grade?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          medium?: string | null
+          name: string
+          sort_order?: number | null
+          stream?: string | null
+          streams?: Json | null
+          subject_code?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          grade?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          medium?: string | null
+          name?: string
+          sort_order?: number | null
+          stream?: string | null
+          streams?: Json | null
+          subject_code?: string | null
+        }
+        Relationships: []
+      }
+      topics: {
+        Row: {
+          created_at: string
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          sort_order: number | null
+          subject_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          sort_order?: number | null
+          subject_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          sort_order?: number | null
+          subject_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topics_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upgrade_requests: {
+        Row: {
+          admin_notes: string | null
+          amount: number | null
+          created_at: string
+          current_tier: string | null
+          enrollment_id: string | null
+          id: string
+          notes: string | null
+          receipt_url: string | null
+          reference_number: string | null
+          requested_tier: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount?: number | null
+          created_at?: string
+          current_tier?: string | null
+          enrollment_id?: string | null
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          reference_number?: string | null
+          requested_tier: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number | null
+          created_at?: string
+          current_tier?: string | null
+          enrollment_id?: string | null
+          id?: string
+          notes?: string | null
+          receipt_url?: string | null
+          reference_number?: string | null
+          requested_tier?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upgrade_requests_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_attributions: {
+        Row: {
+          created_at: string
+          creator_id: string | null
+          discount_code_id: string | null
+          id: string
+          referral_source: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          creator_id?: string | null
+          discount_code_id?: string | null
+          id?: string
+          referral_source?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          creator_id?: string | null
+          discount_code_id?: string | null
+          id?: string
+          referral_source?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_attributions_discount_code_id_fkey"
+            columns: ["discount_code_id"]
+            isOneToOne: false
+            referencedRelation: "discount_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_sessions: {
+        Row: {
+          created_at: string
+          device_fingerprint: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_seen_at: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_fingerprint?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_fingerprint?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_seen_at?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_subjects: {
+        Row: {
+          created_at: string
+          enrollment_id: string | null
+          id: string
+          is_confirmed: boolean | null
+          is_locked: boolean | null
+          locked_at: string | null
+          subject_1: string | null
+          subject_2: string | null
+          subject_3: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enrollment_id?: string | null
+          id?: string
+          is_confirmed?: boolean | null
+          is_locked?: boolean | null
+          locked_at?: string | null
+          subject_1?: string | null
+          subject_2?: string | null
+          subject_3?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enrollment_id?: string | null
+          id?: string
+          is_confirmed?: boolean | null
+          is_locked?: boolean | null
+          locked_at?: string | null
+          subject_1?: string | null
+          subject_2?: string | null
+          subject_3?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subjects_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      set_creator_role: {
+        Args: {
+          _cmo_id?: string
+          _display_name?: string
+          _referral_code?: string
+          _user_id: string
+        }
+        Returns: Json
+      }
+      validate_access_code: { Args: { _code: string }; Returns: Json }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "admin"
+        | "cmo"
+        | "creator"
+        | "user"
+        | "student"
+        | "super_admin"
+        | "content_admin"
+        | "support_admin"
+        | "content_creator"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +1072,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "admin",
+        "cmo",
+        "creator",
+        "user",
+        "student",
+        "super_admin",
+        "content_admin",
+        "support_admin",
+        "content_creator",
+      ],
+    },
   },
 } as const
