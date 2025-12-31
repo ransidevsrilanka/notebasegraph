@@ -24,6 +24,7 @@ interface TierDisplay extends TierPricing {
 
 const PricingSection = () => {
   const [tiers, setTiers] = useState<TierDisplay[]>([]);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const { branding } = useBranding();
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -51,14 +52,22 @@ const PricingSection = () => {
   }, [discountFromUrl]);
 
   const fetchPricing = async () => {
+    setLoadingError(null);
     const { data, error } = await supabase
       .from('site_settings')
       .select('value')
       .eq('key', 'pricing')
       .maybeSingle();
 
-    if (error || !data) {
+    if (error) {
       console.error('Failed to load pricing:', error);
+      setLoadingError(`Database error: ${error.message}`);
+      return;
+    }
+
+    if (!data) {
+      console.error('No pricing data found in site_settings');
+      setLoadingError('Pricing not configured. Please add pricing data in admin settings.');
       return;
     }
 
@@ -124,6 +133,19 @@ const PricingSection = () => {
     // Redirect to access page for bank transfer flow
     navigate('/access');
   };
+
+  if (loadingError) {
+    return (
+      <section className="py-20 bg-background">
+        <div className="container mx-auto px-4 text-center">
+          <div className="p-6 bg-destructive/10 border border-destructive/30 rounded-lg max-w-md mx-auto">
+            <p className="text-destructive font-medium">Failed to load pricing</p>
+            <p className="text-muted-foreground text-sm mt-2">{loadingError}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (tiers.length === 0) {
     return null;
