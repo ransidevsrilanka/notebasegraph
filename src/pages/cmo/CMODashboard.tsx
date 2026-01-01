@@ -249,20 +249,20 @@ const CMODashboard = () => {
   return (
     <main className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-vault-surface border-b border-border">
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link to="/" className="font-display text-xl font-bold text-foreground">
-                <span className="text-brand">READ</span> VAULT
+                CMO Dashboard
               </Link>
-              <span className="px-2 py-1 rounded bg-purple-500/20 text-purple-400 text-xs font-medium">
+              <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-medium">
                 CMO
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-muted-foreground text-sm">{profile?.full_name || user?.email}</span>
-              <Button variant="ghost" size="sm" onClick={signOut}>
+              <span className="text-muted-foreground text-sm hidden sm:block">{profile?.full_name || user?.email}</span>
+              <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>

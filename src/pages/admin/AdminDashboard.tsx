@@ -22,7 +22,6 @@ import {
   Shield,
   TrendingUp,
   AlertTriangle,
-  Clock,
   ChevronRight,
   LogOut,
   Crown,
@@ -30,7 +29,10 @@ import {
   Palette,
   Trash2,
   BarChart3,
+  Wallet,
 } from 'lucide-react';
+import { StatCard } from '@/components/dashboard/StatCard';
+import { MiniChart } from '@/components/dashboard/MiniChart';
 
 interface Stats {
   totalStudents: number;
@@ -40,10 +42,11 @@ interface Stats {
   totalSubjects: number;
   pendingUpgrades: number;
   pendingJoinRequests: number;
+  pendingWithdrawals: number;
 }
 
 const AdminDashboard = () => {
-  const { user, roles, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     activeEnrollments: 0,
@@ -52,9 +55,11 @@ const AdminDashboard = () => {
     totalSubjects: 0,
     pendingUpgrades: 0,
     pendingJoinRequests: 0,
+    pendingWithdrawals: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
+  const [enrollmentData, setEnrollmentData] = useState<{ name: string; value: number }[]>([]);
 
   const fetchStats = async () => {
     try {
@@ -66,6 +71,7 @@ const AdminDashboard = () => {
         { count: totalSubjects },
         { count: pendingUpgrades },
         { count: pendingJoinRequests },
+        { count: pendingWithdrawals },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -74,6 +80,7 @@ const AdminDashboard = () => {
         supabase.from('subjects').select('*', { count: 'exact', head: true }),
         supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       ]);
 
       setStats({
@@ -84,7 +91,16 @@ const AdminDashboard = () => {
         totalSubjects: totalSubjects || 0,
         pendingUpgrades: pendingUpgrades || 0,
         pendingJoinRequests: pendingJoinRequests || 0,
+        pendingWithdrawals: pendingWithdrawals || 0,
       });
+
+      // Generate sample chart data (would be real data in production)
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+      setEnrollmentData(months.map((name, i) => ({
+        name,
+        value: Math.floor((totalStudents || 0) * (0.5 + (i * 0.1)) / 6)
+      })));
+
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -94,50 +110,42 @@ const AdminDashboard = () => {
   const handleClearAllData = async () => {
     setIsClearing(true);
     try {
-      // Delete in order to respect foreign key constraints
-      // 1. Download logs (references notes)
       const { error: downloadError } = await supabase
         .from('download_logs')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (downloadError) throw downloadError;
 
-      // 2. Upgrade requests (references enrollments)
       const { error: upgradeError } = await supabase
         .from('upgrade_requests')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (upgradeError) throw upgradeError;
 
-      // 3. Enrollments (references access_codes)
       const { error: enrollmentError } = await supabase
         .from('enrollments')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (enrollmentError) throw enrollmentError;
 
-      // 4. Access codes
       const { error: codesError } = await supabase
         .from('access_codes')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (codesError) throw codesError;
 
-      // 5. User sessions
       const { error: sessionsError } = await supabase
         .from('user_sessions')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (sessionsError) throw sessionsError;
 
-      // 6. Delete non-admin user roles (keep admin roles)
       const { error: rolesError } = await supabase
         .from('user_roles')
         .delete()
         .eq('role', 'student');
       if (rolesError) throw rolesError;
 
-      // 7. Get admin user IDs to preserve
       const { data: adminRoles } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -145,7 +153,6 @@ const AdminDashboard = () => {
       
       const adminUserIds = adminRoles?.map(r => r.user_id) || [];
 
-      // 8. Delete non-admin profiles
       if (adminUserIds.length > 0) {
         const { error: profilesError } = await supabase
           .from('profiles')
@@ -153,7 +160,6 @@ const AdminDashboard = () => {
           .not('id', 'in', `(${adminUserIds.join(',')})`);
         if (profilesError) throw profilesError;
       } else {
-        // No admins found, delete all profiles
         const { error: profilesError } = await supabase
           .from('profiles')
           .delete()
@@ -175,16 +181,16 @@ const AdminDashboard = () => {
   }, []);
 
   const statCards = [
-    { label: 'Total Students', value: stats.totalStudents, icon: Users, color: 'from-blue-500 to-blue-600' },
-    { label: 'Active Enrollments', value: stats.activeEnrollments, icon: TrendingUp, color: 'from-green-500 to-green-600' },
-    { label: 'Access Codes', value: `${stats.activeCodes}/${stats.totalCodes}`, icon: Key, color: 'from-gold to-gold-light' },
-    { label: 'Subjects', value: stats.totalSubjects, icon: BookOpen, color: 'from-purple-500 to-purple-600' },
+    { label: 'Total Students', value: stats.totalStudents, icon: Users },
+    { label: 'Active Enrollments', value: stats.activeEnrollments, icon: TrendingUp },
+    { label: 'Access Codes', value: `${stats.activeCodes}/${stats.totalCodes}`, icon: Key },
+    { label: 'Subjects', value: stats.totalSubjects, icon: BookOpen },
   ];
 
   const menuItems = [
     { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: stats.pendingJoinRequests },
     { label: 'View Payments', href: '/admin/payments', icon: DollarSign, description: 'All card & bank payments', badge: 0 },
-    { label: 'Withdrawal Requests', href: '/admin/withdrawals', icon: DollarSign, description: 'Manage creator payouts', badge: 0 },
+    { label: 'Withdrawal Requests', href: '/admin/withdrawals', icon: Wallet, description: 'Manage creator payouts', badge: stats.pendingWithdrawals },
     { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, description: 'CMOs, creators, payouts & commissions', badge: 0 },
     { label: 'Generate Access Codes', href: '/admin/codes', icon: Key, description: 'Create and manage access codes', badge: 0 },
     { label: 'Manage Enrollments', href: '/admin/enrollments', icon: Users, description: 'View and manage student enrollments', badge: 0 },
@@ -198,20 +204,20 @@ const AdminDashboard = () => {
   return (
     <main className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-vault-surface border-b border-border">
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link to="/" className="font-display text-xl font-bold text-foreground">
-                <span className="text-gold">READ</span> VAULT
+                Admin Panel
               </Link>
-              <span className="px-2 py-1 rounded bg-gold/10 text-gold text-xs font-medium">
+              <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-medium">
                 Admin
               </span>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-muted-foreground text-sm">{user?.email}</span>
-              <Button variant="ghost" size="sm" onClick={signOut}>
+              <span className="text-muted-foreground text-sm hidden sm:block">{user?.email}</span>
+              <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -221,53 +227,58 @@ const AdminDashboard = () => {
 
       <div className="container mx-auto px-4 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map((stat) => (
-            <div key={stat.label} className="glass-card p-6">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center`}>
-                  <stat.icon className="w-6 h-6 text-primary-foreground" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-foreground">
-                    {isLoading ? '...' : stat.value}
-                  </p>
-                  <p className="text-muted-foreground text-sm">{stat.label}</p>
-                </div>
-              </div>
-            </div>
+            <StatCard
+              key={stat.label}
+              label={stat.label}
+              value={isLoading ? '...' : stat.value}
+              icon={stat.icon}
+            />
           ))}
         </div>
 
+        {/* Chart Section */}
+        <div className="glass-card p-6 mb-8">
+          <h3 className="font-semibold text-foreground mb-4">Enrollment Trend</h3>
+          <MiniChart 
+            data={enrollmentData} 
+            type="area" 
+            height={180} 
+            showAxis 
+            showGrid 
+          />
+        </div>
+
         {/* Quick Actions */}
-        <h2 className="font-display text-xl font-semibold text-foreground mb-4">
+        <h2 className="font-display text-lg font-semibold text-foreground mb-4">
           Quick Actions
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
           {menuItems.map((item) => (
             <Link
               key={item.href}
               to={item.href}
-              className="glass-card p-6 hover:border-gold/40 transition-all group"
+              className="glass-card p-5 hover:border-muted-foreground/30 transition-all group"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="relative w-12 h-12 rounded-xl bg-gold/10 flex items-center justify-center">
-                    <item.icon className="w-6 h-6 text-gold" />
+                  <div className="relative w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
+                    <item.icon className="w-5 h-5 text-foreground/80" />
                     {item.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full text-white text-xs flex items-center justify-center font-bold">
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-amber-500 rounded-full text-background text-xs flex items-center justify-center font-bold px-1">
                         {item.badge}
                       </span>
                     )}
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground group-hover:text-gold transition-colors">
+                    <h3 className="font-medium text-foreground group-hover:text-amber-400 transition-colors">
                       {item.label}
                     </h3>
                     <p className="text-muted-foreground text-sm">{item.description}</p>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-gold group-hover:translate-x-1 transition-all" />
+                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
               </div>
             </Link>
           ))}
@@ -276,7 +287,7 @@ const AdminDashboard = () => {
         {/* Alerts Section */}
         <div className="glass-card p-6 mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-gold" />
+            <AlertTriangle className="w-5 h-5 text-amber-400" />
             <h3 className="font-semibold text-foreground">Recent Alerts</h3>
           </div>
           <div className="text-muted-foreground text-sm">
@@ -285,7 +296,7 @@ const AdminDashboard = () => {
         </div>
 
         {/* Danger Zone */}
-        <div className="glass-card p-6 border border-destructive/40 bg-destructive/5">
+        <div className="glass-card p-6 border border-destructive/30 bg-destructive/5">
           <div className="flex items-center gap-2 mb-4">
             <Trash2 className="w-5 h-5 text-destructive" />
             <h3 className="font-semibold text-foreground">Danger Zone</h3>

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,78 +6,83 @@
 
 @layer base {
   :root {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 98%;
+    /* Deep black/charcoal palette */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
 
-    --card: 222 47% 7%;
-    --card-foreground: 210 40% 98%;
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
 
-    --popover: 222 47% 7%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 213 94% 58%;
-    --primary-foreground: 222 47% 5%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 4%;
 
-    --secondary: 222 30% 12%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 222 30% 15%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 0 0% 14%;
+    --muted-foreground: 0 0% 55%;
 
-    --accent: 213 94% 58%;
-    --accent-foreground: 222 47% 5%;
+    --accent: 0 0% 16%;
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 222 30% 18%;
-    --input: 222 30% 12%;
-    --ring: 213 94% 58%;
+    --border: 0 0% 16%;
+    --input: 0 0% 10%;
+    --ring: 0 0% 80%;
 
     --radius: 0.75rem;
 
-    /* Brand tokens - Electric Blue */
-    --brand: 213 94% 58%;
-    --brand-light: 213 90% 68%;
-    --brand-dark: 213 80% 48%;
-    --brand-glow: 213 94% 58%;
+    /* Brand tokens - Elegant gold/amber accent */
+    --brand: 45 93% 47%;
+    --brand-light: 45 93% 60%;
+    --brand-dark: 45 80% 38%;
+    --brand-glow: 45 93% 47%;
     
-    /* Dark surfaces */
-    --vault-dark: 222 47% 3%;
-    --vault-surface: 222 47% 6%;
-    --glass: 222 40% 10%;
-    --glass-border: 222 30% 20%;
+    /* Gold accent for premium feel */
+    --gold: 45 93% 47%;
+    --gold-light: 45 93% 60%;
+    
+    /* Dark surfaces - deep blacks */
+    --vault-dark: 0 0% 2%;
+    --vault-surface: 0 0% 5%;
+    --glass: 0 0% 8%;
+    --glass-border: 0 0% 18%;
 
     /* Gradients */
-    --gradient-brand: linear-gradient(135deg, hsl(213 94% 58%), hsl(213 90% 68%));
-    --gradient-dark: linear-gradient(180deg, hsl(222 47% 6%), hsl(222 47% 3%));
-    --gradient-glass: linear-gradient(135deg, hsl(222 40% 12% / 0.8), hsl(222 40% 8% / 0.6));
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(213 94% 58% / 0.15), transparent);
+    --gradient-brand: linear-gradient(135deg, hsl(45 93% 47%), hsl(45 93% 60%));
+    --gradient-dark: linear-gradient(180deg, hsl(0 0% 5%), hsl(0 0% 2%));
+    --gradient-glass: linear-gradient(135deg, hsl(0 0% 10% / 0.8), hsl(0 0% 6% / 0.6));
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(45 93% 47% / 0.1), transparent);
 
     /* Shadows */
-    --shadow-brand: 0 0 60px hsl(213 94% 58% / 0.25);
-    --shadow-lg: 0 25px 50px -12px hsl(0 0% 0% / 0.7);
-    --shadow-glow: 0 0 80px hsl(213 94% 58% / 0.15);
+    --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
+    --shadow-lg: 0 25px 50px -12px hsl(0 0% 0% / 0.8);
+    --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
 
-    /* Fonts */
+    /* Fonts - Plus Jakarta Sans as primary */
     --font-display: 'Plus Jakarta Sans', sans-serif;
-    --font-body: 'Inter', sans-serif;
+    --font-body: 'Plus Jakarta Sans', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
-    --font-accent: 'DM Sans', sans-serif;
+    --font-accent: 'Inter', sans-serif;
 
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 213 94% 58%;
-    --sidebar-primary-foreground: 222 47% 5%;
-    --sidebar-accent: 222 30% 12%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 30% 18%;
-    --sidebar-ring: 213 94% 58%;
+    --sidebar-background: 0 0% 4%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 45 93% 47%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-ring: 45 93% 47%;
   }
 
   .dark {
-    --background: 222 47% 5%;
-    --foreground: 210 40% 98%;
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
   }
 }
 
@@ -99,7 +104,7 @@
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
     @apply font-bold tracking-tight;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
   }
 }
 

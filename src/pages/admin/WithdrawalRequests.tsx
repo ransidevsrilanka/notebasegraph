@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -29,8 +29,12 @@ import {
   DollarSign,
   Building2,
   Wallet,
+  Upload,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { StatCard } from '@/components/dashboard/StatCard';
 
 interface WithdrawalRequest {
   id: string;
@@ -43,6 +47,7 @@ interface WithdrawalRequest {
   status: string;
   rejection_reason: string | null;
   admin_notes: string | null;
+  receipt_url: string | null;
   created_at: string;
   creator?: {
     display_name: string | null;
@@ -83,6 +88,8 @@ const WithdrawalRequests = () => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -109,7 +116,6 @@ const WithdrawalRequests = () => {
       return;
     }
 
-    // Fetch related data
     const requestsWithDetails = await Promise.all(
       (data || []).map(async (req) => {
         const [creatorResult, methodResult] = await Promise.all([
@@ -150,6 +156,52 @@ const WithdrawalRequests = () => {
     setIsLoading(false);
   };
 
+  const handleUploadReceipt = async (request: WithdrawalRequest) => {
+    fileInputRef.current?.click();
+    setSelectedRequest(request);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedRequest) return;
+
+    setIsUploading(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${selectedRequest.id}-${Date.now()}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('withdrawal-receipts')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('withdrawal-receipts')
+        .getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('withdrawal_requests')
+        .update({ receipt_url: publicUrl })
+        .eq('id', selectedRequest.id);
+
+      if (updateError) throw updateError;
+
+      toast.success('Receipt uploaded successfully!');
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error uploading receipt:', error);
+      toast.error(error.message || 'Failed to upload receipt');
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleApprove = async (request: WithdrawalRequest) => {
     setIsProcessing(true);
 
@@ -165,7 +217,6 @@ const WithdrawalRequests = () => {
 
       if (error) throw error;
 
-      // Update creator's total_withdrawn
       if (request.creator_id) {
         const { data: creatorData } = await supabase
           .from('creator_profiles')
@@ -274,10 +325,18 @@ const WithdrawalRequests = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <header className="bg-vault-surface border-b border-border">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/*,.pdf"
+        className="hidden"
+      />
+
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link to="/admin" className="text-muted-foreground hover:text-foreground">
+            <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
@@ -291,24 +350,10 @@ const WithdrawalRequests = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-orange-500">{stats.pending}</p>
-            <p className="text-xs text-muted-foreground">Pending</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-blue-500">{stats.approved}</p>
-            <p className="text-xs text-muted-foreground">Approved</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-green-500">{stats.paid}</p>
-            <p className="text-xs text-muted-foreground">Paid</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-lg font-bold text-foreground">
-              Rs. {stats.totalPending.toLocaleString()}
-            </p>
-            <p className="text-xs text-muted-foreground">Pending Total</p>
-          </div>
+          <StatCard label="Pending" value={stats.pending} icon={DollarSign} />
+          <StatCard label="Approved" value={stats.approved} icon={CheckCircle} />
+          <StatCard label="Paid" value={stats.paid} icon={Wallet} />
+          <StatCard label="Pending Total" value={`Rs. ${stats.totalPending.toLocaleString()}`} icon={DollarSign} />
         </div>
 
         {/* Filters */}
@@ -339,7 +384,7 @@ const WithdrawalRequests = () => {
         {/* Requests List */}
         {isLoading ? (
           <div className="text-center py-12">
-            <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
           </div>
         ) : filteredRequests.length === 0 ? (
           <div className="glass-card p-12 text-center">
@@ -360,13 +405,19 @@ const WithdrawalRequests = () => {
                         ({request.creator?.referral_code})
                       </span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        request.status === 'pending' ? 'bg-orange-500/20 text-orange-500' :
-                        request.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
-                        request.status === 'paid' ? 'bg-green-500/20 text-green-500' :
-                        'bg-red-500/20 text-red-500'
+                        request.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
+                        request.status === 'approved' ? 'bg-blue-500/20 text-blue-400' :
+                        request.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400' :
+                        'bg-red-500/20 text-red-400'
                       }`}>
                         {request.status}
                       </span>
+                      {request.receipt_url && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          Receipt
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-foreground font-medium">
                       Rs. {request.amount.toLocaleString()} → Rs. {request.net_amount.toLocaleString()} (after {request.fee_percent}% fee)
@@ -382,10 +433,11 @@ const WithdrawalRequests = () => {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       variant="outline"
                       size="sm"
+                      className="border-muted-foreground/30"
                       onClick={() => {
                         setSelectedRequest(request);
                         setViewDialogOpen(true);
@@ -394,11 +446,37 @@ const WithdrawalRequests = () => {
                       <Eye className="w-4 h-4 mr-1" />
                       View
                     </Button>
+                    
+                    {(request.status === 'approved' || request.status === 'paid') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-muted-foreground/30"
+                        onClick={() => handleUploadReceipt(request)}
+                        disabled={isUploading}
+                      >
+                        <Upload className="w-4 h-4 mr-1" />
+                        {request.receipt_url ? 'Update' : 'Upload'} Receipt
+                      </Button>
+                    )}
+                    
+                    {request.receipt_url && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-emerald-500/30 text-emerald-400"
+                        onClick={() => window.open(request.receipt_url!, '_blank')}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        View Receipt
+                      </Button>
+                    )}
+                    
                     {request.status === 'pending' && (
                       <>
                         <Button
-                          variant="brand"
                           size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-700"
                           onClick={() => handleApprove(request)}
                           disabled={isProcessing}
                         >
@@ -421,8 +499,8 @@ const WithdrawalRequests = () => {
                     )}
                     {request.status === 'approved' && (
                       <Button
-                        variant="brand"
                         size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700"
                         onClick={() => handleMarkPaid(request)}
                         disabled={isProcessing}
                       >
@@ -469,55 +547,70 @@ const WithdrawalRequests = () => {
                 </div>
                 <div className="col-span-2">
                   <span className="text-muted-foreground">Net Amount</span>
-                  <p className="text-lg font-bold text-green-500">Rs. {selectedRequest.net_amount.toLocaleString()}</p>
+                  <p className="text-lg font-bold text-emerald-400">Rs. {selectedRequest.net_amount.toLocaleString()}</p>
                 </div>
               </div>
 
               <div className="border-t border-border pt-4">
                 <h4 className="text-sm font-medium text-foreground mb-2">Withdrawal Method</h4>
                 {selectedRequest.withdrawal_method?.method_type === 'bank' ? (
-                  <div className="bg-secondary/50 rounded-lg p-3 space-y-1 text-sm">
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-1 text-sm">
                     <p><span className="text-muted-foreground">Bank:</span> {selectedRequest.withdrawal_method.bank_name}</p>
                     <p><span className="text-muted-foreground">Account:</span> {selectedRequest.withdrawal_method.account_number}</p>
                     <p><span className="text-muted-foreground">Holder:</span> {selectedRequest.withdrawal_method.account_holder_name}</p>
                   </div>
                 ) : (
-                  <div className="bg-secondary/50 rounded-lg p-3 space-y-1 text-sm">
-                    <p><span className="text-muted-foreground">Type:</span> {selectedRequest.withdrawal_method?.crypto_type}</p>
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-1 text-sm">
+                    <p><span className="text-muted-foreground">Crypto:</span> {selectedRequest.withdrawal_method?.crypto_type}</p>
                     <p><span className="text-muted-foreground">Network:</span> {selectedRequest.withdrawal_method?.network}</p>
-                    <p className="break-all"><span className="text-muted-foreground">Address:</span> {selectedRequest.withdrawal_method?.wallet_address}</p>
+                    <p className="break-all"><span className="text-muted-foreground">Wallet:</span> {selectedRequest.withdrawal_method?.wallet_address}</p>
                   </div>
                 )}
               </div>
 
+              {selectedRequest.receipt_url && (
+                <div className="border-t border-border pt-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Payment Receipt</h4>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-emerald-500/30 text-emerald-400"
+                    onClick={() => window.open(selectedRequest.receipt_url!, '_blank')}
+                  >
+                    <Download className="w-4 h-4 mr-1" />
+                    Download Receipt
+                  </Button>
+                </div>
+              )}
+
               {selectedRequest.status === 'pending' && (
-                <div>
-                  <label className="text-sm text-muted-foreground">Admin Notes (optional)</label>
+                <div className="border-t border-border pt-4">
+                  <h4 className="text-sm font-medium text-foreground mb-2">Admin Notes (Optional)</h4>
                   <Textarea
+                    placeholder="Add notes..."
                     value={adminNotes}
                     onChange={(e) => setAdminNotes(e.target.value)}
-                    placeholder="Add any notes..."
-                    className="mt-1"
+                    rows={2}
                   />
                 </div>
               )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
+                  Close
+                </Button>
+                {selectedRequest.status === 'pending' && (
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    onClick={() => handleApprove(selectedRequest)}
+                    disabled={isProcessing}
+                  >
+                    Approve Withdrawal
+                  </Button>
+                )}
+              </DialogFooter>
             </div>
           )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
-              Close
-            </Button>
-            {selectedRequest?.status === 'pending' && (
-              <Button
-                variant="brand"
-                onClick={() => handleApprove(selectedRequest)}
-                disabled={isProcessing}
-              >
-                {isProcessing ? 'Processing...' : 'Approve Withdrawal'}
-              </Button>
-            )}
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -527,16 +620,16 @@ const WithdrawalRequests = () => {
           <DialogHeader>
             <DialogTitle>Reject Withdrawal</DialogTitle>
             <DialogDescription>
-              Provide a reason for rejection.
+              Please provide a reason for rejecting this withdrawal request.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4">
+          <div className="space-y-4 py-4">
             <div>
-              <label className="text-sm text-muted-foreground">Rejection Reason *</label>
+              <label className="text-sm font-medium text-foreground">Reason</label>
               <Select value={rejectionReason} onValueChange={setRejectionReason}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select a reason" />
+                  <SelectValue placeholder="Select reason" />
                 </SelectTrigger>
                 <SelectContent>
                   {REJECTION_REASONS.map((reason) => (
@@ -547,14 +640,14 @@ const WithdrawalRequests = () => {
                 </SelectContent>
               </Select>
             </div>
-            
             <div>
-              <label className="text-sm text-muted-foreground">Admin Notes (optional)</label>
+              <label className="text-sm font-medium text-foreground">Additional Notes</label>
               <Textarea
+                placeholder="Add notes..."
                 value={adminNotes}
                 onChange={(e) => setAdminNotes(e.target.value)}
-                placeholder="Additional details..."
                 className="mt-1"
+                rows={3}
               />
             </div>
           </div>
@@ -563,12 +656,12 @@ const WithdrawalRequests = () => {
             <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
               Cancel
             </Button>
-            <Button
-              variant="destructive"
+            <Button 
+              variant="destructive" 
               onClick={handleReject}
               disabled={isProcessing || !rejectionReason}
             >
-              {isProcessing ? 'Processing...' : 'Reject'}
+              Reject Request
             </Button>
           </DialogFooter>
         </DialogContent>
