@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { 
   validateSubjectSelection, 
+  validateOLSelection,
   getMandatorySubjects, 
   groupSubjectsByBasket,
   type StreamSubject,
@@ -31,21 +32,36 @@ export function useSubjectSelection() {
   const [validation, setValidation] = useState<ValidationResult>({ valid: false, errors: [], warnings: [] });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // O/L specific state
+  const [firstLanguage, setFirstLanguage] = useState<string>('');
+  const [religion, setReligion] = useState<string>('');
 
   const stream = enrollment?.stream as StreamType | undefined;
+  const grade = enrollment?.grade;
+  const isOL = grade === 'ol';
 
   // Fetch stream subjects and user's existing selection
   useEffect(() => {
     const fetchData = async () => {
-      if (!user || !enrollment || !stream) return;
+      if (!user || !enrollment) return;
 
       setIsLoading(true);
+
+      // For O/L, we fetch 'ol' stream subjects
+      // For A/L, we fetch the specific stream
+      const queryStream = isOL ? 'ol' : stream;
+      
+      if (!queryStream) {
+        setIsLoading(false);
+        return;
+      }
 
       // Fetch subjects for this stream
       const { data: subjects, error: subjectsError } = await supabase
         .from('stream_subjects')
         .select('*')
-        .eq('stream', stream)
+        .eq('stream', queryStream)
         .order('sort_order');
 
       if (subjectsError) {
@@ -74,10 +90,10 @@ export function useSubjectSelection() {
           existingSelection.subject_1,
           existingSelection.subject_2,
           existingSelection.subject_3,
-        ]);
-      } else {
-        // Pre-select mandatory subjects
-        const mandatory = getMandatorySubjects(stream, subjects as StreamSubject[]);
+        ].filter(Boolean));
+      } else if (!isOL) {
+        // Pre-select mandatory subjects for A/L only
+        const mandatory = getMandatorySubjects(stream!, subjects as StreamSubject[]);
         setSelectedSubjects(mandatory);
       }
 
@@ -85,34 +101,67 @@ export function useSubjectSelection() {
     };
 
     fetchData();
-  }, [user, enrollment, stream]);
+  }, [user, enrollment, stream, isOL]);
 
   // Validate whenever selection changes
   useEffect(() => {
-    if (!stream) return;
-    const result = validateSubjectSelection(stream, selectedSubjects, streamSubjects);
-    setValidation(result);
-  }, [selectedSubjects, stream, streamSubjects]);
+    if (isOL) {
+      // O/L validation - needs 3 optional subjects (1 from each basket)
+      const result = validateOLSelection(selectedSubjects, streamSubjects, firstLanguage, religion);
+      setValidation(result);
+    } else if (stream) {
+      // A/L validation
+      const result = validateSubjectSelection(stream, selectedSubjects, streamSubjects);
+      setValidation(result);
+    }
+  }, [selectedSubjects, stream, streamSubjects, isOL, firstLanguage, religion]);
 
   // Toggle subject selection
   const toggleSubject = useCallback((subjectName: string) => {
-    if (!stream) return;
-
-    // Check if subject is mandatory (can't deselect)
-    const mandatory = getMandatorySubjects(stream, streamSubjects);
-    if (mandatory.includes(subjectName) && selectedSubjects.includes(subjectName)) {
-      return; // Can't deselect mandatory subjects
-    }
-
-    setSelectedSubjects(prev => {
-      if (prev.includes(subjectName)) {
-        return prev.filter(s => s !== subjectName);
-      } else if (prev.length < 3) {
-        return [...prev, subjectName];
+    if (isOL) {
+      // For O/L, we need to enforce one from each basket
+      const subject = streamSubjects.find(s => s.subject_name === subjectName);
+      if (!subject) return;
+      
+      // If already selected, remove it
+      if (selectedSubjects.includes(subjectName)) {
+        setSelectedSubjects(prev => prev.filter(s => s !== subjectName));
+        return;
       }
-      return prev;
-    });
-  }, [stream, streamSubjects, selectedSubjects]);
+      
+      // Check if another subject from the same basket is selected
+      const sameBucketSubject = selectedSubjects.find(selected => {
+        const selSubj = streamSubjects.find(s => s.subject_name === selected);
+        return selSubj?.basket === subject.basket;
+      });
+      
+      if (sameBucketSubject) {
+        // Replace the subject in same basket
+        setSelectedSubjects(prev => 
+          prev.filter(s => s !== sameBucketSubject).concat(subjectName)
+        );
+      } else if (selectedSubjects.length < 3) {
+        // Add new subject
+        setSelectedSubjects(prev => [...prev, subjectName]);
+      }
+    } else {
+      // A/L logic
+      // Check if subject is mandatory (can't deselect)
+      const mandatory = getMandatorySubjects(stream!, streamSubjects);
+      if (mandatory.includes(subjectName) && selectedSubjects.includes(subjectName)) {
+        return; // Can't deselect mandatory subjects
+      }
+
+      setSelectedSubjects(prev => {
+        if (prev.includes(subjectName)) {
+          return prev.filter(s => s !== subjectName);
+        } else if (prev.length < 3) {
+          return [...prev, subjectName];
+        }
+        return prev;
+      });
+    }
+  }, [stream, streamSubjects, selectedSubjects, isOL]);
 
   // Save and lock subject selection
   const saveSelection = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
@@ -165,7 +214,18 @@ export function useSubjectSelection() {
 
   // Group subjects by basket for display
   const subjectsByBasket = groupSubjectsByBasket(streamSubjects);
-  const mandatorySubjects = stream ? getMandatorySubjects(stream, streamSubjects) : [];
+  const mandatorySubjects = isOL ? [] : (stream ? getMandatorySubjects(stream, streamSubjects) : []);
+
+  // Get O/L specific subject groups
+  const olMandatorySubjects = isOL 
+    ? streamSubjects.filter(s => s.is_mandatory) 
+    : [];
+  const olReligionOptions = isOL 
+    ? streamSubjects.filter(s => s.basket === 'religion' && s.is_mandatory) 
+    : [];
+  const olFirstLanguageOptions = isOL
+    ? streamSubjects.filter(s => s.basket === 'mandatory' && s.subject_name.startsWith('First Language'))
+    : [];
 
   return {
     streamSubjects,
@@ -177,6 +237,15 @@ export function useSubjectSelection() {
     isLoading,
     isSaving,
     isLocked: userSubjects?.is_locked ?? false,
+    isOL,
+    // O/L specific
+    firstLanguage,
+    setFirstLanguage,
+    religion,
+    setReligion,
+    olMandatorySubjects,
+    olReligionOptions,
+    olFirstLanguageOptions,
     toggleSubject,
     saveSelection,
   };
