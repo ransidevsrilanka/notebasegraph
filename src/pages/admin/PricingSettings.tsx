@@ -24,10 +24,35 @@ type PricingConfig = Record<string, TierPricing>;
 
 const tierKeys = ['starter', 'standard', 'lifetime'];
 
+const defaultPricing: PricingConfig = {
+  starter: {
+    name: 'Silver',
+    price: 1500,
+    period: '1 year',
+    description: 'Essential access for students',
+    features: ['Access to all notes', 'Past papers', 'Basic support'],
+  },
+  standard: {
+    name: 'Gold',
+    price: 2500,
+    period: '1 year',
+    description: 'Enhanced learning experience',
+    features: ['All Silver features', 'Premium content', 'Priority support', 'Study guides'],
+  },
+  lifetime: {
+    name: 'Platinum',
+    price: 5000,
+    period: 'Forever',
+    description: 'Ultimate lifetime access',
+    features: ['All Gold features', 'Lifetime access', 'Exclusive content', 'VIP support', 'Early access'],
+  },
+};
+
 const PricingSettings = () => {
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isNewRecord, setIsNewRecord] = useState(false);
 
   useEffect(() => {
     fetchPricing();
@@ -39,13 +64,17 @@ const PricingSettings = () => {
       .from('site_settings')
       .select('value')
       .eq('key', 'pricing')
-      .single();
+      .maybeSingle();
 
-    if (data) {
-      setPricing(data.value as unknown as PricingConfig);
-    } else if (error) {
+    if (error) {
       console.error('Error fetching pricing:', error);
       toast.error('Failed to load pricing settings');
+    } else if (data) {
+      setPricing(data.value as unknown as PricingConfig);
+    } else {
+      // No pricing exists yet, use defaults
+      setPricing(defaultPricing);
+      setIsNewRecord(true);
     }
     setIsLoading(false);
   };
@@ -65,10 +94,23 @@ const PricingSettings = () => {
     if (!pricing) return;
 
     setIsSaving(true);
-    const { error } = await supabase
-      .from('site_settings')
-      .update({ value: pricing as unknown as Json })
-      .eq('key', 'pricing');
+    
+    let error;
+    if (isNewRecord) {
+      // Insert new record
+      const result = await supabase
+        .from('site_settings')
+        .insert({ key: 'pricing', value: pricing as unknown as Json });
+      error = result.error;
+      if (!error) setIsNewRecord(false);
+    } else {
+      // Update existing record
+      const result = await supabase
+        .from('site_settings')
+        .update({ value: pricing as unknown as Json })
+        .eq('key', 'pricing');
+      error = result.error;
+    }
 
     if (error) {
       toast.error('Failed to save pricing settings');
