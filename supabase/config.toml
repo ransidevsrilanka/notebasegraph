@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.admin-finance]
 verify_jwt = false
+
+[functions.admin-purge-data]
+verify_jwt = false
