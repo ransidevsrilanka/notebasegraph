@@ -68,7 +68,7 @@ const App = () => (
             <Route path="/refund" element={<RefundPolicy />} />
             <Route path="/paid-signup" element={<PaidSignup />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/creator_signup" element={<CreatorSignup />} />
+            <Route path="/creator-signup" element={<CreatorSignup />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
             <Route path="/select-subjects" element={
