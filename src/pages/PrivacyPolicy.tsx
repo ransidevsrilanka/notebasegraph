@@ -28,7 +28,7 @@ const PrivacyPolicy = () => {
                 1. Introduction
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                Welcome to Course Master ("we," "our," or "us"). We are committed
+                Welcome to Notebase ("we," "our," or "us"). We are committed
                 to protecting your personal information and your right to
                 privacy. This Privacy Policy explains how we collect, use,
                 disclose, and safeguard your information when you use our
@@ -78,8 +78,8 @@ const PrivacyPolicy = () => {
                 4. Device Tracking & Security
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                To protect our content and prevent unauthorized sharing, Course
-                Master employs device fingerprinting and session tracking
+                To protect our content and prevent unauthorized sharing, Notebase
+                employs device fingerprinting and session tracking
                 technologies. By using our services, you consent to the
                 collection of device-specific information including browser
                 fingerprints, hardware identifiers, and IP addresses. We reserve
@@ -135,7 +135,7 @@ const PrivacyPolicy = () => {
                 8. Changes to This Policy
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                Course Master reserves the right to update this Privacy Policy at
+                Notebase reserves the right to update this Privacy Policy at
                 any time. Changes will be effective immediately upon posting.
                 Continued use of our services constitutes acceptance of the
                 updated policy.

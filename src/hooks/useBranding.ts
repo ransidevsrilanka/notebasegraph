@@ -3,10 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { BrandingSettings } from '@/types/database';
 
 const defaultBranding: BrandingSettings = {
-  siteName: 'Course Master',
+  siteName: 'Notebase',
   logoText: null,
   logoImage: null,
-  heading: 'Course Master',
+  heading: 'Notebase',
   tagline: 'Stream-based access to curated notes, past papers, and study materials. One code unlocks your entire curriculum.',
   pricingButtons: {
     starter: '/access',

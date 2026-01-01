@@ -22,8 +22,39 @@ interface TierDisplay extends TierPricing {
   highlighted: boolean;
 }
 
+// Default pricing to show immediately while fetching
+const defaultTiers: TierDisplay[] = [
+  {
+    key: 'starter',
+    name: 'Starter',
+    price: 1500,
+    period: 'year',
+    description: 'Perfect for getting started',
+    features: ['Access to core subjects', 'PDF notes', 'Basic support'],
+    highlighted: false,
+  },
+  {
+    key: 'standard',
+    name: 'Standard',
+    price: 2500,
+    period: 'year',
+    description: 'Most popular choice',
+    features: ['All Starter features', 'Past papers', 'Priority support', 'All subjects'],
+    highlighted: true,
+  },
+  {
+    key: 'lifetime',
+    name: 'Lifetime',
+    price: 5000,
+    period: 'lifetime',
+    description: 'One-time purchase',
+    features: ['All Standard features', 'Lifetime access', 'Future updates', 'Premium support'],
+    highlighted: false,
+  },
+];
+
 const PricingSection = () => {
-  const [tiers, setTiers] = useState<TierDisplay[]>([]);
+  const [tiers, setTiers] = useState<TierDisplay[]>(defaultTiers);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const { branding } = useBranding();
   const { user, profile } = useAuth();
@@ -211,9 +242,6 @@ const PricingSection = () => {
     );
   }
 
-  if (tiers.length === 0) {
-    return null;
-  }
 
   return (
     <>
