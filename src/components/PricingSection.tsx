@@ -44,12 +44,61 @@ const PricingSection = () => {
 
   useEffect(() => {
     fetchPricing();
+    
     // Auto-apply discount code from URL
     if (discountFromUrl) {
       setDiscountCodeInput(discountFromUrl);
       validateDiscountCode(discountFromUrl);
+    } 
+    // If ref_creator is present, lookup their discount code
+    else if (refCreator) {
+      fetchCreatorDiscountCode(refCreator);
     }
-  }, [discountFromUrl]);
+  }, [discountFromUrl, refCreator]);
+
+  const fetchCreatorDiscountCode = async (referralCode: string) => {
+    try {
+      // First find the creator by their referral code
+      const { data: creatorData, error: creatorError } = await supabase
+        .from('creator_profiles')
+        .select('id, display_name')
+        .eq('referral_code', referralCode.toUpperCase().trim())
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (creatorError || !creatorData) {
+        console.warn('Creator not found for referral code:', referralCode);
+        return;
+      }
+
+      // Then find their active discount code
+      const { data: discountData, error: discountError } = await supabase
+        .from('discount_codes')
+        .select('code, discount_percent')
+        .eq('creator_id', creatorData.id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      if (discountError || !discountData) {
+        console.warn('No discount code found for creator:', creatorData.display_name);
+        return;
+      }
+
+      // Auto-apply the discount
+      setDiscountCodeInput(discountData.code);
+      setAppliedDiscount({ 
+        code: discountData.code, 
+        percent: discountData.discount_percent || 10 
+      });
+      toast.success(`${creatorData.display_name}'s ${discountData.discount_percent || 10}% discount applied!`);
+      
+      // Store creator ref in localStorage for attribution
+      localStorage.setItem('refCreator', referralCode);
+    } catch (err) {
+      console.error('Error fetching creator discount:', err);
+    }
+  };
 
   const fetchPricing = async () => {
     setLoadingError(null);
