@@ -413,7 +413,7 @@ const PaidSignup = () => {
           // Calculate commission
           const { data: creatorProfile } = await supabase
             .from('creator_profiles')
-            .select('lifetime_paid_users')
+            .select('lifetime_paid_users, available_balance')
             .eq('id', creatorId)
             .single();
 
@@ -445,11 +445,12 @@ const PaidSignup = () => {
               payment_type: 'card',
             });
 
-          // Update creator's lifetime paid users
+          // Update creator's lifetime paid users AND available balance
           await supabase
             .from('creator_profiles')
             .update({ 
-              lifetime_paid_users: (creatorProfile?.lifetime_paid_users || 0) + 1 
+              lifetime_paid_users: (creatorProfile?.lifetime_paid_users || 0) + 1,
+              available_balance: (creatorProfile?.available_balance || 0) + commissionAmount,
             })
             .eq('id', creatorId);
         }
