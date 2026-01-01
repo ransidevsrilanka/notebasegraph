@@ -22,6 +22,7 @@ import SubjectSelection from "./pages/SubjectSelection";
 import PaidSignup from "./pages/PaidSignup";
 import Signup from "./pages/Signup";
 import CreatorSignup from "./pages/CreatorSignup";
+import AwaitingPayment from "./pages/AwaitingPayment";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
 import CMODashboard from "./pages/cmo/CMODashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -32,6 +33,8 @@ import UpgradeRequests from "./pages/admin/UpgradeRequests";
 import PricingSettings from "./pages/admin/PricingSettings";
 import BrandingSettings from "./pages/admin/BrandingSettings";
 import Analytics from "./pages/admin/Analytics";
+import JoinRequests from "./pages/admin/JoinRequests";
+import Payments from "./pages/admin/Payments";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -144,6 +147,18 @@ const App = () => (
                 <Analytics />
               </ProtectedRoute>
             } />
+            <Route path="/admin/join-requests" element={
+              <ProtectedRoute requireAdmin>
+                <JoinRequests />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/payments" element={
+              <ProtectedRoute requireAdmin>
+                <Payments />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/awaiting-payment" element={<AwaitingPayment />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -416,6 +416,78 @@ export type Database = {
           },
         ]
       }
+      join_requests: {
+        Row: {
+          admin_notes: string | null
+          amount: number
+          created_at: string
+          discount_code: string | null
+          grade: string | null
+          id: string
+          medium: string | null
+          receipt_url: string | null
+          ref_creator: string | null
+          reference_number: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          stream: string | null
+          subject_1: string | null
+          subject_2: string | null
+          subject_3: string | null
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount: number
+          created_at?: string
+          discount_code?: string | null
+          grade?: string | null
+          id?: string
+          medium?: string | null
+          receipt_url?: string | null
+          ref_creator?: string | null
+          reference_number: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          stream?: string | null
+          subject_1?: string | null
+          subject_2?: string | null
+          subject_3?: string | null
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          discount_code?: string | null
+          grade?: string | null
+          id?: string
+          medium?: string | null
+          receipt_url?: string | null
+          ref_creator?: string | null
+          reference_number?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          stream?: string | null
+          subject_1?: string | null
+          subject_2?: string | null
+          subject_3?: string | null
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           created_at: string
@@ -476,27 +548,51 @@ export type Database = {
         Row: {
           amount: number | null
           created_at: string
+          creator_commission_amount: number | null
+          creator_commission_rate: number | null
           creator_id: string | null
+          discount_applied: number | null
+          enrollment_id: string | null
+          final_amount: number | null
           id: string
           order_id: string | null
+          original_amount: number | null
+          payment_month: string | null
+          payment_type: string | null
           tier: string | null
           user_id: string
         }
         Insert: {
           amount?: number | null
           created_at?: string
+          creator_commission_amount?: number | null
+          creator_commission_rate?: number | null
           creator_id?: string | null
+          discount_applied?: number | null
+          enrollment_id?: string | null
+          final_amount?: number | null
           id?: string
           order_id?: string | null
+          original_amount?: number | null
+          payment_month?: string | null
+          payment_type?: string | null
           tier?: string | null
           user_id: string
         }
         Update: {
           amount?: number | null
           created_at?: string
+          creator_commission_amount?: number | null
+          creator_commission_rate?: number | null
           creator_id?: string | null
+          discount_applied?: number | null
+          enrollment_id?: string | null
+          final_amount?: number | null
           id?: string
           order_id?: string | null
+          original_amount?: number | null
+          payment_month?: string | null
+          payment_type?: string | null
           tier?: string | null
           user_id?: string
         }
@@ -506,6 +602,13 @@ export type Database = {
             columns: ["creator_id"]
             isOneToOne: false
             referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_attributions_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
             referencedColumns: ["id"]
           },
         ]
