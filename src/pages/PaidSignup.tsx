@@ -256,6 +256,12 @@ const PaidSignup = () => {
       return;
     }
 
+    // Calculate expiry based on tier (1 year for silver/gold, lifetime for platinum)
+    const durationDays = paymentData.tier === 'lifetime' ? null : 365;
+    const expiresAt = durationDays 
+      ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+
     // For paid users, we create an enrollment directly without needing an access code
     const { data: enrollmentData, error: enrollmentError } = await supabase
       .from('enrollments')
@@ -266,7 +272,7 @@ const PaidSignup = () => {
         stream: selectedStream || 'maths',
         medium: selectedMedium,
         tier: paymentData.tier,
-        expires_at: null, // Paid users get lifetime access
+        expires_at: expiresAt,
         is_active: true,
         payment_order_id: paymentData.orderId,
       })
@@ -367,12 +373,16 @@ const PaidSignup = () => {
               user_id: currentUser.id,
               creator_id: creatorId,
               enrollment_id: enrollmentData.id,
+              amount: paymentData.amount,
               original_amount: paymentData.amount,
               discount_applied: discountApplied,
               final_amount: finalAmount,
               creator_commission_rate: commissionRate,
               creator_commission_amount: commissionAmount,
               payment_month: currentMonth.toISOString().split('T')[0],
+              tier: paymentData.tier,
+              order_id: paymentData.orderId,
+              payment_type: 'card',
             });
 
           // Update creator's lifetime paid users

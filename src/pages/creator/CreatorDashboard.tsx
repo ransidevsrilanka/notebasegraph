@@ -100,22 +100,24 @@ const CreatorDashboard = () => {
           .eq('creator_id', cpData.id);
         setDiscountCodes(dcData || []);
 
-        // Fetch user attributions count
+        // Fetch user attributions count (all referred users)
         const { count: totalReferred } = await supabase
           .from('user_attributions')
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', cpData.id);
 
-        // Fetch payment attributions for this month
+        // Fetch payment attributions for this month (paid conversions)
         const currentMonth = new Date();
         currentMonth.setDate(1);
         currentMonth.setHours(0, 0, 0, 0);
         
-        const { count: paidThisMonth } = await supabase
+        const { data: monthlyPayments } = await supabase
           .from('payment_attributions')
-          .select('*', { count: 'exact', head: true })
+          .select('id')
           .eq('creator_id', cpData.id)
-          .gte('payment_month', currentMonth.toISOString().split('T')[0]);
+          .gte('created_at', currentMonth.toISOString());
+        
+        const paidThisMonth = monthlyPayments?.length || 0;
 
         // Fetch payouts
         const { data: payoutData } = await supabase
