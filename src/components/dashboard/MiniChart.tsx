@@ -33,12 +33,14 @@ interface MiniChartProps {
   className?: string;
 }
 
+// Chart colors - uses CSS variable for brand color which adapts to context
+// In dashboard-theme: gold (45 93% 47%), otherwise: blue (199 89% 48%)
 const CHART_COLORS = [
-  'hsl(45, 93%, 47%)',     // Gold
-  'hsl(142, 76%, 36%)',    // Green
-  'hsl(199, 89%, 48%)',    // Blue
-  'hsl(262, 83%, 58%)',    // Purple
-  'hsl(0, 0%, 60%)',       // Gray
+  'hsl(var(--brand))',       // Primary brand color (dynamic)
+  'hsl(142, 76%, 36%)',      // Green
+  'hsl(262, 83%, 58%)',      // Purple
+  'hsl(199, 89%, 48%)',      // Blue
+  'hsl(0, 0%, 60%)',         // Gray
 ];
 
 export const MiniChart = ({

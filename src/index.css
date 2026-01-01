@@ -37,15 +37,11 @@
 
     --radius: 0.75rem;
 
-    /* Brand tokens - Elegant gold/amber accent */
-    --brand: 45 93% 47%;
-    --brand-light: 45 93% 60%;
-    --brand-dark: 45 80% 38%;
-    --brand-glow: 45 93% 47%;
-    
-    /* Gold accent for premium feel */
-    --gold: 45 93% 47%;
-    --gold-light: 45 93% 60%;
+    /* Brand tokens - Professional Blue accent (default for public pages) */
+    --brand: 199 89% 48%;
+    --brand-light: 199 89% 60%;
+    --brand-dark: 199 80% 38%;
+    --brand-glow: 199 89% 48%;
     
     /* Dark surfaces - deep blacks */
     --vault-dark: 0 0% 2%;
@@ -53,16 +49,16 @@
     --glass: 0 0% 8%;
     --glass-border: 0 0% 18%;
 
-    /* Gradients */
-    --gradient-brand: linear-gradient(135deg, hsl(45 93% 47%), hsl(45 93% 60%));
+    /* Gradients - Blue theme */
+    --gradient-brand: linear-gradient(135deg, hsl(199 89% 48%), hsl(199 89% 60%));
     --gradient-dark: linear-gradient(180deg, hsl(0 0% 5%), hsl(0 0% 2%));
     --gradient-glass: linear-gradient(135deg, hsl(0 0% 10% / 0.8), hsl(0 0% 6% / 0.6));
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(45 93% 47% / 0.1), transparent);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(199 89% 48% / 0.1), transparent);
 
-    /* Shadows */
-    --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
+    /* Shadows - Blue glow */
+    --shadow-brand: 0 0 60px hsl(199 89% 48% / 0.15);
     --shadow-lg: 0 25px 50px -12px hsl(0 0% 0% / 0.8);
-    --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
+    --shadow-glow: 0 0 80px hsl(199 89% 48% / 0.1);
 
     /* Fonts - Plus Jakarta Sans as primary */
     --font-display: 'Plus Jakarta Sans', sans-serif;
@@ -70,6 +66,7 @@
     --font-mono: 'JetBrains Mono', monospace;
     --font-accent: 'Inter', sans-serif;
 
+    /* Sidebar - uses gold for dashboard context */
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 45 93% 47%;
@@ -83,6 +80,26 @@
   .dark {
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
+  }
+
+  /* Dashboard Theme - Gold/Amber accent for Admin, CMO, Creator dashboards */
+  .dashboard-theme {
+    --brand: 45 93% 47%;
+    --brand-light: 45 93% 60%;
+    --brand-dark: 45 80% 38%;
+    --brand-glow: 45 93% 47%;
+    
+    /* Gold accent for premium feel */
+    --gold: 45 93% 47%;
+    --gold-light: 45 93% 60%;
+
+    /* Gradients - Gold theme */
+    --gradient-brand: linear-gradient(135deg, hsl(45 93% 47%), hsl(45 93% 60%));
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(45 93% 47% / 0.1), transparent);
+
+    /* Shadows - Gold glow */
+    --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
+    --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
   }
 }
 
