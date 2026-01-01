@@ -413,7 +413,7 @@ const PaidSignup = () => {
           // Calculate commission
           const { data: creatorProfile } = await supabase
             .from('creator_profiles')
-            .select('lifetime_paid_users, available_balance')
+            .select('lifetime_paid_users, available_balance, cmo_id')
             .eq('id', creatorId)
             .single();
 
@@ -426,6 +426,7 @@ const PaidSignup = () => {
           const currentMonth = new Date();
           currentMonth.setDate(1);
           currentMonth.setHours(0, 0, 0, 0);
+          const paymentMonth = currentMonth.toISOString().split('T')[0];
 
           await supabase
             .from('payment_attributions')
@@ -439,7 +440,7 @@ const PaidSignup = () => {
               final_amount: finalAmount,
               creator_commission_rate: commissionRate,
               creator_commission_amount: commissionAmount,
-              payment_month: currentMonth.toISOString().split('T')[0],
+              payment_month: paymentMonth,
               tier: paymentData.tier,
               order_id: paymentData.orderId,
               payment_type: 'card',
@@ -453,6 +454,42 @@ const PaidSignup = () => {
               available_balance: (creatorProfile?.available_balance || 0) + commissionAmount,
             })
             .eq('id', creatorId);
+
+          // Update CMO payout if creator has a CMO
+          if (creatorProfile?.cmo_id) {
+            const cmoCommissionRate = 0.03; // CMO gets 3% of creator earnings
+            const cmoCommission = commissionAmount * cmoCommissionRate;
+
+            // Check if payout record exists for this month
+            const { data: existingPayout } = await supabase
+              .from('cmo_payouts')
+              .select('*')
+              .eq('cmo_id', creatorProfile.cmo_id)
+              .eq('payout_month', paymentMonth)
+              .maybeSingle();
+
+            if (existingPayout) {
+              // Update existing payout
+              await supabase
+                .from('cmo_payouts')
+                .update({
+                  total_paid_users: (existingPayout.total_paid_users || 0) + 1,
+                  base_commission_amount: (existingPayout.base_commission_amount || 0) + cmoCommission,
+                  total_commission: (existingPayout.total_commission || 0) + cmoCommission,
+                })
+                .eq('id', existingPayout.id);
+            } else {
+              // Create new payout record
+              await supabase.from('cmo_payouts').insert({
+                cmo_id: creatorProfile.cmo_id,
+                payout_month: paymentMonth,
+                total_paid_users: 1,
+                base_commission_amount: cmoCommission,
+                total_commission: cmoCommission,
+                status: 'pending',
+              });
+            }
+          }
         }
       } catch (refError) {
         console.error('Error processing referral:', refError);
