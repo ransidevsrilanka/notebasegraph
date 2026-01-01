@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Key, AlertCircle } from 'lucide-react';
 
 const Activate = () => {
-  const { user, enrollment, isAdmin, isCMO, isCreator, signOut, isLoading } = useAuth();
+  const { user, enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, signOut, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // Redirect non-students to their appropriate dashboard
@@ -33,10 +33,16 @@ const Activate = () => {
       navigate('/creator/dashboard', { replace: true });
       return;
     }
-  }, [enrollment, isAdmin, isCMO, isCreator, isLoading, navigate]);
+
+    // Bank transfer users waiting for approval
+    if (pendingJoinRequest) {
+      navigate('/awaiting-payment', { replace: true });
+      return;
+    }
+  }, [enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, isLoading, navigate]);
 
   // Show loading while checking roles
-  if (isLoading || enrollment || isAdmin || isCMO || isCreator) {
+  if (isLoading || enrollment || isAdmin || isCMO || isCreator || pendingJoinRequest) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />

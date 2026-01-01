@@ -18,7 +18,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireCMO = false,
   requireCreator = false,
 }) => {
-  const { user, isLoading, isAdmin, isCMO, isCreator, enrollment, hasSelectedSubjects } = useAuth();
+  const { user, isLoading, isAdmin, isCMO, isCreator, enrollment, hasSelectedSubjects, pendingJoinRequest } = useAuth();
   const location = useLocation();
 
   // IMPORTANT: Never unmount protected pages for same-session loading (mobile camera/file picker can
@@ -63,6 +63,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     if (isAdmin) return <Navigate to="/admin" replace />;
     if (isCMO) return <Navigate to="/cmo/dashboard" replace />;
     if (isCreator) return <Navigate to="/creator/dashboard" replace />;
+    // Users with pending bank transfer go to awaiting-payment, not activate
+    if (pendingJoinRequest) return <Navigate to="/awaiting-payment" replace />;
     return <Navigate to="/activate" replace />;
   }
 
