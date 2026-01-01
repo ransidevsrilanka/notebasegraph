@@ -30,9 +30,11 @@ import {
   Trash2,
   BarChart3,
   Wallet,
+  RefreshCw,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
+import { format } from 'date-fns';
 
 interface Stats {
   totalStudents: number;
@@ -66,6 +68,7 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const [revenueData, setRevenueData] = useState<{ name: string; value: number }[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const fetchStats = async () => {
     try {
@@ -165,6 +168,7 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
+    setLastUpdated(new Date());
     setIsLoading(false);
   };
 
@@ -324,6 +328,29 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     fetchStats();
+
+    // Subscribe to real-time payment updates
+    const channel = supabase
+      .channel('admin-payments-realtime')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'payment_attributions' },
+        () => {
+          console.log('Payment attribution change detected, refreshing stats...');
+          fetchStats();
+        }
+      )
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'payments' },
+        () => {
+          console.log('Payment change detected, refreshing stats...');
+          fetchStats();
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const statCards = [
@@ -373,6 +400,23 @@ const AdminDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Last Updated Timestamp */}
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs text-muted-foreground">
+            {lastUpdated ? `Last updated: ${format(lastUpdated, 'PPp')}` : 'Loading...'}
+          </p>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => fetchStats()} 
+            disabled={isLoading}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map((stat) => (

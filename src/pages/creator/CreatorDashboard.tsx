@@ -117,6 +117,7 @@ const CreatorDashboard = () => {
     availableBalance: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -238,6 +239,7 @@ const CreatorDashboard = () => {
       console.error('Error fetching data:', error);
       toast.error('Failed to load dashboard data');
     }
+    setLastUpdated(new Date());
     setIsLoading(false);
   };
 
@@ -394,6 +396,13 @@ const CreatorDashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Last Updated Timestamp */}
+        <div className="flex items-center justify-end mb-2">
+          <p className="text-xs text-muted-foreground">
+            {lastUpdated ? `Last updated: ${format(lastUpdated, 'PPp')}` : ''}
+          </p>
+        </div>
+
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">
