@@ -43,6 +43,8 @@ interface Stats {
   pendingUpgrades: number;
   pendingJoinRequests: number;
   pendingWithdrawals: number;
+  totalRevenue: number;
+  thisMonthRevenue: number;
 }
 
 const AdminDashboard = () => {
@@ -56,10 +58,12 @@ const AdminDashboard = () => {
     pendingUpgrades: 0,
     pendingJoinRequests: 0,
     pendingWithdrawals: 0,
+    totalRevenue: 0,
+    thisMonthRevenue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
-  const [enrollmentData, setEnrollmentData] = useState<{ name: string; value: number }[]>([]);
+  const [revenueData, setRevenueData] = useState<{ name: string; value: number }[]>([]);
 
   const fetchStats = async () => {
     try {
@@ -83,6 +87,50 @@ const AdminDashboard = () => {
         supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       ]);
 
+      // Fetch revenue data from payment_attributions
+      const { data: allPayments } = await supabase
+        .from('payment_attributions')
+        .select('final_amount, payment_month');
+
+      const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+
+      // This month's revenue
+      const currentMonth = new Date();
+      currentMonth.setDate(1);
+      const currentMonthStr = currentMonth.toISOString().split('T')[0];
+      const thisMonthRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= currentMonthStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+
+      // Generate revenue chart data (last 6 months)
+      const monthlyRevenue: { [key: string]: number } = {};
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthKey = date.toISOString().slice(0, 7); // YYYY-MM
+        const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+        monthlyRevenue[monthKey] = 0;
+      }
+
+      (allPayments || []).forEach(p => {
+        if (p.payment_month) {
+          const monthKey = p.payment_month.slice(0, 7);
+          if (monthlyRevenue.hasOwnProperty(monthKey)) {
+            monthlyRevenue[monthKey] += Number(p.final_amount || 0);
+          }
+        }
+      });
+
+      const chartData = Object.entries(monthlyRevenue).map(([key, value]) => {
+        const date = new Date(key + '-01');
+        return {
+          name: date.toLocaleDateString('en-US', { month: 'short' }),
+          value,
+        };
+      });
+
+      setRevenueData(chartData);
+
       setStats({
         totalStudents: totalStudents || 0,
         activeEnrollments: activeEnrollments || 0,
@@ -92,14 +140,9 @@ const AdminDashboard = () => {
         pendingUpgrades: pendingUpgrades || 0,
         pendingJoinRequests: pendingJoinRequests || 0,
         pendingWithdrawals: pendingWithdrawals || 0,
+        totalRevenue,
+        thisMonthRevenue,
       });
-
-      // Generate sample chart data (would be real data in production)
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-      setEnrollmentData(months.map((name, i) => ({
-        name,
-        value: Math.floor((totalStudents || 0) * (0.5 + (i * 0.1)) / 6)
-      })));
 
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -266,10 +309,10 @@ const AdminDashboard = () => {
   }, []);
 
   const statCards = [
+    { label: 'Total Revenue', value: `Rs. ${stats.totalRevenue.toLocaleString()}`, icon: DollarSign },
+    { label: 'This Month', value: `Rs. ${stats.thisMonthRevenue.toLocaleString()}`, icon: TrendingUp },
     { label: 'Total Students', value: stats.totalStudents, icon: Users },
     { label: 'Active Enrollments', value: stats.activeEnrollments, icon: TrendingUp },
-    { label: 'Access Codes', value: `${stats.activeCodes}/${stats.totalCodes}`, icon: Key },
-    { label: 'Subjects', value: stats.totalSubjects, icon: BookOpen },
   ];
 
   const menuItems = [
@@ -323,11 +366,11 @@ const AdminDashboard = () => {
           ))}
         </div>
 
-        {/* Chart Section */}
+        {/* Revenue Chart Section */}
         <div className="glass-card p-6 mb-8">
-          <h3 className="font-semibold text-foreground mb-4">Enrollment Trend</h3>
+          <h3 className="font-semibold text-foreground mb-4">Revenue (Last 6 Months)</h3>
           <MiniChart 
-            data={enrollmentData} 
+            data={revenueData} 
             type="area" 
             height={180} 
             showAxis 
