@@ -251,14 +251,14 @@ const PaidSignup = () => {
       .insert({
         user_id: currentUser.id,
         access_code_id: null,
-        grade: selectedGrade as any,
-        stream: (selectedStream || 'maths') as any,
-        medium: selectedMedium as any,
-        tier: paymentData.tier as any,
+        grade: selectedGrade,
+        stream: selectedStream || 'maths',
+        medium: selectedMedium,
+        tier: paymentData.tier,
         expires_at: null, // Paid users get lifetime access
         is_active: true,
         payment_order_id: paymentData.orderId,
-      } as any)
+      })
       .select()
       .single();
 
@@ -388,8 +388,8 @@ const PaidSignup = () => {
           subject_1: selectedSubjects[0],
           subject_2: selectedSubjects[1],
           subject_3: selectedSubjects[2],
-          is_locked: false, // Paid users can change their subjects
-          locked_at: null,
+          is_locked: true, // Lock subjects after paid signup to allow dashboard access
+          locked_at: new Date().toISOString(),
         });
 
       if (subjectsError) {
@@ -406,8 +406,9 @@ const PaidSignup = () => {
     setStep('success');
     toast.success("Enrollment complete!");
 
+    // Force full page reload to ensure AuthContext fetches new enrollment data
     setTimeout(() => {
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     }, 2000);
   };
 
