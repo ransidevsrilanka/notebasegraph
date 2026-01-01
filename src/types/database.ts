@@ -100,6 +100,13 @@ export interface Note {
   updated_at: string;
 }
 
+export interface BankDetails {
+  bankName: string;
+  accountName: string;
+  accountNumber: string;
+  branch: string;
+}
+
 export interface BrandingSettings {
   siteName: string;
   logoText: string;
@@ -111,6 +118,7 @@ export interface BrandingSettings {
     standard: string;
     lifetime: string;
   };
+  bankDetails?: BankDetails;
 }
 
 export const GRADE_LABELS: Record<GradeLevel, string> = {

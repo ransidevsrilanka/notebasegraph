@@ -19,6 +19,12 @@ const defaultBranding: BrandingSettingsType = {
     standard: '/access',
     lifetime: '/access',
   },
+  bankDetails: {
+    bankName: 'Bank of Ceylon',
+    accountName: 'ReadVault Education',
+    accountNumber: '1234567890',
+    branch: 'Colombo Main',
+  },
 };
 
 const BrandingSettings = () => {
@@ -286,7 +292,7 @@ const BrandingSettings = () => {
         </section>
 
         {/* Pricing Buttons */}
-        <section className="glass-card p-6">
+        <section className="glass-card p-6 mb-6">
           <h2 className="font-display text-lg font-semibold text-foreground mb-4">Pricing Page Buttons</h2>
           <p className="text-sm text-muted-foreground mb-4">
             Set where each tier's "Get" button leads. Use "/access" for internal page or a full URL for external links (e.g., Daraz product page).
@@ -332,6 +338,72 @@ const BrandingSettings = () => {
                   pricingButtons: { ...prev.pricingButtons, lifetime: e.target.value }
                 }))}
                 placeholder="/access or https://daraz.lk/..."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Bank Details */}
+        <section className="glass-card p-6">
+          <h2 className="font-display text-lg font-semibold text-foreground mb-4">Bank Transfer Details</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Bank account details shown to users for bank transfer payments.
+          </p>
+          
+          <div className="grid gap-4">
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Bank Name
+              </label>
+              <Input
+                value={branding.bankDetails?.bankName || ''}
+                onChange={(e) => setBranding(prev => ({
+                  ...prev,
+                  bankDetails: { ...prev.bankDetails!, bankName: e.target.value }
+                }))}
+                placeholder="Bank of Ceylon"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Account Name
+              </label>
+              <Input
+                value={branding.bankDetails?.accountName || ''}
+                onChange={(e) => setBranding(prev => ({
+                  ...prev,
+                  bankDetails: { ...prev.bankDetails!, accountName: e.target.value }
+                }))}
+                placeholder="ReadVault Education"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Account Number
+              </label>
+              <Input
+                value={branding.bankDetails?.accountNumber || ''}
+                onChange={(e) => setBranding(prev => ({
+                  ...prev,
+                  bankDetails: { ...prev.bankDetails!, accountNumber: e.target.value }
+                }))}
+                placeholder="1234567890"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-2">
+                Branch
+              </label>
+              <Input
+                value={branding.bankDetails?.branch || ''}
+                onChange={(e) => setBranding(prev => ({
+                  ...prev,
+                  bankDetails: { ...prev.bankDetails!, branch: e.target.value }
+                }))}
+                placeholder="Colombo Main"
               />
             </div>
           </div>
