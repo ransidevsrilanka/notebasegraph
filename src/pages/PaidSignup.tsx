@@ -340,156 +340,35 @@ const PaidSignup = () => {
       console.error("Failed to update payment record:", updateErr);
     }
 
-    // Handle referral attribution if present
+    // Handle referral attribution via edge function (uses service role to bypass RLS)
     // Also check localStorage as fallback for referral info
     const effectiveRefCreator = paymentData.refCreator || localStorage.getItem('refCreator');
     const effectiveDiscountCode = paymentData.discountCode;
 
     if (effectiveRefCreator || effectiveDiscountCode) {
       try {
-        let creatorId: string | null = null;
-        let discountCodeId: string | null = null;
-        let referralSource: 'link' | 'discount_code' = 'link';
+        // Calculate discount
+        const discountApplied = effectiveDiscountCode ? paymentData.amount * 0.1 : 0;
+        const finalAmount = paymentData.amount - discountApplied;
 
-        // Find creator by referral code
-        if (effectiveRefCreator) {
-          const { data: creatorData } = await supabase
-            .from('creator_profiles')
-            .select('id')
-            .eq('referral_code', effectiveRefCreator.toUpperCase())
-            .maybeSingle();
-          
-          if (creatorData) {
-            creatorId = creatorData.id;
-            console.log("Found creator by referral code:", effectiveRefCreator, "->", creatorId);
-          }
-        }
+        // Call edge function to handle commission attribution (bypasses RLS)
+        const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
+          body: {
+            order_id: paymentData.orderId,
+            enrollment_id: enrollmentData.id,
+            payment_type: 'card',
+            tier: paymentData.tier,
+            original_amount: paymentData.amount,
+            final_amount: finalAmount,
+            ref_creator: effectiveRefCreator,
+            discount_code: effectiveDiscountCode,
+          },
+        });
 
-        // Find creator by discount code
-        if (effectiveDiscountCode && !creatorId) {
-          const { data: dcData } = await supabase
-            .from('discount_codes')
-            .select('id, creator_id')
-            .eq('code', effectiveDiscountCode.toUpperCase())
-            .eq('is_active', true)
-            .maybeSingle();
-          
-          if (dcData) {
-            creatorId = dcData.creator_id;
-            discountCodeId = dcData.id;
-            referralSource = 'discount_code';
-            console.log("Found creator by discount code:", effectiveDiscountCode, "->", creatorId);
-
-            // Update discount code usage - fetch current and increment
-            const { data: currentDC } = await supabase
-              .from('discount_codes')
-              .select('usage_count, paid_conversions')
-              .eq('id', dcData.id)
-              .single();
-            
-            if (currentDC) {
-              await supabase
-                .from('discount_codes')
-                .update({ 
-                  usage_count: (currentDC.usage_count || 0) + 1,
-                  paid_conversions: (currentDC.paid_conversions || 0) + 1,
-                })
-                .eq('id', dcData.id);
-            }
-          }
-        }
-
-        // Create user attribution (permanent link)
-        if (creatorId) {
-          await supabase
-            .from('user_attributions')
-            .insert({
-              user_id: currentUser.id,
-              creator_id: creatorId,
-              discount_code_id: discountCodeId,
-              referral_source: referralSource,
-            });
-
-          // Calculate commission
-          const { data: creatorProfile } = await supabase
-            .from('creator_profiles')
-            .select('lifetime_paid_users, available_balance, cmo_id')
-            .eq('id', creatorId)
-            .single();
-
-          const commissionRate = (creatorProfile?.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08;
-          const discountApplied = paymentData.discountCode ? paymentData.amount * 0.1 : 0;
-          const finalAmount = paymentData.amount - discountApplied;
-          const commissionAmount = finalAmount * commissionRate;
-
-          // Create payment attribution
-          const currentMonth = new Date();
-          currentMonth.setDate(1);
-          currentMonth.setHours(0, 0, 0, 0);
-          const paymentMonth = currentMonth.toISOString().split('T')[0];
-
-          await supabase
-            .from('payment_attributions')
-            .insert({
-              user_id: currentUser.id,
-              creator_id: creatorId,
-              enrollment_id: enrollmentData.id,
-              amount: paymentData.amount,
-              original_amount: paymentData.amount,
-              discount_applied: discountApplied,
-              final_amount: finalAmount,
-              creator_commission_rate: commissionRate,
-              creator_commission_amount: commissionAmount,
-              payment_month: paymentMonth,
-              tier: paymentData.tier,
-              order_id: paymentData.orderId,
-              payment_type: 'card',
-            });
-
-          // Update creator's lifetime paid users AND available balance
-          await supabase
-            .from('creator_profiles')
-            .update({ 
-              lifetime_paid_users: (creatorProfile?.lifetime_paid_users || 0) + 1,
-              available_balance: (creatorProfile?.available_balance || 0) + commissionAmount,
-            })
-            .eq('id', creatorId);
-
-          // Update CMO payout if creator has a CMO
-          if (creatorProfile?.cmo_id) {
-            const cmoCommissionRate = 0.03; // CMO gets 3% of creator earnings
-            const cmoCommission = commissionAmount * cmoCommissionRate;
-
-            // Check if payout record exists for this month
-            const { data: existingPayout } = await supabase
-              .from('cmo_payouts')
-              .select('*')
-              .eq('cmo_id', creatorProfile.cmo_id)
-              .eq('payout_month', paymentMonth)
-              .maybeSingle();
-
-            if (existingPayout) {
-              // Update existing payout
-              await supabase
-                .from('cmo_payouts')
-                .update({
-                  total_paid_users: (existingPayout.total_paid_users || 0) + 1,
-                  base_commission_amount: (existingPayout.base_commission_amount || 0) + cmoCommission,
-                  total_commission: (existingPayout.total_commission || 0) + cmoCommission,
-                })
-                .eq('id', existingPayout.id);
-            } else {
-              // Create new payout record
-              await supabase.from('cmo_payouts').insert({
-                cmo_id: creatorProfile.cmo_id,
-                payout_month: paymentMonth,
-                total_paid_users: 1,
-                base_commission_amount: cmoCommission,
-                total_commission: cmoCommission,
-                status: 'pending',
-              });
-            }
-          }
+        if (finError) {
+          console.error('Error finalizing payment attribution:', finError);
+        } else {
+          console.log('Payment attribution finalized successfully');
         }
       } catch (refError) {
         console.error('Error processing referral:', refError);

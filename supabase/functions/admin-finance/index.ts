@@ -26,7 +26,7 @@ serve(async (req) => {
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Verify admin auth
+  // Verify auth
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -46,22 +46,201 @@ serve(async (req) => {
     });
   }
 
-  // Verify user is admin
-  const { data: roleData } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .in("role", ["admin", "super_admin", "content_admin", "support_admin"]);
+  // Check if this is a user-accessible endpoint (finalize-payment-user)
+  const isUserEndpoint = path === "finalize-payment-user";
 
-  if (!roleData || roleData.length === 0) {
-    return new Response(JSON.stringify({ error: "Admin access required" }), {
-      status: 403,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  // For admin-only endpoints, verify admin role
+  if (!isUserEndpoint) {
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .in("role", ["admin", "super_admin", "content_admin", "support_admin"]);
+
+    if (!roleData || roleData.length === 0) {
+      return new Response(JSON.stringify({ error: "Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
   }
 
   try {
-    // Finalize a payment - creates attribution, updates commissions
+    // Finalize a payment from user after card payment - creates attribution, updates commissions
+    // This endpoint can be called by the paying user themselves
+    if (path === "finalize-payment-user" && req.method === "POST") {
+      const body = await req.json();
+      const {
+        order_id,
+        enrollment_id,
+        payment_type,
+        tier,
+        original_amount,
+        final_amount,
+        ref_creator,
+        discount_code,
+      } = body;
+
+      // IMPORTANT: Use the authenticated user's ID, not from request body
+      const user_id = user.id;
+
+      console.log("Finalizing payment (user):", { order_id, user_id, tier, final_amount, ref_creator });
+
+      // Get current month for attribution
+      const currentMonth = new Date();
+      currentMonth.setDate(1);
+      currentMonth.setHours(0, 0, 0, 0);
+      const paymentMonth = currentMonth.toISOString().split("T")[0];
+
+      let creatorId: string | null = null;
+      let discountCodeId: string | null = null;
+      let creatorCommissionAmount = 0;
+
+      // Find creator by referral code
+      if (ref_creator) {
+        const { data: creatorData } = await supabase
+          .from("creator_profiles")
+          .select("id, lifetime_paid_users, available_balance, cmo_id")
+          .eq("referral_code", ref_creator.toUpperCase())
+          .maybeSingle();
+
+        if (creatorData) {
+          creatorId = creatorData.id;
+          const commissionRate = (creatorData.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
+            ? CREATOR_BONUS_RATE 
+            : CREATOR_BASE_RATE;
+          creatorCommissionAmount = final_amount * commissionRate;
+
+          // Update creator balance and paid users (using service role, bypasses RLS)
+          await supabase
+            .from("creator_profiles")
+            .update({
+              lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
+              available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
+            })
+            .eq("id", creatorData.id);
+
+          // Create user attribution if doesn't exist
+          const { data: existingAttribution } = await supabase
+            .from("user_attributions")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("creator_id", creatorData.id)
+            .maybeSingle();
+
+          if (!existingAttribution) {
+            await supabase.from("user_attributions").insert({
+              user_id,
+              creator_id: creatorData.id,
+              referral_source: "link",
+            });
+          }
+
+          // Handle CMO commission
+          if (creatorData.cmo_id) {
+            await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
+          }
+
+          console.log("Creator found:", creatorData.id, "Commission:", creatorCommissionAmount);
+        }
+      }
+
+      // Find creator by discount code if not found by ref
+      if (!creatorId && discount_code) {
+        const { data: dcData } = await supabase
+          .from("discount_codes")
+          .select("id, creator_id")
+          .eq("code", discount_code.toUpperCase())
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (dcData && dcData.creator_id) {
+          creatorId = dcData.creator_id;
+          discountCodeId = dcData.id;
+
+          const { data: creatorData } = await supabase
+            .from("creator_profiles")
+            .select("id, lifetime_paid_users, available_balance, cmo_id")
+            .eq("id", creatorId)
+            .single();
+
+          if (creatorData) {
+            const commissionRate = (creatorData.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
+              ? CREATOR_BONUS_RATE 
+              : CREATOR_BASE_RATE;
+            creatorCommissionAmount = final_amount * commissionRate;
+
+            await supabase
+              .from("creator_profiles")
+              .update({
+                lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
+                available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
+              })
+              .eq("id", creatorId);
+
+            // Create user attribution
+            await supabase.from("user_attributions").upsert({
+              user_id,
+              creator_id: creatorId,
+              discount_code_id: discountCodeId,
+              referral_source: "discount_code",
+            }, { onConflict: "user_id" });
+
+            // Update discount code stats
+            const { data: currentDC } = await supabase
+              .from("discount_codes")
+              .select("usage_count, paid_conversions")
+              .eq("id", discountCodeId)
+              .single();
+
+            if (currentDC) {
+              await supabase
+                .from("discount_codes")
+                .update({
+                  usage_count: (currentDC.usage_count || 0) + 1,
+                  paid_conversions: (currentDC.paid_conversions || 0) + 1,
+                })
+                .eq("id", discountCodeId);
+            }
+
+            // Handle CMO commission
+            if (creatorData.cmo_id) {
+              await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
+            }
+          }
+
+          console.log("Creator found by discount code:", creatorId, "Commission:", creatorCommissionAmount);
+        }
+      }
+
+      // Create payment attribution
+      const { error: paError } = await supabase.from("payment_attributions").upsert({
+        order_id,
+        user_id,
+        creator_id: creatorId,
+        enrollment_id,
+        amount: final_amount,
+        original_amount,
+        discount_applied: original_amount - final_amount,
+        final_amount,
+        creator_commission_rate: creatorId ? (creatorCommissionAmount / final_amount) : 0,
+        creator_commission_amount: creatorCommissionAmount,
+        payment_month: paymentMonth,
+        tier,
+        payment_type,
+      }, { onConflict: "order_id" });
+
+      if (paError) {
+        console.error("Payment attribution error:", paError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, creator_id: creatorId, commission: creatorCommissionAmount }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Finalize a payment (admin-only) - creates attribution, updates commissions
     if (path === "finalize-payment" && req.method === "POST") {
       const body = await req.json();
       const {
