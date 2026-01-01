@@ -39,7 +39,7 @@ const RefundPolicy = () => {
                 1. General Policy
               </h2>
               <p className="text-muted-foreground leading-relaxed">
-                Course Master provides digital educational content that is accessible immediately upon activation of an access code. Due to the instant delivery nature of our digital products and the inability to "return" accessed content, we maintain a strict no-refund policy on all purchases unless otherwise specified in this document.
+                Notebase provides digital educational content that is accessible immediately upon activation of an access code. Due to the instant delivery nature of our digital products and the inability to "return" accessed content, we maintain a strict no-refund policy on all purchases unless otherwise specified in this document.
               </p>
             </section>
 
@@ -146,7 +146,7 @@ const RefundPolicy = () => {
                 </a>
               </p>
               <p className="text-muted-foreground leading-relaxed mt-4">
-                By purchasing from Course Master, you acknowledge that you have read, understood, and agreed to this Refund Policy.
+                By purchasing from Notebase, you acknowledge that you have read, understood, and agreed to this Refund Policy.
               </p>
             </section>
           </div>
