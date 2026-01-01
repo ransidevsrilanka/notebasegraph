@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Navbar from '@/components/Navbar';
@@ -6,13 +7,41 @@ import { Button } from '@/components/ui/button';
 import { Key, AlertCircle } from 'lucide-react';
 
 const Activate = () => {
-  const { user, enrollment, signOut } = useAuth();
+  const { user, enrollment, isAdmin, isCMO, isCreator, signOut, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // If user has enrollment, redirect to dashboard
-  if (enrollment) {
-    navigate('/dashboard');
-    return null;
+  // Redirect non-students to their appropriate dashboard
+  useEffect(() => {
+    if (isLoading) return;
+    
+    if (enrollment) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    
+    if (isAdmin) {
+      navigate('/admin', { replace: true });
+      return;
+    }
+    
+    if (isCMO) {
+      navigate('/cmo/dashboard', { replace: true });
+      return;
+    }
+    
+    if (isCreator) {
+      navigate('/creator/dashboard', { replace: true });
+      return;
+    }
+  }, [enrollment, isAdmin, isCMO, isCreator, isLoading, navigate]);
+
+  // Show loading while checking roles
+  if (isLoading || enrollment || isAdmin || isCMO || isCreator) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   return (
