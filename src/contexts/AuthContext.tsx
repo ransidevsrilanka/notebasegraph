@@ -266,6 +266,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: new Error('Failed to create user') };
       }
 
+      // Ensure a profile row exists (we keep profiles.id == auth user id across the app)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: authData.user.id,
+            user_id: authData.user.id,
+            email,
+          },
+          { onConflict: 'id' }
+        );
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+      }
+
       // Update access code - use code_id from validation response
       const { error: updateCodeError } = await supabase
         .from('access_codes')

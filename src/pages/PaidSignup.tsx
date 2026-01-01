@@ -190,11 +190,22 @@ const PaidSignup = () => {
       return;
     }
 
-    // Update profile with name
-    await supabase
+    // Ensure profile exists and store name (profile id == auth user id)
+    const { error: profileError } = await supabase
       .from('profiles')
-      .update({ full_name: name })
-      .eq('id', authData.user.id);
+      .upsert(
+        {
+          id: authData.user.id,
+          user_id: authData.user.id,
+          email,
+          full_name: name,
+        },
+        { onConflict: 'id' }
+      );
+
+    if (profileError) {
+      console.error('Error upserting profile:', profileError);
+    }
 
     setIsLoading(false);
     toast.success("Account created!");
@@ -430,7 +441,31 @@ const PaidSignup = () => {
     .map(s => s.subject_name);
 
   if (!paymentData) {
-    return null;
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+
+        <section className="pt-28 pb-20">
+          <div className="container mx-auto px-4">
+            <div className="max-w-md mx-auto">
+              <div className="glass-card p-6 text-center">
+                <h1 className="font-display text-xl font-bold text-foreground mb-2">
+                  Complete payment to continue
+                </h1>
+                <p className="text-sm text-muted-foreground mb-5">
+                  We couldn’t find your payment session. Please go back to pricing and complete the payment first.
+                </p>
+                <Button variant="brand" className="w-full" onClick={() => navigate('/pricing')}>
+                  Go to Pricing
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <Footer />
+      </main>
+    );
   }
 
   return (
