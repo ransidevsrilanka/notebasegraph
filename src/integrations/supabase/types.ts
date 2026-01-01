@@ -247,6 +247,7 @@ export type Database = {
       }
       creator_profiles: {
         Row: {
+          available_balance: number | null
           cmo_id: string | null
           created_at: string
           display_name: string | null
@@ -255,9 +256,11 @@ export type Database = {
           lifetime_paid_users: number | null
           monthly_paid_users: number | null
           referral_code: string
+          total_withdrawn: number | null
           user_id: string
         }
         Insert: {
+          available_balance?: number | null
           cmo_id?: string | null
           created_at?: string
           display_name?: string | null
@@ -266,9 +269,11 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code: string
+          total_withdrawn?: number | null
           user_id: string
         }
         Update: {
+          available_balance?: number | null
           cmo_id?: string | null
           created_at?: string
           display_name?: string | null
@@ -277,6 +282,7 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code?: string
+          total_withdrawn?: number | null
           user_id?: string
         }
         Relationships: [
@@ -1014,6 +1020,131 @@ export type Database = {
             columns: ["enrollment_id"]
             isOneToOne: false
             referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      withdrawal_methods: {
+        Row: {
+          account_holder_name: string | null
+          account_number: string | null
+          bank_name: string | null
+          branch_name: string | null
+          created_at: string
+          creator_id: string
+          crypto_type: string | null
+          id: string
+          is_primary: boolean | null
+          method_type: string
+          network: string | null
+          updated_at: string
+          wallet_address: string | null
+        }
+        Insert: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          branch_name?: string | null
+          created_at?: string
+          creator_id: string
+          crypto_type?: string | null
+          id?: string
+          is_primary?: boolean | null
+          method_type: string
+          network?: string | null
+          updated_at?: string
+          wallet_address?: string | null
+        }
+        Update: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_name?: string | null
+          branch_name?: string | null
+          created_at?: string
+          creator_id?: string
+          crypto_type?: string | null
+          id?: string
+          is_primary?: boolean | null
+          method_type?: string
+          network?: string | null
+          updated_at?: string
+          wallet_address?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawal_methods_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      withdrawal_requests: {
+        Row: {
+          admin_notes: string | null
+          amount: number
+          created_at: string
+          creator_id: string
+          fee_amount: number
+          fee_percent: number
+          id: string
+          net_amount: number
+          paid_at: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          withdrawal_method_id: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount: number
+          created_at?: string
+          creator_id: string
+          fee_amount: number
+          fee_percent?: number
+          id?: string
+          net_amount: number
+          paid_at?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          withdrawal_method_id?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          creator_id?: string
+          fee_amount?: number
+          fee_percent?: number
+          id?: string
+          net_amount?: number
+          paid_at?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          withdrawal_method_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "withdrawal_requests_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawal_requests_withdrawal_method_id_fkey"
+            columns: ["withdrawal_method_id"]
+            isOneToOne: false
+            referencedRelation: "withdrawal_methods"
             referencedColumns: ["id"]
           },
         ]

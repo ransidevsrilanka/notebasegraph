@@ -3,6 +3,11 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/storageClient';
 import type { Profile, Enrollment, AppRole } from '@/types/database';
 
+export interface PendingJoinRequest {
+  id: string;
+  status: string;
+  reference_number: string;
+}
 export interface UserSubjects {
   id: string;
   user_id: string;
@@ -23,6 +28,7 @@ interface AuthContextType {
   roles: AppRole[];
   enrollment: Enrollment | null;
   userSubjects: UserSubjects | null;
+  pendingJoinRequest: PendingJoinRequest | null;
   hasSelectedSubjects: boolean;
   isLoading: boolean;
   isAdmin: boolean;
@@ -44,6 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [userSubjects, setUserSubjects] = useState<UserSubjects | null>(null);
+  const [pendingJoinRequest, setPendingJoinRequest] = useState<PendingJoinRequest | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
 
@@ -121,6 +128,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         if (!preserve) setUserSubjects(null);
       }
+
+      // Fetch pending join request (for bank transfer users)
+      const { data: joinReqData, error: joinReqError } = await supabase
+        .from('join_requests')
+        .select('id, status, reference_number')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+      if (joinReqError) {
+        console.error('Error fetching join request:', joinReqError);
+        if (!preserve) setPendingJoinRequest(null);
+      } else {
+        setPendingJoinRequest((joinReqData as PendingJoinRequest) ?? null);
+      }
     } catch (error) {
       console.error('Error fetching user data:', error);
       if (!preserve) {
@@ -128,6 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRoles([]);
         setEnrollment(null);
         setUserSubjects(null);
+        setPendingJoinRequest(null);
       }
     }
   };
@@ -168,6 +191,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRoles([]);
         setEnrollment(null);
         setUserSubjects(null);
+        setPendingJoinRequest(null);
         setIsLoading(false);
         return;
       }
@@ -184,6 +208,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRoles([]);
         setEnrollment(null);
         setUserSubjects(null);
+        setPendingJoinRequest(null);
         setIsLoading(false);
         return;
       }
@@ -194,6 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setRoles([]);
         setEnrollment(null);
         setUserSubjects(null);
+        setPendingJoinRequest(null);
         setIsLoading(true);
         fetchUserData(nextUserId).finally(() => setIsLoading(false));
       } else if (event === 'USER_UPDATED') {
@@ -340,6 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRoles([]);
     setEnrollment(null);
     setUserSubjects(null);
+    setPendingJoinRequest(null);
   };
 
   const refreshEnrollment = async () => {
@@ -385,6 +412,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roles,
         enrollment,
         userSubjects,
+        pendingJoinRequest,
         hasSelectedSubjects,
         isLoading,
         isAdmin,
