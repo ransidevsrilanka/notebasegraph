@@ -2,7 +2,7 @@ export type GradeLevel = 'ol' | 'al_grade12' | 'al_grade13';
 export type StreamType = 'maths' | 'biology' | 'commerce' | 'arts' | 'technology';
 export type MediumType = 'english' | 'sinhala';
 export type TierType = 'starter' | 'standard' | 'lifetime';
-export type AppRole = 'super_admin' | 'content_admin' | 'support_admin' | 'student' | 'cmo' | 'content_creator';
+export type AppRole = 'super_admin' | 'content_admin' | 'support_admin' | 'student' | 'cmo' | 'creator';
 export type CodeStatus = 'active' | 'used' | 'expired' | 'revoked';
 
 export interface Profile {

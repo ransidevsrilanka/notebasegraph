@@ -52,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
   
   const isCMO = roles.includes('cmo');
-  const isCreator = roles.includes('content_creator');
+  const isCreator = roles.includes('creator');
 
   // User has selected and locked subjects
   const hasSelectedSubjects = userSubjects?.is_locked ?? false;
