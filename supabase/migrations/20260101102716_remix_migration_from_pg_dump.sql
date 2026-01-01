@@ -269,7 +269,9 @@ CREATE TABLE public.creator_profiles (
     lifetime_paid_users integer DEFAULT 0,
     is_active boolean DEFAULT true,
     cmo_id uuid,
-    monthly_paid_users integer DEFAULT 0
+    monthly_paid_users integer DEFAULT 0,
+    available_balance numeric DEFAULT 0,
+    total_withdrawn numeric DEFAULT 0
 );
 
 
@@ -326,6 +328,35 @@ CREATE TABLE public.enrollments (
 
 
 --
+-- Name: join_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.join_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    reference_number text NOT NULL,
+    tier text DEFAULT 'starter'::text NOT NULL,
+    grade text,
+    stream text,
+    medium text,
+    subject_1 text,
+    subject_2 text,
+    subject_3 text,
+    amount numeric NOT NULL,
+    receipt_url text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    rejection_reason text,
+    admin_notes text,
+    reviewed_at timestamp with time zone,
+    reviewed_by uuid,
+    ref_creator text,
+    discount_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: notes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -357,7 +388,38 @@ CREATE TABLE public.payment_attributions (
     amount numeric(10,2),
     tier text,
     order_id text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    enrollment_id uuid,
+    original_amount numeric,
+    discount_applied numeric DEFAULT 0,
+    final_amount numeric,
+    creator_commission_rate numeric,
+    creator_commission_amount numeric,
+    payment_month text,
+    payment_type text DEFAULT 'card'::text
+);
+
+
+--
+-- Name: payments; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    order_id text NOT NULL,
+    user_id uuid,
+    amount numeric,
+    currency text DEFAULT 'LKR'::text,
+    status text DEFAULT 'pending'::text,
+    payment_id text,
+    tier text,
+    enrollment_id uuid,
+    payment_method text DEFAULT 'card'::text,
+    ref_creator text,
+    discount_code text,
+    processed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -534,6 +596,54 @@ CREATE TABLE public.user_subjects (
 
 
 --
+-- Name: withdrawal_methods; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.withdrawal_methods (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    creator_id uuid NOT NULL,
+    method_type text NOT NULL,
+    bank_name text,
+    account_number text,
+    account_holder_name text,
+    branch_name text,
+    crypto_type text,
+    wallet_address text,
+    network text,
+    is_primary boolean DEFAULT false,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT withdrawal_methods_method_type_check CHECK ((method_type = ANY (ARRAY['bank'::text, 'crypto'::text])))
+);
+
+
+--
+-- Name: withdrawal_requests; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.withdrawal_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    creator_id uuid NOT NULL,
+    withdrawal_method_id uuid,
+    amount numeric NOT NULL,
+    fee_percent numeric DEFAULT 3 NOT NULL,
+    fee_amount numeric NOT NULL,
+    net_amount numeric NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    rejection_reason text,
+    admin_notes text,
+    reviewed_at timestamp with time zone,
+    reviewed_by uuid,
+    paid_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    receipt_url text,
+    CONSTRAINT withdrawal_requests_amount_check CHECK ((amount > (0)::numeric)),
+    CONSTRAINT withdrawal_requests_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'paid'::text])))
+);
+
+
+--
 -- Name: access_codes access_codes_code_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -646,6 +756,22 @@ ALTER TABLE ONLY public.enrollments
 
 
 --
+-- Name: join_requests join_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.join_requests
+    ADD CONSTRAINT join_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: join_requests join_requests_reference_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.join_requests
+    ADD CONSTRAINT join_requests_reference_number_key UNIQUE (reference_number);
+
+
+--
 -- Name: notes notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -659,6 +785,22 @@ ALTER TABLE ONLY public.notes
 
 ALTER TABLE ONLY public.payment_attributions
     ADD CONSTRAINT payment_attributions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payments payments_order_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payments
+    ADD CONSTRAINT payments_order_id_key UNIQUE (order_id);
+
+
+--
+-- Name: payments payments_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payments
+    ADD CONSTRAINT payments_pkey PRIMARY KEY (id);
 
 
 --
@@ -766,6 +908,36 @@ ALTER TABLE ONLY public.user_subjects
 
 
 --
+-- Name: withdrawal_methods withdrawal_methods_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.withdrawal_methods
+    ADD CONSTRAINT withdrawal_methods_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: withdrawal_requests withdrawal_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.withdrawal_requests
+    ADD CONSTRAINT withdrawal_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: withdrawal_methods_bank_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX withdrawal_methods_bank_unique ON public.withdrawal_methods USING btree (creator_id, account_number) WHERE ((method_type = 'bank'::text) AND (account_number IS NOT NULL));
+
+
+--
+-- Name: withdrawal_methods_crypto_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX withdrawal_methods_crypto_unique ON public.withdrawal_methods USING btree (creator_id, wallet_address) WHERE ((method_type = 'crypto'::text) AND (wallet_address IS NOT NULL));
+
+
+--
 -- Name: access_codes update_access_codes_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -777,6 +949,13 @@ CREATE TRIGGER update_access_codes_updated_at BEFORE UPDATE ON public.access_cod
 --
 
 CREATE TRIGGER update_enrollments_updated_at BEFORE UPDATE ON public.enrollments FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: join_requests update_join_requests_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_join_requests_updated_at BEFORE UPDATE ON public.join_requests FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -879,6 +1058,22 @@ ALTER TABLE ONLY public.payment_attributions
 
 
 --
+-- Name: payment_attributions payment_attributions_enrollment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_attributions
+    ADD CONSTRAINT payment_attributions_enrollment_id_fkey FOREIGN KEY (enrollment_id) REFERENCES public.enrollments(id);
+
+
+--
+-- Name: payments payments_enrollment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payments
+    ADD CONSTRAINT payments_enrollment_id_fkey FOREIGN KEY (enrollment_id) REFERENCES public.enrollments(id);
+
+
+--
 -- Name: topics topics_subject_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -919,10 +1114,167 @@ ALTER TABLE ONLY public.user_subjects
 
 
 --
+-- Name: withdrawal_methods withdrawal_methods_creator_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.withdrawal_methods
+    ADD CONSTRAINT withdrawal_methods_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.creator_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: withdrawal_requests withdrawal_requests_creator_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.withdrawal_requests
+    ADD CONSTRAINT withdrawal_requests_creator_id_fkey FOREIGN KEY (creator_id) REFERENCES public.creator_profiles(id) ON DELETE CASCADE;
+
+
+--
+-- Name: withdrawal_requests withdrawal_requests_withdrawal_method_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.withdrawal_requests
+    ADD CONSTRAINT withdrawal_requests_withdrawal_method_id_fkey FOREIGN KEY (withdrawal_method_id) REFERENCES public.withdrawal_methods(id);
+
+
+--
+-- Name: cmo_payouts Admins can delete cmo payouts; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can delete cmo payouts" ON public.cmo_payouts FOR DELETE USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: enrollments Admins can insert enrollments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can insert enrollments" ON public.enrollments FOR INSERT WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: payment_attributions Admins can insert payment attributions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can insert payment attributions" ON public.payment_attributions FOR INSERT WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: user_attributions Admins can insert user attributions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can insert user attributions" ON public.user_attributions FOR INSERT WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: user_subjects Admins can insert user_subjects; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can insert user_subjects" ON public.user_subjects FOR INSERT WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: cmo_payouts Admins can manage cmo payouts; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage cmo payouts" ON public.cmo_payouts USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role))) WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: join_requests Admins can update all join requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update all join requests" ON public.join_requests FOR UPDATE USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: upgrade_requests Admins can update all upgrade requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update all upgrade requests" ON public.upgrade_requests FOR UPDATE USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: creator_profiles Admins can update creator profiles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update creator profiles" ON public.creator_profiles FOR UPDATE USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: enrollments Admins can update enrollments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update enrollments" ON public.enrollments FOR UPDATE USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: withdrawal_requests Admins can update withdrawal requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update withdrawal requests" ON public.withdrawal_requests FOR UPDATE USING ((public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: enrollments Admins can view all enrollments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all enrollments" ON public.enrollments FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: join_requests Admins can view all join requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all join requests" ON public.join_requests FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: payment_attributions Admins can view all payment attributions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all payment attributions" ON public.payment_attributions FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: payments Admins can view all payments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all payments" ON public.payments FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: profiles Admins can view all profiles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all profiles" ON public.profiles FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: upgrade_requests Admins can view all upgrade requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all upgrade requests" ON public.upgrade_requests FOR SELECT USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: withdrawal_requests Admins can view all withdrawal requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all withdrawal requests" ON public.withdrawal_requests FOR SELECT USING ((public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
 -- Name: payment_attributions Anyone can insert payment attribution; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Anyone can insert payment attribution" ON public.payment_attributions FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: payments Anyone can insert payments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Anyone can insert payments" ON public.payments FOR INSERT WITH CHECK (true);
 
 
 --
@@ -1031,10 +1383,75 @@ CREATE POLICY "Authenticated users can modify site_settings" ON public.site_sett
 
 
 --
+-- Name: payment_attributions CMOs can view payment attributions for their creators; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "CMOs can view payment attributions for their creators" ON public.payment_attributions FOR SELECT USING ((creator_id IN ( SELECT cp.id
+   FROM (public.creator_profiles cp
+     JOIN public.cmo_profiles cmo ON ((cp.cmo_id = cmo.id)))
+  WHERE (cmo.user_id = auth.uid()))));
+
+
+--
+-- Name: user_attributions CMOs can view user attributions for their creators; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "CMOs can view user attributions for their creators" ON public.user_attributions FOR SELECT USING ((creator_id IN ( SELECT cp.id
+   FROM (public.creator_profiles cp
+     JOIN public.cmo_profiles cmo ON ((cp.cmo_id = cmo.id)))
+  WHERE (cmo.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_methods Creators can delete own withdrawal methods; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can delete own withdrawal methods" ON public.withdrawal_methods FOR DELETE USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_methods Creators can insert own withdrawal methods; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can insert own withdrawal methods" ON public.withdrawal_methods FOR INSERT WITH CHECK ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_requests Creators can insert own withdrawal requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can insert own withdrawal requests" ON public.withdrawal_requests FOR INSERT WITH CHECK ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
 -- Name: discount_codes Creators can update own discount codes; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Creators can update own discount codes" ON public.discount_codes FOR UPDATE TO authenticated USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_methods Creators can update own withdrawal methods; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can update own withdrawal methods" ON public.withdrawal_methods FOR UPDATE USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: payment_attributions Creators can view own payment attributions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can view own payment attributions" ON public.payment_attributions FOR SELECT USING ((creator_id IN ( SELECT creator_profiles.id
    FROM public.creator_profiles
   WHERE (creator_profiles.user_id = auth.uid()))));
 
@@ -1049,10 +1466,51 @@ CREATE POLICY "Creators can view own payouts" ON public.creator_payouts FOR SELE
 
 
 --
+-- Name: user_attributions Creators can view own user attributions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can view own user attributions" ON public.user_attributions FOR SELECT USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_methods Creators can view own withdrawal methods; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can view own withdrawal methods" ON public.withdrawal_methods FOR SELECT USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: withdrawal_requests Creators can view own withdrawal requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Creators can view own withdrawal requests" ON public.withdrawal_requests FOR SELECT USING ((creator_id IN ( SELECT creator_profiles.id
+   FROM public.creator_profiles
+  WHERE (creator_profiles.user_id = auth.uid()))));
+
+
+--
+-- Name: payments Service can update payments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Service can update payments" ON public.payments FOR UPDATE USING (true);
+
+
+--
 -- Name: download_logs Users can create download logs; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can create download logs" ON public.download_logs FOR INSERT WITH CHECK ((auth.uid() = user_id));
+
+
+--
+-- Name: join_requests Users can create join requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can create join requests" ON public.join_requests FOR INSERT WITH CHECK ((auth.uid() = user_id));
 
 
 --
@@ -1112,6 +1570,13 @@ CREATE POLICY "Users can update own enrollment" ON public.enrollments FOR UPDATE
 
 
 --
+-- Name: join_requests Users can update own join requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can update own join requests" ON public.join_requests FOR UPDATE USING (((auth.uid() = user_id) AND (status = 'pending'::text)));
+
+
+--
 -- Name: profiles Users can update own profile; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1144,6 +1609,20 @@ CREATE POLICY "Users can view own download logs" ON public.download_logs FOR SEL
 --
 
 CREATE POLICY "Users can view own enrollment" ON public.enrollments FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: join_requests Users can view own join requests; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view own join requests" ON public.join_requests FOR SELECT USING ((auth.uid() = user_id));
+
+
+--
+-- Name: payments Users can view own payments; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view own payments" ON public.payments FOR SELECT USING ((auth.uid() = user_id));
 
 
 --
@@ -1236,6 +1715,12 @@ ALTER TABLE public.download_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enrollments ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: join_requests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.join_requests ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: notes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1246,6 +1731,12 @@ ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.payment_attributions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: payments; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
@@ -1306,6 +1797,18 @@ ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.user_subjects ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: withdrawal_methods; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.withdrawal_methods ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: withdrawal_requests; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.withdrawal_requests ENABLE ROW LEVEL SECURITY;
 
 --
 -- PostgreSQL database dump complete
