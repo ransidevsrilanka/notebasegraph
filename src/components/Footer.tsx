@@ -20,12 +20,9 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-vault-dark relative overflow-hidden">
-      {/* Top border accent */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/30 to-transparent" />
-      
+    <footer className="bg-muted/50 relative overflow-hidden border-t border-border">
       {/* Background glow */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-brand/5 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
 
       <div className="container mx-auto px-4 sm:px-6 relative z-10">
         {/* Main Footer Content */}
@@ -38,7 +35,7 @@ const Footer = () => {
                     <img src={branding.logoImage} alt={branding.siteName} className="w-10 h-10 rounded-xl object-cover" />
                   ) : branding.logoText ? (
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center">
-                      <span className="font-display text-lg font-bold text-brand">{branding.logoText}</span>
+                      <span className="font-display text-lg font-bold text-primary">{branding.logoText}</span>
                     </div>
                   ) : null
                 )}
@@ -50,7 +47,7 @@ const Footer = () => {
                 {branding.tagline}
               </p>
               <div className="flex flex-col gap-3">
-                <a href="mailto:ransibeats@gmail.com" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand transition-colors text-sm">
+                <a href="mailto:ransibeats@gmail.com" className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors text-sm">
                   <Mail className="w-4 h-4" />
                   ransibeats@gmail.com
                 </a>
@@ -71,7 +68,7 @@ const Footer = () => {
                   <li key={link.name}>
                     <Link 
                       to={link.path} 
-                      className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-brand transition-colors group"
+                      className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-primary transition-colors group"
                     >
                       {link.name}
                       <ArrowUpRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
@@ -91,7 +88,7 @@ const Footer = () => {
                   <li key={link.name}>
                     <Link 
                       to={link.path} 
-                      className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-brand transition-colors group"
+                      className="inline-flex items-center gap-1 text-muted-foreground text-sm hover:text-primary transition-colors group"
                     >
                       {link.name}
                       <ArrowUpRight className="w-3 h-3 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
@@ -104,7 +101,7 @@ const Footer = () => {
         </div>
 
         {/* Bottom Bar */}
-        <div className="py-6 border-t border-border/30">
+        <div className="py-6 border-t border-border">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="font-body text-muted-foreground text-xs md:text-sm text-center md:text-left">
               © {currentYear} {branding.siteName}. All rights reserved.
@@ -112,7 +109,7 @@ const Footer = () => {
             <div className="flex items-center gap-6">
               <a 
                 href="#" 
-                className="text-muted-foreground hover:text-brand transition-colors"
+                className="text-muted-foreground hover:text-primary transition-colors"
                 aria-label="Instagram"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -121,7 +118,7 @@ const Footer = () => {
               </a>
               <a 
                 href="#" 
-                className="text-muted-foreground hover:text-brand transition-colors"
+                className="text-muted-foreground hover:text-primary transition-colors"
                 aria-label="Facebook"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
@@ -130,7 +127,7 @@ const Footer = () => {
               </a>
               <a 
                 href="#" 
-                className="text-muted-foreground hover:text-brand transition-colors"
+                className="text-muted-foreground hover:text-primary transition-colors"
                 aria-label="WhatsApp"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">

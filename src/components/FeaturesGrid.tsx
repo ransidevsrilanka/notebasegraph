@@ -46,20 +46,20 @@ const FeaturesGrid = () => {
   }, []);
 
   return (
-    <section ref={sectionRef} id="features" className="py-24 md:py-32 lg:py-40 bg-vault-dark relative overflow-hidden">
+    <section ref={sectionRef} id="features" className="py-24 md:py-32 lg:py-40 bg-muted/30 relative overflow-hidden">
       {/* Background elements */}
-      <div className="absolute inset-0 bg-gradient-to-b from-background via-vault-dark to-vault-surface" />
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/20 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-b from-background via-muted/30 to-muted/50" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
       
       {/* Floating orb */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-brand/5 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[150px] pointer-events-none" />
       
       <div className="container mx-auto px-4 sm:px-6 relative z-10">
         {/* Section Header */}
         <div className="text-center mb-16 md:mb-24">
-          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 border border-brand/20 mb-6">
-            <Sparkles className="w-4 h-4 text-brand" />
-            <span className="font-accent text-sm text-brand uppercase tracking-wider">Core Features</span>
+          <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="font-accent text-sm text-primary uppercase tracking-wider">Core Features</span>
           </span>
           <h2 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground tracking-tight mb-6">
             What Makes Us <span className="text-brand-gradient">Different</span>
@@ -79,15 +79,15 @@ const FeaturesGrid = () => {
               style={{ transitionDelay: `${index * 0.15}s` }}
             >
               {/* Card */}
-              <div className="relative h-full p-6 md:p-8 lg:p-10 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 hover:border-brand/40 transition-all duration-500 overflow-hidden hover-lift hover-glow">
+              <div className="relative h-full p-6 md:p-8 lg:p-10 rounded-2xl md:rounded-3xl bg-card border border-border hover:border-primary/40 transition-all duration-500 overflow-hidden hover-lift shadow-sm hover:shadow-lg">
                 {/* Number watermark */}
-                <div className="absolute -right-4 -top-8 font-display text-[120px] md:text-[150px] font-black text-brand/[0.03] leading-none pointer-events-none select-none">
+                <div className="absolute -right-4 -top-8 font-display text-[120px] md:text-[150px] font-black text-primary/[0.05] leading-none pointer-events-none select-none">
                   {feature.number}
                 </div>
                 
                 {/* Icon */}
-                <div className="relative z-10 w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-brand/10 flex items-center justify-center mb-6 md:mb-8 group-hover:bg-brand/20 group-hover:scale-110 transition-all duration-500">
-                  <feature.icon className="w-7 h-7 md:w-8 md:h-8 text-brand" />
+                <div className="relative z-10 w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-primary/10 flex items-center justify-center mb-6 md:mb-8 group-hover:bg-primary/20 group-hover:scale-110 transition-all duration-500">
+                  <feature.icon className="w-7 h-7 md:w-8 md:h-8 text-primary" />
                 </div>
 
                 {/* Content */}
@@ -99,7 +99,7 @@ const FeaturesGrid = () => {
                 </p>
 
                 {/* Hover line accent */}
-                <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-brand to-brand-light w-0 group-hover:w-full transition-all duration-500" />
+                <div className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-primary to-primary/60 w-0 group-hover:w-full transition-all duration-500" />
               </div>
             </div>
           ))}

@@ -202,7 +202,7 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background dashboard-dark">
       {/* Header */}
       <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
