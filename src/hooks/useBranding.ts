@@ -13,6 +13,12 @@ const defaultBranding: BrandingSettings = {
     standard: '/access',
     lifetime: '/access',
   },
+  bankDetails: {
+    bankName: 'Bank of Ceylon',
+    accountName: 'ReadVault Education',
+    accountNumber: '1234567890',
+    branch: 'Colombo Main',
+  },
 };
 
 export const useBranding = () => {

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { AlertCircle, ArrowLeft, Building2, CheckCircle, Copy, Crown, MessageCircle, Upload } from 'lucide-react';
 import { TIER_LABELS, type TierType } from '@/types/database';
 import { toast } from 'sonner';
+import { useBranding } from '@/hooks/useBranding';
 
 interface TierPricing {
   name: string;
@@ -27,6 +28,7 @@ const UpgradePage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, enrollment, profile, isLoading: authLoading } = useAuth();
+  const { branding, isLoading: brandingLoading } = useBranding();
 
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
@@ -36,6 +38,7 @@ const UpgradePage = () => {
 
   const [existingRequest, setExistingRequest] = useState<any>(null);
   const [requestFlowStarted, setRequestFlowStarted] = useState(false);
+  const [requestCreating, setRequestCreating] = useState(false);
 
   const [isUploading, setIsUploading] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -44,10 +47,19 @@ const UpgradePage = () => {
 
   const isHighestTier = enrollment?.tier === 'lifetime';
 
+  // Bank details from branding settings
+  const bankDetails = branding.bankDetails || {
+    bankName: 'Bank of Ceylon',
+    accountName: 'ReadVault Education',
+    accountNumber: '1234567890',
+    branch: 'Colombo Main',
+  };
+
   const getTierDisplayName = useMemo(() => {
     return (tier: TierType) => pricing?.[tier]?.name || TIER_LABELS[tier];
   }, [pricing]);
 
+  // Fetch pricing
   useEffect(() => {
     const fetchPricing = async () => {
       setPricingLoading(true);
@@ -59,6 +71,7 @@ const UpgradePage = () => {
     fetchPricing();
   }, []);
 
+  // Check for existing upgrade request
   useEffect(() => {
     if (!user) return;
 
@@ -78,6 +91,7 @@ const UpgradePage = () => {
     checkExistingRequest();
   }, [user?.id]);
 
+  // Set requested tier from URL params
   useEffect(() => {
     if (!enrollment || !pricing) return;
 
@@ -100,16 +114,44 @@ const UpgradePage = () => {
     setAmount(0);
   }, [enrollment?.tier, pricing, searchParams]);
 
-  // Hard-block: highest tier should not have upgrade UI available.
+  // Redirect if highest tier
   useEffect(() => {
     if (isHighestTier) navigate('/dashboard', { replace: true });
   }, [isHighestTier, navigate]);
 
-  // Upload begins ONLY after explicit user action (Request Upgrade) and explicit receipt selection.
+  // Create request record when landing on page with tier param (if no existing request)
+  useEffect(() => {
+    if (!user || !enrollment || !requestedTier || existingRequest || requestCreating) return;
+
+    const createRequest = async () => {
+      setRequestCreating(true);
+      const refNumber = generateReferenceNumber();
+      const { data, error } = await supabase
+        .from('upgrade_requests')
+        .insert({
+          user_id: user.id,
+          enrollment_id: enrollment.id,
+          reference_number: refNumber,
+          current_tier: enrollment.tier,
+          requested_tier: requestedTier,
+          amount: amount,
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        setExistingRequest(data);
+      }
+      setRequestCreating(false);
+    };
+
+    createRequest();
+  }, [user?.id, enrollment?.id, requestedTier, existingRequest, amount, requestCreating]);
+
+  // Upload receipt when file is selected
   useEffect(() => {
     if (!receiptFile || !user || !requestFlowStarted) return;
     void submitUpgradeWithReceipt(receiptFile);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receiptFile, requestFlowStarted, user?.id]);
 
   const generateReferenceNumber = () => {
@@ -200,7 +242,7 @@ const UpgradePage = () => {
   };
 
   // Loading
-  if (authLoading || pricingLoading) {
+  if (authLoading || pricingLoading || brandingLoading) {
     return (
       <main className="min-h-screen bg-background">
         <Navbar />
@@ -275,7 +317,7 @@ const UpgradePage = () => {
                 <CheckCircle className="w-8 h-8 text-foreground" />
               </div>
               <h1 className="font-display text-2xl font-bold text-foreground mb-3">Upgrade request under review</h1>
-              <p className="text-muted-foreground mb-6">We’ve received your submission. Our team will review and apply the upgrade.</p>
+              <p className="text-muted-foreground mb-6">We've received your submission. Our team will review and apply the upgrade.</p>
 
               <div className="bg-secondary/30 rounded-lg p-4 text-left mb-6">
                 <div className="flex items-center justify-between">
@@ -394,41 +436,6 @@ const UpgradePage = () => {
   const resumeNeeded = !!existingRequest && !existingRequest.receipt_url;
   const referenceNumber = existingRequest?.reference_number;
 
-  // Bank details
-  const bankDetails = {
-    bankName: 'Bank of Ceylon',
-    accountName: 'ReadVault Education',
-    accountNumber: '1234567890',
-    branch: 'Colombo Main',
-  };
-
-  // Create request record immediately when landing on this page with a tier param
-  useEffect(() => {
-    if (!user || !enrollment || !requestedTier || existingRequest) return;
-
-    const createRequest = async () => {
-      const refNumber = generateReferenceNumber();
-      const { data, error } = await supabase
-        .from('upgrade_requests')
-        .insert({
-          user_id: user.id,
-          enrollment_id: enrollment.id,
-          reference_number: refNumber,
-          current_tier: enrollment.tier,
-          requested_tier: requestedTier,
-          amount: amount,
-        })
-        .select()
-        .single();
-      
-      if (!error && data) {
-        setExistingRequest(data);
-      }
-    };
-
-    createRequest();
-  }, [user?.id, enrollment?.id, requestedTier, existingRequest, amount]);
-
   return (
     <main className="min-h-screen bg-background">
       <UploadOverlay isVisible={isUploading} message="Submitting…" />
@@ -477,6 +484,13 @@ const UpgradePage = () => {
                 <p className="text-xs text-muted-foreground mt-2">
                   Include this reference in your bank transfer description
                 </p>
+              </div>
+            )}
+
+            {/* Creating request indicator */}
+            {requestCreating && !referenceNumber && (
+              <div className="bg-secondary/30 rounded-lg p-4 mb-6 text-center">
+                <p className="text-muted-foreground">Generating reference number...</p>
               </div>
             )}
 

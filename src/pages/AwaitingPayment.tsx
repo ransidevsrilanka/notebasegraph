@@ -32,8 +32,8 @@ const AwaitingPayment = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [receiptInputKey, setReceiptInputKey] = useState(0);
 
-  // Bank details (you can customize these)
-  const bankDetails = {
+  // Bank details from branding settings
+  const bankDetails = branding.bankDetails || {
     bankName: 'Bank of Ceylon',
     accountName: 'ReadVault Education',
     accountNumber: '1234567890',
