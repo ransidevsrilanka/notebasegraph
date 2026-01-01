@@ -36,6 +36,7 @@ import { MiniChart } from '@/components/dashboard/MiniChart';
 
 interface Stats {
   totalStudents: number;
+  totalCreators: number;
   activeEnrollments: number;
   totalCodes: number;
   activeCodes: number;
@@ -51,6 +52,7 @@ const AdminDashboard = () => {
   const { user, signOut } = useAuth();
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
+    totalCreators: 0,
     activeEnrollments: 0,
     totalCodes: 0,
     activeCodes: 0,
@@ -67,8 +69,16 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
+      // Get non-student user IDs (creators, admins, CMOs)
+      const { data: nonStudentRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['admin', 'super_admin', 'content_admin', 'support_admin', 'creator', 'cmo']);
+      
+      const nonStudentUserIds = new Set((nonStudentRoles || []).map(r => r.user_id));
+
       const [
-        { count: totalStudents },
+        { data: allEnrollments },
         { count: activeEnrollments },
         { count: totalCodes },
         { count: activeCodes },
@@ -76,8 +86,9 @@ const AdminDashboard = () => {
         { count: pendingUpgrades },
         { count: pendingJoinRequests },
         { count: pendingWithdrawals },
+        { count: totalCreators },
       ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('enrollments').select('user_id').eq('is_active', true),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('access_codes').select('*', { count: 'exact', head: true }),
         supabase.from('access_codes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
@@ -85,7 +96,13 @@ const AdminDashboard = () => {
         supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
       ]);
+
+      // Count students = active enrollments excluding non-student roles
+      const totalStudents = (allEnrollments || []).filter(
+        e => !nonStudentUserIds.has(e.user_id)
+      ).length;
 
       // Fetch revenue data from payment_attributions
       const { data: allPayments } = await supabase
@@ -132,7 +149,8 @@ const AdminDashboard = () => {
       setRevenueData(chartData);
 
       setStats({
-        totalStudents: totalStudents || 0,
+        totalStudents,
+        totalCreators: totalCreators || 0,
         activeEnrollments: activeEnrollments || 0,
         totalCodes: totalCodes || 0,
         activeCodes: activeCodes || 0,
@@ -311,6 +329,7 @@ const AdminDashboard = () => {
   const statCards = [
     { label: 'Total Revenue', value: `Rs. ${stats.totalRevenue.toLocaleString()}`, icon: DollarSign },
     { label: 'This Month', value: `Rs. ${stats.thisMonthRevenue.toLocaleString()}`, icon: TrendingUp },
+    { label: 'Total Creators', value: stats.totalCreators, icon: Users },
     { label: 'Total Students', value: stats.totalStudents, icon: Users },
     { label: 'Active Enrollments', value: stats.activeEnrollments, icon: TrendingUp },
   ];
