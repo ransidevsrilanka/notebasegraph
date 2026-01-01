@@ -39,6 +39,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   refreshEnrollment: () => Promise<void>;
   refreshUserSubjects: () => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -403,6 +404,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUserSubjects((subjectsData as UserSubjects) ?? null);
   };
 
+  const refreshUserData = async () => {
+    if (!user) return;
+    await fetchUserData(user.id);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -423,6 +429,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signOut,
         refreshEnrollment,
         refreshUserSubjects,
+        refreshUserData,
       }}
     >
       {children}

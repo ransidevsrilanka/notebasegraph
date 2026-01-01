@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import UploadOverlay from '@/components/UploadOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AlertCircle, ArrowLeft, CheckCircle, Copy, Upload, Building2, Clock, MessageCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle, Copy, Upload, Building2, Clock, MessageCircle, RefreshCw } from 'lucide-react';
 import { TIER_LABELS, type TierType } from '@/types/database';
 import { toast } from 'sonner';
 import { useBranding } from '@/hooks/useBranding';
@@ -24,7 +24,7 @@ interface JoinRequestData {
 
 const AwaitingPayment = () => {
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, enrollment, isLoading: authLoading, refreshUserData } = useAuth();
   const { branding } = useBranding();
   
   const [joinRequest, setJoinRequest] = useState<JoinRequestData | null>(null);
@@ -48,8 +48,14 @@ const AwaitingPayment = () => {
       return;
     }
 
+    // If user already has enrollment, redirect to dashboard
+    if (enrollment) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+
     fetchJoinRequest();
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, enrollment, navigate]);
 
   const fetchJoinRequest = async () => {
     if (!user) return;
@@ -195,6 +201,19 @@ const AwaitingPayment = () => {
                 </div>
 
                 <div className="flex flex-col gap-3">
+                  <Button 
+                    variant="brand" 
+                    className="w-full" 
+                    onClick={async () => {
+                      toast.loading('Checking status...');
+                      await refreshUserData();
+                      toast.dismiss();
+                      // If enrollment exists after refresh, navigate will happen via useEffect
+                    }}
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Check Status
+                  </Button>
                   <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
                     Back to Home
                   </Button>
