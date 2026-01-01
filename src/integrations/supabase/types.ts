@@ -1153,6 +1153,7 @@ export type Database = {
           id: string
           net_amount: number
           paid_at: string | null
+          receipt_url: string | null
           rejection_reason: string | null
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1170,6 +1171,7 @@ export type Database = {
           id?: string
           net_amount: number
           paid_at?: string | null
+          receipt_url?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1187,6 +1189,7 @@ export type Database = {
           id?: string
           net_amount?: number
           paid_at?: string | null
+          receipt_url?: string | null
           rejection_reason?: string | null
           reviewed_at?: string | null
           reviewed_by?: string | null
