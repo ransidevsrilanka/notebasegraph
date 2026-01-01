@@ -165,7 +165,7 @@ const JoinRequests = () => {
       if (request.ref_creator) {
         const { data: creatorData } = await supabase
           .from('creator_profiles')
-          .select('id, lifetime_paid_users')
+          .select('id, lifetime_paid_users, available_balance')
           .eq('referral_code', request.ref_creator.toUpperCase())
           .maybeSingle();
 
@@ -197,10 +197,13 @@ const JoinRequests = () => {
             payment_type: 'bank',
           });
 
-          // Update creator lifetime paid users
+          // Update creator lifetime paid users AND available balance
           await supabase
             .from('creator_profiles')
-            .update({ lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1 })
+            .update({ 
+              lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
+              available_balance: (creatorData.available_balance || 0) + commissionAmount,
+            })
             .eq('id', creatorData.id);
         }
       }
