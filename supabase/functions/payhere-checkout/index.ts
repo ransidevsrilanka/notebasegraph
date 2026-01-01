@@ -21,6 +21,8 @@ interface CheckoutRequest {
   country: string;
   custom_1?: string; // tier type
   custom_2?: string; // enrollment_id or 'new'
+  ref_creator?: string; // referral code
+  discount_code?: string; // discount code
 }
 
 function md5(input: string): string {
@@ -220,6 +222,26 @@ serve(async (req) => {
 
       const hash = generateHash(merchantId, body.order_id, body.amount, body.currency, merchantSecret);
 
+      // Create a pending payment record
+      const { error: paymentError } = await supabase
+        .from("payments")
+        .insert({
+          order_id: body.order_id,
+          amount: body.amount,
+          currency: body.currency,
+          tier: body.custom_1,
+          status: "pending",
+          payment_method: "card",
+          ref_creator: body.ref_creator || null,
+          discount_code: body.discount_code || null,
+        });
+
+      if (paymentError) {
+        console.error("Failed to create payment record:", paymentError);
+      } else {
+        console.log("Payment record created for order:", body.order_id);
+      }
+
       return new Response(
         JSON.stringify({
           merchant_id: merchantId,
@@ -230,6 +252,52 @@ serve(async (req) => {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
+      );
+    }
+
+    // Verify payment status endpoint - called from frontend before creating enrollment
+    if (path === "verify-payment" && req.method === "POST") {
+      const { order_id } = await req.json();
+      
+      if (!order_id) {
+        return new Response(
+          JSON.stringify({ error: "order_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { data: payment, error } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("order_id", order_id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching payment:", error);
+        return new Response(
+          JSON.stringify({ error: "Failed to verify payment" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!payment) {
+        return new Response(
+          JSON.stringify({ verified: false, error: "Payment not found" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          verified: payment.status === "completed",
+          status: payment.status,
+          payment_id: payment.payment_id,
+          amount: payment.amount,
+          tier: payment.tier,
+          ref_creator: payment.ref_creator,
+          discount_code: payment.discount_code,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -270,7 +338,41 @@ serve(async (req) => {
 
       if (!isValid) {
         console.error("Invalid payment signature for order:", orderId);
+        // Update payment status to failed
+        await supabase
+          .from("payments")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("order_id", orderId);
         return new Response("Invalid signature", { status: 400 });
+      }
+
+      // Map status codes
+      let paymentStatus = "pending";
+      if (statusCode === "2") {
+        paymentStatus = "completed";
+      } else if (statusCode === "-1") {
+        paymentStatus = "cancelled";
+      } else if (statusCode === "-2") {
+        paymentStatus = "failed";
+      } else if (statusCode === "-3") {
+        paymentStatus = "chargedback";
+      } else if (statusCode === "0") {
+        paymentStatus = "pending";
+      }
+
+      // Update payment record
+      const { error: updateError } = await supabase
+        .from("payments")
+        .update({
+          status: paymentStatus,
+          payment_id: paymentId,
+          processed_at: paymentStatus === "completed" ? new Date().toISOString() : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", orderId);
+
+      if (updateError) {
+        console.error("Failed to update payment record:", updateError);
       }
 
       // Payment successful (status_code = 2)
@@ -283,15 +385,21 @@ serve(async (req) => {
           const enrollmentId = custom2;
           const newTier = custom1;
 
-          const { error: updateError } = await supabase
+          const { error: enrollmentUpdateError } = await supabase
             .from("enrollments")
             .update({ tier: newTier })
             .eq("id", enrollmentId);
 
-          if (updateError) {
-            console.error("Failed to update enrollment:", updateError);
+          if (enrollmentUpdateError) {
+            console.error("Failed to update enrollment:", enrollmentUpdateError);
           } else {
             console.log("Enrollment upgraded to:", newTier);
+            
+            // Update payment record with enrollment_id
+            await supabase
+              .from("payments")
+              .update({ enrollment_id: enrollmentId })
+              .eq("order_id", orderId);
           }
 
           // Also check if there's a pending upgrade request and approve it
@@ -328,6 +436,40 @@ serve(async (req) => {
       }
 
       return new Response("OK", { status: 200 });
+    }
+
+    // Update payment with user_id and enrollment_id
+    if (path === "update-payment" && req.method === "POST") {
+      const { order_id, user_id, enrollment_id } = await req.json();
+      
+      if (!order_id) {
+        return new Response(
+          JSON.stringify({ error: "order_id is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const { error } = await supabase
+        .from("payments")
+        .update({
+          user_id,
+          enrollment_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("order_id", order_id);
+
+      if (error) {
+        console.error("Error updating payment:", error);
+        return new Response(
+          JSON.stringify({ error: "Failed to update payment" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(JSON.stringify({ error: "Not found" }), {

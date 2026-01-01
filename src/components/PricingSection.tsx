@@ -337,7 +337,7 @@ const PricingSection = () => {
           amount={getDiscountedPrice(selectedTier.price)}
           originalAmount={selectedTier.price}
           discountCode={appliedDiscount?.code}
-          refCreator={refCreator}
+          refCreator={refCreator || localStorage.getItem('refCreator') || undefined}
           userEmail={user?.email}
           userName={profile?.full_name || user?.email?.split("@")[0]}
           isNewUser={!user}

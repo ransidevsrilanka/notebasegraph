@@ -619,6 +619,68 @@ export type Database = {
           },
         ]
       }
+      payments: {
+        Row: {
+          amount: number | null
+          created_at: string
+          currency: string | null
+          discount_code: string | null
+          enrollment_id: string | null
+          id: string
+          order_id: string
+          payment_id: string | null
+          payment_method: string | null
+          processed_at: string | null
+          ref_creator: string | null
+          status: string | null
+          tier: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          discount_code?: string | null
+          enrollment_id?: string | null
+          id?: string
+          order_id: string
+          payment_id?: string | null
+          payment_method?: string | null
+          processed_at?: string | null
+          ref_creator?: string | null
+          status?: string | null
+          tier?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          currency?: string | null
+          discount_code?: string | null
+          enrollment_id?: string | null
+          id?: string
+          order_id?: string
+          payment_id?: string | null
+          payment_method?: string | null
+          processed_at?: string | null
+          ref_creator?: string | null
+          status?: string | null
+          tier?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           abuse_flags: number | null
