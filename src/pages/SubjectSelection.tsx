@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubjectSelection } from '@/hooks/useSubjectSelection';
-import { BASKET_LABELS } from '@/lib/subjectValidation';
+import { BASKET_LABELS, OL_COMPULSORY_SUBJECTS } from '@/lib/subjectValidation';
 import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +52,13 @@ const SubjectSelection = () => {
     isLoading,
     isSaving,
     isLocked,
+    isOL,
+    firstLanguage,
+    setFirstLanguage,
+    religion,
+    setReligion,
+    olReligionOptions,
+    olFirstLanguageOptions,
     toggleSubject,
     saveSelection,
   } = useSubjectSelection();
@@ -93,7 +102,7 @@ const SubjectSelection = () => {
     const { error } = await supabase
       .from('profiles')
       .update({ full_name: userName.trim() })
-      .eq('id', user.id);
+      .eq('user_id', user.id);
 
     setIsSavingName(false);
 
@@ -120,7 +129,10 @@ const SubjectSelection = () => {
     return null; // Will redirect via useEffect
   }
 
-  const basketOrder = ['mandatory', 'core', 'optional', 'religion', 'language', 'aesthetic'];
+  // Different basket order for O/L vs A/L
+  const basketOrder = isOL 
+    ? ['basket1', 'basket2', 'basket3']
+    : ['mandatory', 'core', 'optional', 'restricted', 'religion', 'language', 'aesthetic'];
 
   return (
     <main className="min-h-screen bg-background">
@@ -134,13 +146,18 @@ const SubjectSelection = () => {
               Step 2 of 2
             </span>
             <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-2 tracking-tight">
-              Select Your A/L Subjects
+              {isOL ? 'Select Your O/L Subjects' : 'Select Your A/L Subjects'}
             </h1>
             <p className="text-muted-foreground mt-2">
-              {GRADE_LABELS[enrollment.grade]} • {STREAM_LABELS[enrollment.stream]} Stream
+              {GRADE_LABELS[enrollment.grade as keyof typeof GRADE_LABELS] || enrollment.grade}
+              {!isOL && enrollment.stream && ` • ${STREAM_LABELS[enrollment.stream as keyof typeof STREAM_LABELS]} Stream`}
             </p>
             <p className="text-sm text-muted-foreground mt-4">
-              Choose exactly <strong>3 subjects</strong> for your A/L studies. This selection will be locked after confirmation.
+              {isOL ? (
+                <>Choose <strong>1 subject from each category</strong> (3 optional subjects total). Your compulsory subjects are pre-set.</>
+              ) : (
+                <>Choose exactly <strong>3 subjects</strong> for your A/L studies. This selection will be locked after confirmation.</>
+              )}
             </p>
           </header>
 
@@ -151,6 +168,60 @@ const SubjectSelection = () => {
             </div>
           ) : (
             <>
+              {/* O/L Compulsory Subjects Display */}
+              {isOL && (
+                <div className="glass-card p-6 mb-8">
+                  <h2 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-brand" />
+                    Compulsory Subjects (Fixed)
+                  </h2>
+                  
+                  {/* First Language Selection */}
+                  <div className="mb-6">
+                    <Label className="text-sm font-medium text-muted-foreground mb-3 block">First Language</Label>
+                    <RadioGroup value={firstLanguage} onValueChange={setFirstLanguage} className="flex gap-4">
+                      {olFirstLanguageOptions.map((subj) => (
+                        <div key={subj.id} className="flex items-center space-x-2">
+                          <RadioGroupItem value={subj.subject_name} id={subj.id} />
+                          <Label htmlFor={subj.id} className="cursor-pointer">
+                            {subj.subject_name.replace('First Language (', '').replace(')', '')}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+
+                  {/* Religion Selection */}
+                  <div className="mb-6">
+                    <Label className="text-sm font-medium text-muted-foreground mb-3 block">Religion</Label>
+                    <RadioGroup value={religion} onValueChange={setReligion} className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {olReligionOptions.map((subj) => (
+                        <div key={subj.id} className="flex items-center space-x-2">
+                          <RadioGroupItem value={subj.subject_name} id={subj.id} />
+                          <Label htmlFor={subj.id} className="cursor-pointer">{subj.subject_name}</Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+
+                  {/* Fixed Compulsory Subjects */}
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground mb-3 block">Fixed Subjects</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {OL_COMPULSORY_SUBJECTS.map((subject) => (
+                        <span
+                          key={subject}
+                          className="inline-flex items-center gap-1.5 bg-secondary/80 text-muted-foreground px-3 py-1.5 rounded-lg text-sm border border-border"
+                        >
+                          <Lock className="w-3 h-3" />
+                          {subject}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Validation Status */}
               <div className="mb-6">
                 {validation.errors.length > 0 && (
@@ -197,21 +268,45 @@ const SubjectSelection = () => {
 
               {/* Subject Selection */}
               <div className="space-y-8">
+                {isOL && (
+                  <h2 className="font-display text-xl font-semibold text-foreground">
+                    Optional Subjects (Choose 1 from each category)
+                  </h2>
+                )}
+                
                 {basketOrder.map((basketKey) => {
                   const subjects = subjectsByBasket[basketKey];
                   if (!subjects || subjects.length === 0) return null;
+
+                  // For O/L, skip mandatory/religion baskets as they're handled above
+                  if (isOL && (basketKey === 'mandatory' || basketKey === 'religion')) {
+                    return null;
+                  }
 
                   return (
                     <div key={basketKey} className="glass-card p-6">
                       <h2 className="font-display text-lg font-semibold text-foreground mb-4">
                         {BASKET_LABELS[basketKey] || basketKey}
+                        {isOL && (
+                          <span className="text-sm font-normal text-muted-foreground ml-2">
+                            (Select 1)
+                          </span>
+                        )}
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {subjects.map((subject) => {
                           const isSelected = selectedSubjects.includes(subject.subject_name);
                           const isMandatory = mandatorySubjects.includes(subject.subject_name);
-                          // Only disable if at max AND this subject is not already selected
-                          const isDisabled = selectedSubjects.length >= 3 && !isSelected;
+                          
+                          // For O/L: check if another subject from same basket is selected
+                          const sameBucketSelected = isOL && selectedSubjects.some(selected => {
+                            const selSubj = subjects.find(s => s.subject_name === selected);
+                            return selSubj && selSubj.subject_name !== subject.subject_name;
+                          });
+                          
+                          // Disable if at max AND this subject is not already selected (A/L)
+                          // Or if same bucket already has a selection (O/L) - but allow clicking to replace
+                          const isDisabled = !isOL && selectedSubjects.length >= 3 && !isSelected;
 
                           return (
                             <label
@@ -220,7 +315,9 @@ const SubjectSelection = () => {
                                 flex items-center gap-3 p-4 rounded-lg border transition-all
                                 ${isSelected 
                                   ? 'bg-brand/10 border-brand/40' 
-                                  : 'bg-secondary/50 border-border hover:border-muted-foreground/30'}
+                                  : sameBucketSelected
+                                    ? 'bg-secondary/30 border-border/50 hover:border-muted-foreground/30'
+                                    : 'bg-secondary/50 border-border hover:border-muted-foreground/30'}
                                 ${isMandatory ? 'cursor-default' : isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                               `}
                               onClick={(e) => {
@@ -230,11 +327,19 @@ const SubjectSelection = () => {
                                 toggleSubject(subject.subject_name);
                               }}
                             >
-                              <Checkbox
-                                checked={isSelected}
-                                disabled={isMandatory}
-                                className="pointer-events-none"
-                              />
+                              {isOL ? (
+                                <RadioGroupItem
+                                  value={subject.subject_name}
+                                  checked={isSelected}
+                                  className="pointer-events-none"
+                                />
+                              ) : (
+                                <Checkbox
+                                  checked={isSelected}
+                                  disabled={isMandatory}
+                                  className="pointer-events-none"
+                                />
+                              )}
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className={`font-medium ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
@@ -244,6 +349,11 @@ const SubjectSelection = () => {
                                     <span className="text-xs bg-brand/20 text-brand px-2 py-0.5 rounded-full flex items-center gap-1">
                                       <Lock className="w-3 h-3" />
                                       Required
+                                    </span>
+                                  )}
+                                  {subject.basket === 'restricted' && (
+                                    <span className="text-xs bg-yellow-500/20 text-yellow-600 px-2 py-0.5 rounded-full">
+                                      Restricted
                                     </span>
                                   )}
                                 </div>
@@ -268,7 +378,7 @@ const SubjectSelection = () => {
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                   <div>
                     <h3 className="font-display font-semibold text-foreground">
-                      Selected Subjects ({selectedSubjects.length}/3)
+                      {isOL ? 'Selected Optional Subjects' : 'Selected Subjects'} ({selectedSubjects.length}/3)
                     </h3>
                     {selectedSubjects.length > 0 ? (
                       <div className="flex flex-wrap gap-2 mt-2">
@@ -318,7 +428,19 @@ const SubjectSelection = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Your Subjects</AlertDialogTitle>
             <AlertDialogDescription className="space-y-3">
-              <p>You are about to lock the following subjects:</p>
+              {isOL && (
+                <>
+                  <p className="font-medium text-foreground">Compulsory Subjects:</p>
+                  <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                    <li>{firstLanguage}</li>
+                    <li>{religion}</li>
+                    {OL_COMPULSORY_SUBJECTS.map((s) => <li key={s}>{s}</li>)}
+                  </ul>
+                </>
+              )}
+              <p className="font-medium text-foreground mt-4">
+                {isOL ? 'Optional Subjects:' : 'You are about to lock the following subjects:'}
+              </p>
               <ul className="list-disc list-inside space-y-1">
                 {selectedSubjects.map((s) => (
                   <li key={s} className="font-medium text-foreground">{s}</li>
