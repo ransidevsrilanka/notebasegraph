@@ -106,6 +106,10 @@ const PaymentMethodDialog = ({
       const firstName = nameParts[0] || "Customer";
       const lastName = nameParts.slice(1).join(" ") || "User";
 
+      // Get refCreator from localStorage as fallback
+      const effectiveRefCreator = refCreator || localStorage.getItem('refCreator') || undefined;
+      const effectiveDiscountCode = discountCode || localStorage.getItem('discount_code') || undefined;
+
       // Get hash from edge function
       const { data, error } = await supabase.functions.invoke(
         "payhere-checkout/generate-hash",
@@ -124,6 +128,8 @@ const PaymentMethodDialog = ({
             country: "Sri Lanka",
             custom_1: tier,
             custom_2: enrollmentId || "new",
+            ref_creator: effectiveRefCreator,
+            discount_code: effectiveDiscountCode,
           },
         }
       );

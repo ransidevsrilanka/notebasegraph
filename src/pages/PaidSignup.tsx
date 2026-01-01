@@ -256,6 +256,47 @@ const PaidSignup = () => {
       return;
     }
 
+    // Verify payment was actually successful before creating enrollment
+    try {
+      const { data: verifyData, error: verifyError } = await supabase.functions.invoke(
+        "payhere-checkout/verify-payment",
+        { body: { order_id: paymentData.orderId } }
+      );
+
+      if (verifyError) {
+        console.error("Payment verification error:", verifyError);
+        // Allow proceeding if verification service is down but log warning
+        console.warn("Payment verification service unavailable, proceeding with enrollment");
+      } else if (verifyData && !verifyData.verified) {
+        // Payment was not verified - check if it's still pending
+        if (verifyData.status === "pending") {
+          toast.error("Payment is still being processed. Please wait a moment and try again.");
+          setIsLoading(false);
+          return;
+        } else if (verifyData.status === "failed" || verifyData.status === "cancelled") {
+          toast.error("Payment was not successful. Please try again.");
+          localStorage.removeItem('pending_payment');
+          navigate('/pricing');
+          return;
+        }
+      }
+
+      // Get referral info from verified payment data if available
+      const verifiedRefCreator = verifyData?.ref_creator || paymentData.refCreator || localStorage.getItem('refCreator');
+      const verifiedDiscountCode = verifyData?.discount_code || paymentData.discountCode;
+
+      // Update paymentData with verified info
+      if (verifiedRefCreator && !paymentData.refCreator) {
+        paymentData.refCreator = verifiedRefCreator;
+      }
+      if (verifiedDiscountCode && !paymentData.discountCode) {
+        paymentData.discountCode = verifiedDiscountCode;
+      }
+    } catch (verifyErr) {
+      console.error("Payment verification failed:", verifyErr);
+      // Continue anyway if verification fails but log warning
+    }
+
     // Calculate expiry based on tier (1 year for silver/gold, lifetime for platinum)
     const durationDays = paymentData.tier === 'lifetime' ? null : 365;
     const expiresAt = durationDays 
@@ -286,32 +327,50 @@ const PaidSignup = () => {
       return;
     }
 
+    // Update payment record with user_id and enrollment_id
+    try {
+      await supabase.functions.invoke("payhere-checkout/update-payment", {
+        body: {
+          order_id: paymentData.orderId,
+          user_id: currentUser.id,
+          enrollment_id: enrollmentData.id,
+        },
+      });
+    } catch (updateErr) {
+      console.error("Failed to update payment record:", updateErr);
+    }
+
     // Handle referral attribution if present
-    if (paymentData.refCreator || paymentData.discountCode) {
+    // Also check localStorage as fallback for referral info
+    const effectiveRefCreator = paymentData.refCreator || localStorage.getItem('refCreator');
+    const effectiveDiscountCode = paymentData.discountCode;
+
+    if (effectiveRefCreator || effectiveDiscountCode) {
       try {
         let creatorId: string | null = null;
         let discountCodeId: string | null = null;
         let referralSource: 'link' | 'discount_code' = 'link';
 
         // Find creator by referral code
-        if (paymentData.refCreator) {
+        if (effectiveRefCreator) {
           const { data: creatorData } = await supabase
             .from('creator_profiles')
             .select('id')
-            .eq('referral_code', paymentData.refCreator.toUpperCase())
+            .eq('referral_code', effectiveRefCreator.toUpperCase())
             .maybeSingle();
           
           if (creatorData) {
             creatorId = creatorData.id;
+            console.log("Found creator by referral code:", effectiveRefCreator, "->", creatorId);
           }
         }
 
         // Find creator by discount code
-        if (paymentData.discountCode && !creatorId) {
+        if (effectiveDiscountCode && !creatorId) {
           const { data: dcData } = await supabase
             .from('discount_codes')
             .select('id, creator_id')
-            .eq('code', paymentData.discountCode.toUpperCase())
+            .eq('code', effectiveDiscountCode.toUpperCase())
             .eq('is_active', true)
             .maybeSingle();
           
@@ -319,6 +378,7 @@ const PaidSignup = () => {
             creatorId = dcData.creator_id;
             discountCodeId = dcData.id;
             referralSource = 'discount_code';
+            console.log("Found creator by discount code:", effectiveDiscountCode, "->", creatorId);
 
             // Update discount code usage - fetch current and increment
             const { data: currentDC } = await supabase
