@@ -110,54 +110,132 @@ const AdminDashboard = () => {
   const handleClearAllData = async () => {
     setIsClearing(true);
     try {
+      // Get admin and CMO user IDs to preserve
+      const { data: adminRoles } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .in('role', ['super_admin', 'content_admin', 'support_admin', 'admin', 'cmo']);
+      
+      const preservedUserIds = adminRoles?.map(r => r.user_id) || [];
+
+      // 1. Delete payment attributions (referral income tracking)
+      const { error: paymentAttrError } = await supabase
+        .from('payment_attributions')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (paymentAttrError) throw paymentAttrError;
+
+      // 2. Delete user attributions (referral links)
+      const { error: userAttrError } = await supabase
+        .from('user_attributions')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (userAttrError) throw userAttrError;
+
+      // 3. Delete payments
+      const { error: paymentsError } = await supabase
+        .from('payments')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (paymentsError) throw paymentsError;
+
+      // 4. Delete join requests (bank transfers)
+      const { error: joinReqError } = await supabase
+        .from('join_requests')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (joinReqError) throw joinReqError;
+
+      // 5. Delete withdrawal requests
+      const { error: withdrawalReqError } = await supabase
+        .from('withdrawal_requests')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (withdrawalReqError) throw withdrawalReqError;
+
+      // 6. Delete withdrawal methods
+      const { error: withdrawalMethodsError } = await supabase
+        .from('withdrawal_methods')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (withdrawalMethodsError) throw withdrawalMethodsError;
+
+      // 7. Delete creator payouts
+      const { error: creatorPayoutsError } = await supabase
+        .from('creator_payouts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (creatorPayoutsError) throw creatorPayoutsError;
+
+      // 8. Delete discount codes
+      const { error: discountCodesError } = await supabase
+        .from('discount_codes')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (discountCodesError) throw discountCodesError;
+
+      // 9. Delete creator profiles (this deletes all creators)
+      const { error: creatorProfilesError } = await supabase
+        .from('creator_profiles')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (creatorProfilesError) throw creatorProfilesError;
+
+      // 10. Delete user subjects
+      const { error: userSubjectsError } = await supabase
+        .from('user_subjects')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (userSubjectsError) throw userSubjectsError;
+
+      // 11. Delete download logs
       const { error: downloadError } = await supabase
         .from('download_logs')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (downloadError) throw downloadError;
 
+      // 12. Delete upgrade requests
       const { error: upgradeError } = await supabase
         .from('upgrade_requests')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (upgradeError) throw upgradeError;
 
+      // 13. Delete enrollments
       const { error: enrollmentError } = await supabase
         .from('enrollments')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (enrollmentError) throw enrollmentError;
 
+      // 14. Delete access codes
       const { error: codesError } = await supabase
         .from('access_codes')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (codesError) throw codesError;
 
+      // 15. Delete user sessions
       const { error: sessionsError } = await supabase
         .from('user_sessions')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (sessionsError) throw sessionsError;
 
+      // 16. Delete student and creator roles (preserve admin/cmo roles)
       const { error: rolesError } = await supabase
         .from('user_roles')
         .delete()
-        .eq('role', 'student');
+        .in('role', ['student', 'creator', 'user']);
       if (rolesError) throw rolesError;
 
-      const { data: adminRoles } = await supabase
-        .from('user_roles')
-        .select('user_id')
-        .in('role', ['super_admin', 'content_admin', 'support_admin']);
-      
-      const adminUserIds = adminRoles?.map(r => r.user_id) || [];
-
-      if (adminUserIds.length > 0) {
+      // 17. Delete non-admin/cmo profiles
+      if (preservedUserIds.length > 0) {
         const { error: profilesError } = await supabase
           .from('profiles')
           .delete()
-          .not('id', 'in', `(${adminUserIds.join(',')})`);
+          .not('user_id', 'in', `(${preservedUserIds.join(',')})`);
         if (profilesError) throw profilesError;
       } else {
         const { error: profilesError } = await supabase
@@ -167,7 +245,7 @@ const AdminDashboard = () => {
         if (profilesError) throw profilesError;
       }
 
-      toast.success('All user data cleared. Non-admin accounts can no longer sign in.');
+      toast.success('All user data, stats, and creator accounts cleared. Admin & CMO accounts preserved.');
       fetchStats();
     } catch (error: any) {
       console.error('Error clearing data:', error);
@@ -302,10 +380,10 @@ const AdminDashboard = () => {
             <h3 className="font-semibold text-foreground">Danger Zone</h3>
           </div>
           <p className="text-muted-foreground text-sm mb-2">
-            Permanently delete all user accounts, enrollments, access codes, sessions, and activity logs.
+            Permanently delete all user accounts, enrollments, payments, referral data, creator accounts, and activity logs.
           </p>
           <p className="text-destructive text-xs font-medium mb-4">
-            Warning: All non-admin users will be unable to sign in after this action.
+            Warning: This resets the entire platform. Only admin and CMO accounts will be preserved.
           </p>
           <AlertDialog>
             <AlertDialogTrigger asChild>
@@ -316,20 +394,25 @@ const AdminDashboard = () => {
             </AlertDialogTrigger>
             <AlertDialogContent className="border-destructive/30">
               <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive">Confirm Data Purge</AlertDialogTitle>
+                <AlertDialogTitle className="text-destructive">Confirm Complete Data Purge</AlertDialogTitle>
                 <AlertDialogDescription asChild>
                   <div className="space-y-3">
                     <p className="text-sm">This action is irreversible. The following will be permanently deleted:</p>
                     <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      <li>All student profiles</li>
+                      <li>All student profiles & accounts</li>
+                      <li>All creator accounts & their stats</li>
                       <li>All access codes</li>
                       <li>All enrollments</li>
+                      <li>All payments (card & bank)</li>
+                      <li>All join requests</li>
+                      <li>All referral attributions & commissions</li>
+                      <li>All withdrawal requests & methods</li>
+                      <li>All discount codes</li>
                       <li>All upgrade requests</li>
-                      <li>All user sessions</li>
-                      <li>All download logs</li>
+                      <li>All user sessions & download logs</li>
                     </ul>
                     <p className="text-xs text-foreground/70 font-medium border-t pt-3 mt-3">
-                      Admin accounts will be preserved.
+                      Admin and CMO accounts will be preserved.
                     </p>
                   </div>
                 </AlertDialogDescription>

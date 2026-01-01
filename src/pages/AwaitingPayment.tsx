@@ -60,6 +60,25 @@ const AwaitingPayment = () => {
   const fetchJoinRequest = async () => {
     if (!user) return;
 
+    // First check if user has an approved join request - if so, refresh to get enrollment
+    const { data: approvedRequest } = await supabase
+      .from('join_requests')
+      .select('id, status')
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (approvedRequest) {
+      // User was approved! Refresh their data to pick up the enrollment
+      await refreshUserData();
+      setIsLoading(false);
+      // The useEffect will redirect to dashboard once enrollment is loaded
+      return;
+    }
+
+    // Otherwise fetch pending join request
     const { data, error } = await supabase
       .from('join_requests')
       .select('*')
