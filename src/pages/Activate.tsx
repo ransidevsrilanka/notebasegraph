@@ -1,18 +1,47 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
 import { Key, AlertCircle } from 'lucide-react';
 
 const Activate = () => {
-  const { user, enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, signOut, isLoading } = useAuth();
+  const { user, enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, signOut, isLoading, refreshUserData } = useAuth();
   const navigate = useNavigate();
+  const [isCheckingApproval, setIsCheckingApproval] = useState(true);
+
+  // Check if user has an approved join request that hasn't been picked up yet
+  useEffect(() => {
+    const checkApprovedRequest = async () => {
+      if (!user || isLoading) return;
+      
+      // If user has no enrollment and no pending request, check if they were just approved
+      if (!enrollment && !pendingJoinRequest) {
+        const { data: approvedRequest } = await supabase
+          .from('join_requests')
+          .select('id, status')
+          .eq('user_id', user.id)
+          .eq('status', 'approved')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (approvedRequest) {
+          // User was approved! Refresh to pick up enrollment
+          await refreshUserData();
+        }
+      }
+      setIsCheckingApproval(false);
+    };
+
+    checkApprovedRequest();
+  }, [user, isLoading, enrollment, pendingJoinRequest, refreshUserData]);
 
   // Redirect non-students to their appropriate dashboard
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isCheckingApproval) return;
     
     if (enrollment) {
       navigate('/dashboard', { replace: true });
@@ -39,10 +68,10 @@ const Activate = () => {
       navigate('/awaiting-payment', { replace: true });
       return;
     }
-  }, [enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, isLoading, navigate]);
+  }, [enrollment, isAdmin, isCMO, isCreator, pendingJoinRequest, isLoading, isCheckingApproval, navigate]);
 
   // Show loading while checking roles
-  if (isLoading || enrollment || isAdmin || isCMO || isCreator || pendingJoinRequest) {
+  if (isLoading || isCheckingApproval || enrollment || isAdmin || isCMO || isCreator || pendingJoinRequest) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin" />
