@@ -144,9 +144,10 @@ const CreatorSignup = () => {
       setSuccess(true);
       toast.success("Account created! Redirecting to your dashboard...");
       
+      // Force reload to ensure auth state is fully refreshed
       setTimeout(() => {
-        navigate('/creator/dashboard');
-      }, 2000);
+        window.location.href = '/creator/dashboard';
+      }, 1500);
 
     } catch (error) {
       console.error('Signup error:', error);
