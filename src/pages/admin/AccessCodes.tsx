@@ -190,7 +190,7 @@ const AccessCodes = () => {
   };
 
   return (
-    <main className="min-h-screen bg-background dashboard-dark">
+    <main className="min-h-screen bg-background">
       {/* QR Code Modal */}
       {qrCode && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

@@ -28,7 +28,7 @@ const Navbar = () => {
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-background/95 backdrop-blur-xl border-b border-border shadow-sm' : 'bg-transparent'
+      scrolled ? 'bg-vault-dark/90 backdrop-blur-xl border-b border-border/50' : 'bg-transparent'
     }`}>
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
@@ -39,7 +39,7 @@ const Navbar = () => {
                 <img src={branding.logoImage} alt={branding.siteName} className="w-8 h-8 md:w-10 md:h-10 rounded-lg object-cover" />
               ) : branding.logoText ? (
                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center">
-                  <span className="font-display text-base md:text-lg font-bold text-primary">{branding.logoText}</span>
+                  <span className="font-display text-base md:text-lg font-bold text-brand">{branding.logoText}</span>
                 </div>
               ) : null
             )}
@@ -50,15 +50,15 @@ const Navbar = () => {
 
           {/* Centered Desktop Navigation */}
           <div className="hidden md:flex items-center justify-center absolute left-1/2 -translate-x-1/2">
-            <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-muted/50 border border-border/30 backdrop-blur-sm">
+            <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-glass/50 border border-border/30 backdrop-blur-sm">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   to={link.path}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
                     isActive(link.path)
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      ? "bg-brand/10 text-brand"
+                      : "text-muted-foreground hover:text-foreground hover:bg-glass"
                   }`}
                 >
                   {link.name}
@@ -75,7 +75,7 @@ const Navbar = () => {
               </Button>
             </Link>
             <Link to="/access">
-              <Button size="sm" className="gap-2 font-semibold bg-primary text-primary-foreground hover:bg-primary/90">
+              <Button variant="brand" size="sm" className="gap-2 font-semibold">
                 <Key className="w-4 h-4" />
                 Enter Code
               </Button>
@@ -84,7 +84,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden p-2 text-foreground rounded-lg hover:bg-muted transition-colors"
+            className="md:hidden p-2 text-foreground rounded-lg hover:bg-glass transition-colors"
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -95,7 +95,7 @@ const Navbar = () => {
         <div className={`md:hidden overflow-hidden transition-all duration-300 ease-out ${
           isOpen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'
         }`}>
-          <div className="py-4 space-y-2 border-t border-border bg-background">
+          <div className="py-4 space-y-2 border-t border-border/50 bg-vault-dark">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
@@ -103,8 +103,8 @@ const Navbar = () => {
                 onClick={() => setIsOpen(false)}
                 className={`block px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                   isActive(link.path)
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    ? "bg-brand/10 text-brand"
+                    : "text-muted-foreground hover:text-foreground hover:bg-glass"
                 }`}
               >
                 {link.name}
@@ -117,7 +117,7 @@ const Navbar = () => {
                 </Button>
               </Link>
               <Link to="/access" onClick={() => setIsOpen(false)}>
-                <Button size="sm" className="w-full gap-2 bg-primary text-primary-foreground">
+                <Button variant="brand" size="sm" className="w-full gap-2">
                   <Key className="w-4 h-4" />
                   Enter Code
                 </Button>

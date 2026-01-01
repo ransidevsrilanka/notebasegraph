@@ -240,14 +240,14 @@ const CMODashboard = () => {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-background dashboard-dark flex items-center justify-center">
+      <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Loading dashboard...</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-dark">
+    <main className="min-h-screen bg-background">
       {/* Header */}
       <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">

@@ -19,8 +19,12 @@ const ParallaxHero = () => {
   };
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-b from-background to-muted/30">
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Parallax Background Layers */}
+      <div 
+        className="absolute inset-0 bg-vault-dark"
+        style={{ transform: `translateY(${scrollY * 0.5}px)` }}
+      />
       <div 
         className="absolute inset-0 hero-gradient"
         style={{ transform: `translateY(${scrollY * 0.3}px)` }}
@@ -30,7 +34,7 @@ const ParallaxHero = () => {
       <div 
         className="absolute inset-0 opacity-[0.03]"
         style={{
-          backgroundImage: `linear-gradient(hsl(var(--primary) / 0.2) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--primary) / 0.2) 1px, transparent 1px)`,
+          backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
           backgroundSize: '60px 60px',
           transform: `translateY(${scrollY * 0.2}px)`
         }}
@@ -38,11 +42,11 @@ const ParallaxHero = () => {
       
       {/* Floating orbs with parallax */}
       <div 
-        className="absolute top-1/4 left-1/4 w-[400px] md:w-[600px] h-[400px] md:h-[600px] bg-primary/10 rounded-full blur-[120px] md:blur-[150px] animate-float"
+        className="absolute top-1/4 left-1/4 w-[400px] md:w-[600px] h-[400px] md:h-[600px] bg-brand/8 rounded-full blur-[120px] md:blur-[150px] animate-float"
         style={{ transform: `translate(${scrollY * 0.1}px, ${scrollY * 0.15}px)` }}
       />
       <div 
-        className="absolute bottom-1/4 right-1/4 w-[300px] md:w-[400px] h-[300px] md:h-[400px] bg-primary/5 rounded-full blur-[100px] md:blur-[120px]"
+        className="absolute bottom-1/4 right-1/4 w-[300px] md:w-[400px] h-[300px] md:h-[400px] bg-brand/5 rounded-full blur-[100px] md:blur-[120px]"
         style={{ 
           transform: `translate(-${scrollY * 0.08}px, ${scrollY * 0.1}px)`,
           animationDelay: '2s' 
@@ -54,8 +58,8 @@ const ParallaxHero = () => {
         <div className="max-w-5xl mx-auto text-center">
           {/* Badge */}
           <div className="flex justify-center mb-8 md:mb-10">
-            <div className="inline-flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm animate-slide-up">
-              <GraduationCap className="w-4 h-4 text-primary" />
+            <div className="inline-flex items-center gap-2 px-4 md:px-5 py-2 md:py-2.5 rounded-full bg-glass/50 border border-brand/20 backdrop-blur-sm animate-slide-up">
+              <GraduationCap className="w-4 h-4 text-brand" />
               <span className="text-xs md:text-sm text-muted-foreground font-body">For Sri Lankan O/L & A/L Students</span>
             </div>
           </div>
@@ -83,13 +87,13 @@ const ParallaxHero = () => {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 mb-16 md:mb-20 animate-slide-up px-4" style={{ animationDelay: '0.3s' }}>
             <Link to="/access" className="w-full sm:w-auto">
-              <Button size="lg" className="gap-3 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-semibold w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90 hover-glow">
+              <Button variant="brand" size="lg" className="gap-3 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-semibold w-full sm:w-auto hover-glow">
                 <Key className="w-4 md:w-5 h-4 md:h-5" />
                 Enter Access Code
               </Button>
             </Link>
             <Link to="/pricing" className="w-full sm:w-auto">
-              <Button variant="outline" size="lg" className="gap-2 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-medium border-border hover:bg-muted hover:border-primary/30 w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="gap-2 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-medium border-border/50 hover:bg-glass hover:border-brand/30 w-full sm:w-auto">
                 View Plans
                 <ArrowRight className="w-4 h-4" />
               </Button>
@@ -103,7 +107,7 @@ const ParallaxHero = () => {
             style={{ animationDelay: '0.4s' }}
           >
             <span className="font-accent text-xs text-muted-foreground uppercase tracking-[0.2em]">Discover More</span>
-            <div className="w-8 h-12 rounded-full border border-border flex items-start justify-center p-2 group-hover:border-primary/50 transition-colors">
+            <div className="w-8 h-12 rounded-full border border-border/50 flex items-start justify-center p-2 group-hover:border-brand/50 transition-colors">
               <ChevronDown className="w-4 h-4 text-muted-foreground animate-bounce" />
             </div>
           </div>

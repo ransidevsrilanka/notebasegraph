@@ -61,7 +61,7 @@ const StickyServices = () => {
           }}
         >
           <div 
-            className="absolute inset-0 bg-background"
+            className="absolute inset-0 bg-vault-dark"
             style={{
               opacity: 0.98 - (index * 0.02)
             }}
@@ -69,7 +69,7 @@ const StickyServices = () => {
           
           {/* Accent glow */}
           <div 
-            className={`absolute top-1/2 ${index % 2 === 0 ? 'right-0' : 'left-0'} w-[300px] md:w-[500px] h-[300px] md:h-[500px] -translate-y-1/2 rounded-full blur-[150px] md:blur-[200px] pointer-events-none bg-primary/10`}
+            className={`absolute top-1/2 ${index % 2 === 0 ? 'right-0' : 'left-0'} w-[300px] md:w-[500px] h-[300px] md:h-[500px] -translate-y-1/2 rounded-full blur-[150px] md:blur-[200px] pointer-events-none bg-brand/8`}
           />
 
           <div 
@@ -86,7 +86,7 @@ const StickyServices = () => {
                 <h2 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4 tracking-tight">
                   {service.title}
                 </h2>
-                <p className="text-lg md:text-xl font-medium mb-6 text-primary">
+                <p className="text-lg md:text-xl font-medium mb-6 text-brand">
                   {service.subtitle}
                 </p>
                 <p className="font-body text-base md:text-lg text-muted-foreground leading-relaxed mb-8 max-w-lg">
@@ -101,7 +101,7 @@ const StickyServices = () => {
                       className="flex items-center gap-2 animate-slide-up"
                       style={{ animationDelay: `${0.3 + fIndex * 0.1}s` }}
                     >
-                      <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-brand" />
                       <span className="font-body text-sm text-foreground">{feature}</span>
                     </li>
                   ))}
@@ -112,14 +112,14 @@ const StickyServices = () => {
               <div className={`${index % 2 === 1 ? 'lg:order-1' : ''}`}>
                 <div className="relative">
                   {/* Main card */}
-                  <div className="relative p-8 md:p-12 rounded-2xl md:rounded-3xl bg-card border border-border backdrop-blur-sm overflow-hidden hover-lift shadow-lg">
+                  <div className="relative p-8 md:p-12 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 backdrop-blur-sm overflow-hidden hover-lift hover-glow">
                     {/* Icon */}
-                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl md:rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-8">
-                      <service.icon className="w-10 h-10 md:w-12 md:h-12 text-primary" />
+                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl md:rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-8">
+                      <service.icon className="w-10 h-10 md:w-12 md:h-12 text-brand" />
                     </div>
 
                     {/* Decorative number */}
-                    <div className="absolute -right-4 -bottom-8 font-display text-[150px] md:text-[200px] font-black text-foreground/[0.03] leading-none pointer-events-none select-none">
+                    <div className="absolute -right-4 -bottom-8 font-display text-[150px] md:text-[200px] font-black text-foreground/[0.02] leading-none pointer-events-none select-none">
                       0{service.id}
                     </div>
 
@@ -134,14 +134,14 @@ const StickyServices = () => {
                   </div>
 
                   {/* Floating accent */}
-                  <div className="absolute -top-4 -right-4 w-24 md:w-32 h-24 md:h-32 rounded-full blur-[40px] md:blur-[60px] bg-primary/20" />
+                  <div className="absolute -top-4 -right-4 w-24 md:w-32 h-24 md:h-32 rounded-full blur-[40px] md:blur-[60px] bg-brand/20" />
                 </div>
               </div>
             </div>
           </div>
 
           {/* Section separator */}
-          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/30 to-transparent" />
         </div>
       ))}
     </section>
