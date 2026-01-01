@@ -31,6 +31,7 @@ import {
   BarChart3,
   Wallet,
   RefreshCw,
+  GitCompare,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
@@ -241,6 +242,7 @@ const AdminDashboard = () => {
   const menuItems = [
     { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: stats.pendingJoinRequests },
     { label: 'View Payments', href: '/admin/payments', icon: DollarSign, description: 'All card & bank payments', badge: 0 },
+    { label: 'Payment Reconciliation', href: '/admin/reconciliation', icon: GitCompare, description: 'Fix missing payment attributions', badge: 0 },
     { label: 'Withdrawal Requests', href: '/admin/withdrawals', icon: Wallet, description: 'Manage creator payouts', badge: stats.pendingWithdrawals },
     { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, description: 'CMOs, creators, payouts & commissions', badge: 0 },
     { label: 'Generate Access Codes', href: '/admin/codes', icon: Key, description: 'Create and manage access codes', badge: 0 },
