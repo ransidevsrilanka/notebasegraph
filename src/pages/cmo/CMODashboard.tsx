@@ -232,11 +232,12 @@ const CMODashboard = () => {
     setIsCreatingCode(false);
   };
 
-  const referralLink = cmoProfile 
-    ? `${window.location.origin}/creator_signup?ref_cmo=${cmoProfile.referral_code}`
+  const referralLink = cmoProfile?.referral_code
+    ? `${window.location.origin}/creator-signup?ref_cmo=${cmoProfile.referral_code}`
     : '';
 
-  const bonusEligible = stats.totalPaidUsersThisMonth >= 500;
+  // CMO bonus eligibility: 1000 creators goal
+  const bonusEligible = stats.totalCreators >= 1000;
 
   if (isLoading) {
     return (
@@ -332,7 +333,7 @@ const CMODashboard = () => {
           </div>
         </div>
 
-        {/* Bonus Eligibility */}
+        {/* Bonus Eligibility - 1000 creators goal */}
         <div className={`glass-card p-4 mb-8 ${bonusEligible ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/50'}`}>
           <div className="flex items-center gap-3">
             <Award className={`w-5 h-5 ${bonusEligible ? 'text-green-500' : 'text-muted-foreground'}`} />
@@ -346,8 +347,8 @@ const CMODashboard = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 {bonusEligible 
-                  ? 'Your creators brought 500+ paid users this month. You earn 8% base + 5% bonus.'
-                  : `Need ${500 - stats.totalPaidUsersThisMonth} more collective paid users for +5% bonus`}
+                  ? 'You have 1000+ creators! You earn 5% base + 5% bonus on gross revenue.'
+                  : `Need ${1000 - stats.totalCreators} more creators for +5% bonus (currently 5% of gross revenue)`}
               </p>
             </div>
           </div>
@@ -361,23 +362,34 @@ const CMODashboard = () => {
               <h2 className="font-semibold text-foreground">Recruit Content Creators</h2>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Input 
-              value={referralLink} 
-              readOnly 
-              className="bg-secondary text-foreground text-sm"
-            />
-            <Button 
-              variant="outline" 
-              size="icon"
-              onClick={() => copyToClipboard(referralLink, 'Referral link')}
-            >
-              <Copy className="w-4 h-4" />
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground mt-2">
-            Share this link to onboard new content creators under your management.
-          </p>
+          {referralLink ? (
+            <>
+              <div className="flex gap-2">
+                <Input 
+                  value={referralLink} 
+                  readOnly 
+                  className="bg-secondary text-foreground text-sm"
+                />
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  onClick={() => copyToClipboard(referralLink, 'Referral link')}
+                >
+                  <Copy className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Share this link to onboard new content creators under your management.
+              </p>
+            </>
+          ) : (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+              <p className="text-amber-500 text-sm font-medium">CMO profile not fully initialized</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Please contact admin to generate your referral code.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Creator Leaderboard */}
