@@ -18,21 +18,7 @@ const Pricing = () => {
     <main className="min-h-screen bg-background">
       <Navbar />
       
-      {/* Hero */}
-      <section className="pt-28 md:pt-32 pb-12 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-vault-dark via-background to-background" />
-        <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-brand/5 rounded-full blur-3xl" />
-        
-        <div className="container mx-auto px-4 sm:px-6 relative z-10 text-center">
-          <h1 className="font-display text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 animate-slide-up">
-            Simple, Transparent <span className="text-brand-gradient">Pricing</span>
-          </h1>
-          <p className="text-muted-foreground text-base md:text-lg max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
-            One-time payment. Lifetime value. No subscriptions, no hidden fees.
-          </p>
-        </div>
-      </section>
-
+      <div className="pt-24" />
       <PricingSection />
 
       {/* FAQ Section */}

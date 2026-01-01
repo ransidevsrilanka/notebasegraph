@@ -7,12 +7,12 @@ const corsHeaders = {
 };
 
 // Commission rates
-const CREATOR_BASE_RATE = 0.08; // 8% for creators
-const CREATOR_BONUS_RATE = 0.12; // 12% after 500 paid users
-const CREATOR_BONUS_THRESHOLD = 500;
-const CMO_COMMISSION_RATE = 0.05; // 5% of gross revenue
-const CMO_BONUS_RATE = 0.05; // Additional 5% if 1000 creators goal met
-const CMO_CREATOR_GOAL = 1000;
+const CREATOR_BASE_RATE = 0.12; // 12% for creators
+const CREATOR_BONUS_RATE = 0.17; // 17% (12% + 5% bonus) after 1000 users
+const CREATOR_BONUS_THRESHOLD = 1000;
+const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
+const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
+const CMO_ANNUAL_USER_GOAL = 280; // 280 users annually for bonus
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -804,15 +804,33 @@ async function updateCMOPayout(
   grossAmount: number,
   paymentMonth: string
 ) {
-  // Get CMO's creator count to determine if bonus applies
-  const { count: creatorCount } = await supabase
+  // Get CMO's annual paid users to determine if bonus applies (280 users annually)
+  const yearStart = new Date();
+  yearStart.setMonth(0, 1);
+  yearStart.setHours(0, 0, 0, 0);
+  const yearStartStr = yearStart.toISOString().split("T")[0];
+
+  // Get all creator IDs under this CMO
+  const { data: cmoCreators } = await supabase
     .from("creator_profiles")
-    .select("*", { count: "exact", head: true })
+    .select("id")
     .eq("cmo_id", cmoId);
 
-  // CMO commission: 5% of gross revenue, +5% if 1000 creators goal met
+  const creatorIds = (cmoCreators || []).map((c: any) => c.id);
+  
+  let annualPaidUsers = 0;
+  if (creatorIds.length > 0) {
+    const { count } = await supabase
+      .from("payment_attributions")
+      .select("*", { count: "exact", head: true })
+      .in("creator_id", creatorIds)
+      .gte("payment_month", yearStartStr);
+    annualPaidUsers = count || 0;
+  }
+
+  // CMO commission: 8% of revenue from their creators, +5% if 280 annual users goal met
   const baseCommission = grossAmount * CMO_COMMISSION_RATE;
-  const bonusCommission = (creatorCount || 0) >= CMO_CREATOR_GOAL ? grossAmount * CMO_BONUS_RATE : 0;
+  const bonusCommission = annualPaidUsers >= CMO_ANNUAL_USER_GOAL ? grossAmount * CMO_BONUS_RATE : 0;
   const totalCommission = baseCommission + bonusCommission;
 
   // Check if payout record exists for this month
@@ -845,5 +863,5 @@ async function updateCMOPayout(
     });
   }
 
-  console.log("CMO payout updated:", cmoId, "Base:", baseCommission, "Bonus:", bonusCommission);
+  console.log("CMO payout updated:", cmoId, "Base:", baseCommission, "Bonus:", bonusCommission, "Annual users:", annualPaidUsers);
 }
