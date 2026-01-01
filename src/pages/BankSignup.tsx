@@ -278,6 +278,39 @@ const BankSignup = () => {
       return;
     }
 
+    // Create user attribution immediately (referral association)
+    // This ensures the referrer sees the user in their dashboard right away
+    if (bankData.refCreator) {
+      try {
+        const { data: creatorData } = await supabase
+          .from('creator_profiles')
+          .select('id')
+          .eq('referral_code', bankData.refCreator.toUpperCase())
+          .maybeSingle();
+
+        if (creatorData) {
+          // Check if attribution already exists
+          const { data: existingAttribution } = await supabase
+            .from('user_attributions')
+            .select('id')
+            .eq('user_id', currentUser.id)
+            .eq('creator_id', creatorData.id)
+            .maybeSingle();
+
+          if (!existingAttribution) {
+            await supabase.from('user_attributions').insert({
+              user_id: currentUser.id,
+              creator_id: creatorData.id,
+              referral_source: 'link',
+            });
+          }
+        }
+      } catch (attrError) {
+        console.error('Attribution error:', attrError);
+        // Don't fail the signup for attribution errors
+      }
+    }
+
     // Clear bank transfer data
     localStorage.removeItem('bank_transfer_pending');
     localStorage.removeItem('refCreator');

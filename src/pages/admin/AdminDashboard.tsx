@@ -167,6 +167,13 @@ const AdminDashboard = () => {
         .neq('id', '00000000-0000-0000-0000-000000000000');
       if (creatorPayoutsError) throw creatorPayoutsError;
 
+      // 7b. Delete CMO payouts
+      const { error: cmoPayoutsError } = await supabase
+        .from('cmo_payouts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000');
+      if (cmoPayoutsError) throw cmoPayoutsError;
+
       // 8. Delete discount codes
       const { error: discountCodesError } = await supabase
         .from('discount_codes')
