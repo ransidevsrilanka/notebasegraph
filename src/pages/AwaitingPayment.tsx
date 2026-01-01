@@ -7,7 +7,7 @@ import Footer from '@/components/Footer';
 import UploadOverlay from '@/components/UploadOverlay';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AlertCircle, ArrowLeft, CheckCircle, Copy, Upload, Building2, Clock } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle, Copy, Upload, Building2, Clock, MessageCircle } from 'lucide-react';
 import { TIER_LABELS, type TierType } from '@/types/database';
 import { toast } from 'sonner';
 import { useBranding } from '@/hooks/useBranding';
@@ -194,9 +194,19 @@ const AwaitingPayment = () => {
                   </div>
                 </div>
 
-                <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
-                  Back to Home
-                </Button>
+                <div className="flex flex-col gap-3">
+                  <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
+                    Back to Home
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    className="w-full text-muted-foreground"
+                    onClick={() => window.open('https://wa.me/94773219334', '_blank')}
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Something wrong? Contact Us
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -328,6 +338,16 @@ const AwaitingPayment = () => {
                   Upload a screenshot or photo of your bank transfer confirmation (max 25MB)
                 </p>
               </div>
+
+              {/* WhatsApp Contact Button */}
+              <Button 
+                variant="ghost" 
+                className="w-full mt-4 text-muted-foreground"
+                onClick={() => window.open('https://wa.me/94773219334', '_blank')}
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Something wrong? Contact Us
+              </Button>
             </div>
           </div>
         </div>
