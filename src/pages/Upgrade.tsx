@@ -7,7 +7,7 @@ import UploadOverlay from '@/components/UploadOverlay';
 import PaymentMethodDialog from '@/components/PaymentMethodDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AlertCircle, ArrowLeft, CheckCircle, Copy, Crown, Upload } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Building2, CheckCircle, Copy, Crown, MessageCircle, Upload } from 'lucide-react';
 import { TIER_LABELS, type TierType } from '@/types/database';
 import { toast } from 'sonner';
 
@@ -394,6 +394,41 @@ const UpgradePage = () => {
   const resumeNeeded = !!existingRequest && !existingRequest.receipt_url;
   const referenceNumber = existingRequest?.reference_number;
 
+  // Bank details
+  const bankDetails = {
+    bankName: 'Bank of Ceylon',
+    accountName: 'ReadVault Education',
+    accountNumber: '1234567890',
+    branch: 'Colombo Main',
+  };
+
+  // Create request record immediately when landing on this page with a tier param
+  useEffect(() => {
+    if (!user || !enrollment || !requestedTier || existingRequest) return;
+
+    const createRequest = async () => {
+      const refNumber = generateReferenceNumber();
+      const { data, error } = await supabase
+        .from('upgrade_requests')
+        .insert({
+          user_id: user.id,
+          enrollment_id: enrollment.id,
+          reference_number: refNumber,
+          current_tier: enrollment.tier,
+          requested_tier: requestedTier,
+          amount: amount,
+        })
+        .select()
+        .single();
+      
+      if (!error && data) {
+        setExistingRequest(data);
+      }
+    };
+
+    createRequest();
+  }, [user?.id, enrollment?.id, requestedTier, existingRequest, amount]);
+
   return (
     <main className="min-h-screen bg-background">
       <UploadOverlay isVisible={isUploading} message="Submitting…" />
@@ -408,47 +443,107 @@ const UpgradePage = () => {
 
           <div className="glass-card p-8">
             <div className="flex items-start justify-between mb-6">
-              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-                <Upload className="w-6 h-6 text-muted-foreground" />
+              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-brand" />
               </div>
             </div>
 
-            <h1 className="font-display text-2xl font-bold text-foreground mb-2">Upgrade Request</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground mb-2">Complete Your Upgrade</h1>
             <p className="text-muted-foreground mb-6">
-              Target tier: <span className="font-semibold text-foreground">{getTierDisplayName(requestedTier)}</span>
+              Transfer the amount to our bank account and upload the receipt.
             </p>
 
-            <div className="bg-secondary/30 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Amount</span>
-                <span className="text-foreground font-semibold">Rs. {amount.toLocaleString()}</span>
+            {/* Reference Number */}
+            {referenceNumber && (
+              <div className="bg-brand/10 border border-brand/30 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-muted-foreground uppercase tracking-wider block mb-1">
+                      Your Reference Number
+                    </span>
+                    <span className="font-mono text-lg font-bold text-foreground">
+                      {referenceNumber}
+                    </span>
+                  </div>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon" 
+                    onClick={() => copyReference(referenceNumber)}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Include this reference in your bank transfer description
+                </p>
               </div>
-              {referenceNumber ? (
-                <div className="flex items-center justify-between mt-2">
-                  <span className="text-muted-foreground">Reference</span>
+            )}
+
+            {/* Amount & Tier Info */}
+            <div className="bg-secondary/30 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground">Current Tier</span>
+                <span className="text-foreground">{getTierDisplayName(enrollment.tier)}</span>
+              </div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-muted-foreground">Upgrading To</span>
+                <span className="text-foreground font-semibold">{getTierDisplayName(requestedTier)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Amount to Pay</span>
+                <span className="text-2xl font-bold text-brand">Rs. {amount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Bank Details */}
+            <div className="border border-border rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-foreground mb-3">Bank Transfer Details</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Bank Name</span>
+                  <span className="text-foreground">{bankDetails.bankName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Account Name</span>
+                  <span className="text-foreground">{bankDetails.accountName}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Account Number</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-foreground">{referenceNumber}</span>
-                    <Button type="button" variant="outline" size="icon" onClick={() => copyReference(referenceNumber)}>
-                      <Copy className="w-4 h-4" />
+                    <span className="font-mono text-foreground">{bankDetails.accountNumber}</span>
+                    <Button 
+                      type="button"
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-6 w-6"
+                      onClick={() => copyReference(bankDetails.accountNumber)}
+                    >
+                      <Copy className="w-3 h-3" />
                     </Button>
                   </div>
                 </div>
-              ) : null}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Branch</span>
+                  <span className="text-foreground">{bankDetails.branch}</span>
+                </div>
+              </div>
             </div>
 
+            {/* Upload Receipt */}
             {!requestFlowStarted ? (
               <div className="space-y-3">
                 <Button
                   type="button"
                   variant="brand"
                   className="w-full"
-                  disabled={!canStart}
+                  disabled={!canStart || !referenceNumber}
                   onClick={() => setRequestFlowStarted(true)}
                 >
-                  {resumeNeeded ? 'Resume Upgrade Submission' : 'Request Upgrade'}
+                  {resumeNeeded ? 'Upload Receipt' : 'Upload Payment Receipt'}
                 </Button>
-                <p className="text-xs text-muted-foreground">
-                  This will not submit anything until you upload a receipt.
+                <p className="text-xs text-muted-foreground text-center">
+                  After transferring, upload your receipt to complete the upgrade request.
                 </p>
               </div>
             ) : (
@@ -464,13 +559,24 @@ const UpgradePage = () => {
                   className="cursor-pointer"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Your request is submitted only after the receipt upload completes.
+                  Upload a screenshot or photo of your bank transfer confirmation (max 25MB)
                 </p>
                 <Button type="button" variant="outline" className="w-full" onClick={() => setRequestFlowStarted(false)} disabled={isUploading}>
                   Cancel
                 </Button>
               </div>
             )}
+
+            {/* WhatsApp Contact Button */}
+            <Button 
+              type="button"
+              variant="ghost" 
+              className="w-full mt-4 text-muted-foreground"
+              onClick={() => window.open('https://wa.me/94773219334', '_blank')}
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Something wrong? Contact Us
+            </Button>
           </div>
         </div>
       </section>
