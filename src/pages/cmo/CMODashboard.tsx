@@ -19,6 +19,9 @@ import {
   Calendar,
   Award,
   UserPlus,
+  Target,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -34,28 +37,28 @@ interface CreatorWithStats {
   display_name: string;
   referral_code: string;
   lifetime_paid_users: number;
+  available_balance: number;
   is_active: boolean;
   created_at: string;
   discount_codes: { code: string; paid_conversions: number }[];
   monthly_paid_users: number;
 }
 
-interface CMOPayoutSummary {
-  payout_month: string;
-  total_paid_users: number;
-  base_commission_amount: number;
-  bonus_amount: number;
-  total_commission: number;
-  status: string;
-}
-
 interface Stats {
   totalCreators: number;
   totalPaidUsersThisMonth: number;
-  baseCommission: number;
-  bonusCommission: number;
-  pendingEarnings: number;
-  paidEarnings: number;
+  totalBusinessRevenue: number;
+  estimatedPayout: number;
+  commissionRate: number;
+}
+
+interface Goal {
+  id: string;
+  title: string;
+  target: number;
+  current: number;
+  completed: boolean;
+  description: string;
 }
 
 const CMODashboard = () => {
@@ -63,16 +66,16 @@ const CMODashboard = () => {
   const navigate = useNavigate();
   const [cmoProfile, setCmoProfile] = useState<CMOProfile | null>(null);
   const [creators, setCreators] = useState<CreatorWithStats[]>([]);
-  const [payouts, setPayouts] = useState<CMOPayoutSummary[]>([]);
   const [stats, setStats] = useState<Stats>({
     totalCreators: 0,
     totalPaidUsersThisMonth: 0,
-    baseCommission: 0,
-    bonusCommission: 0,
-    pendingEarnings: 0,
-    paidEarnings: 0,
+    totalBusinessRevenue: 0,
+    estimatedPayout: 0,
+    commissionRate: 0.05,
   });
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   // Discount code creation
   const [selectedCreatorId, setSelectedCreatorId] = useState<string | null>(null);
@@ -142,43 +145,72 @@ const CMODashboard = () => {
 
           // Calculate stats
           const totalPaidThisMonth = creatorsWithStats.reduce((sum, c) => sum + c.monthly_paid_users, 0);
-          const bonusEligible = totalPaidThisMonth >= 500;
 
-          setStats(prev => ({
-            ...prev,
+          // Fetch total business revenue
+          const { data: allPayments } = await supabase
+            .from('payment_attributions')
+            .select('final_amount');
+
+          const totalBusinessRevenue = (allPayments || []).reduce(
+            (sum, p) => sum + Number(p.final_amount || 0), 0
+          );
+
+          // CMO commission: 5% base, +5% if 1000 creators goal met
+          const bonusEligible = creatorsWithStats.length >= 1000;
+          const commissionRate = bonusEligible ? 0.10 : 0.05;
+          const estimatedPayout = totalBusinessRevenue * commissionRate;
+
+          setStats({
             totalCreators: creatorsWithStats.length,
             totalPaidUsersThisMonth: totalPaidThisMonth,
-            bonusCommission: bonusEligible ? 0.05 : 0,
-          }));
+            totalBusinessRevenue,
+            estimatedPayout,
+            commissionRate,
+          });
+
+          // Set goals
+          const creatorCount = creatorsWithStats.length;
+          setGoals([
+            {
+              id: '1',
+              title: 'Get 5 active creators',
+              target: 5,
+              current: creatorCount,
+              completed: creatorCount >= 5,
+              description: 'Onboard your first 5 content creators',
+            },
+            {
+              id: '2',
+              title: 'Get 20 active creators',
+              target: 20,
+              current: creatorCount,
+              completed: creatorCount >= 20,
+              description: 'Build a solid creator base',
+            },
+            {
+              id: '3',
+              title: 'Get 100 active creators',
+              target: 100,
+              current: creatorCount,
+              completed: creatorCount >= 100,
+              description: 'Scale your creator network',
+            },
+            {
+              id: '4',
+              title: 'Reach 1000 creators for +5% bonus',
+              target: 1000,
+              current: creatorCount,
+              completed: creatorCount >= 1000,
+              description: 'Unlock the 5% bonus commission (10% total)',
+            },
+          ]);
         }
-
-        // Fetch CMO payouts
-        const { data: payoutData } = await supabase
-          .from('cmo_payouts')
-          .select('*')
-          .eq('cmo_id', cmoData.id)
-          .order('payout_month', { ascending: false })
-          .limit(12);
-
-        setPayouts(payoutData || []);
-
-        // Calculate earnings
-        const pendingPayouts = (payoutData || []).filter(p => p.status !== 'paid');
-        const paidPayouts = (payoutData || []).filter(p => p.status === 'paid');
-        
-        const pendingEarnings = pendingPayouts.reduce((sum, p) => sum + Number(p.total_commission || 0), 0);
-        const paidEarnings = paidPayouts.reduce((sum, p) => sum + Number(p.total_commission || 0), 0);
-
-        setStats(prev => ({
-          ...prev,
-          pendingEarnings,
-          paidEarnings,
-        }));
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load dashboard data');
     }
+    setLastUpdated(new Date());
     setIsLoading(false);
   };
 
@@ -272,17 +304,24 @@ const CMODashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Last Updated Timestamp */}
+        <div className="flex items-center justify-end mb-2">
+          <p className="text-xs text-muted-foreground">
+            {lastUpdated ? `Last updated: ${format(lastUpdated, 'PPp')}` : ''}
+          </p>
+        </div>
+
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">
             CMO Dashboard
           </h1>
           <p className="text-muted-foreground">
-            Manage your content creators and track performance
+            Manage your content creators and track business performance
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Updated without commission display */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-card p-6">
             <div className="flex items-center gap-4">
@@ -314,8 +353,8 @@ const CMODashboard = () => {
                 <DollarSign className="w-6 h-6 text-brand" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">LKR {stats.pendingEarnings.toLocaleString()}</p>
-                <p className="text-muted-foreground text-sm">Pending Earnings</p>
+                <p className="text-2xl font-bold text-foreground">LKR {stats.totalBusinessRevenue.toLocaleString()}</p>
+                <p className="text-muted-foreground text-sm">Total Business Revenue</p>
               </div>
             </div>
           </div>
@@ -326,10 +365,57 @@ const CMODashboard = () => {
                 <Award className="w-6 h-6 text-blue-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">LKR {stats.paidEarnings.toLocaleString()}</p>
-                <p className="text-muted-foreground text-sm">Total Paid</p>
+                <p className="text-2xl font-bold text-foreground">LKR {stats.estimatedPayout.toLocaleString()}</p>
+                <p className="text-muted-foreground text-sm">
+                  Estimated Payout ({stats.commissionRate * 100}%)
+                </p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Goals Section */}
+        <div className="glass-card p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="w-5 h-5 text-brand" />
+            <h2 className="font-semibold text-foreground">Goals & Milestones</h2>
+          </div>
+          <div className="space-y-4">
+            {goals.map((goal) => (
+              <div 
+                key={goal.id} 
+                className={`flex items-center gap-4 p-4 rounded-lg border ${
+                  goal.completed 
+                    ? 'bg-green-500/10 border-green-500/30' 
+                    : 'bg-muted/30 border-border'
+                }`}
+              >
+                {goal.completed ? (
+                  <CheckCircle2 className="w-6 h-6 text-green-500 flex-shrink-0" />
+                ) : (
+                  <Circle className="w-6 h-6 text-muted-foreground flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className={`font-medium ${goal.completed ? 'text-green-500' : 'text-foreground'}`}>
+                    {goal.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{goal.description}</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className={`text-sm font-medium ${goal.completed ? 'text-green-500' : 'text-foreground'}`}>
+                    {goal.current}/{goal.target}
+                  </p>
+                  {!goal.completed && (
+                    <div className="w-20 h-1.5 bg-muted rounded-full mt-1">
+                      <div 
+                        className="h-full bg-brand rounded-full transition-all"
+                        style={{ width: `${Math.min((goal.current / goal.target) * 100, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -347,8 +433,8 @@ const CMODashboard = () => {
               </p>
               <p className="text-xs text-muted-foreground">
                 {bonusEligible 
-                  ? 'You have 1000+ creators! You earn 5% base + 5% bonus on gross revenue.'
-                  : `Need ${1000 - stats.totalCreators} more creators for +5% bonus (currently 5% of gross revenue)`}
+                  ? 'You have 1000+ creators! You earn 10% of total business revenue.'
+                  : `Need ${1000 - stats.totalCreators} more creators for +5% bonus (currently 5% of business revenue)`}
               </p>
             </div>
           </div>
@@ -408,7 +494,7 @@ const CMODashboard = () => {
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Creator</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">This Month</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Lifetime</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Commission</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Balance</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Discount Codes</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
@@ -422,14 +508,8 @@ const CMODashboard = () => {
                       </td>
                       <td className="py-3 px-4 text-sm text-foreground">{creator.monthly_paid_users}</td>
                       <td className="py-3 px-4 text-sm text-foreground">{creator.lifetime_paid_users}</td>
-                      <td className="py-3 px-4">
-                        <span className={`text-xs px-2 py-0.5 rounded ${
-                          creator.lifetime_paid_users >= 500 
-                            ? 'bg-green-500/20 text-green-500' 
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {creator.lifetime_paid_users >= 500 ? '12%' : '8%'}
-                        </span>
+                      <td className="py-3 px-4 text-sm text-foreground">
+                        LKR {(creator.available_balance || 0).toLocaleString()}
                       </td>
                       <td className="py-3 px-4">
                         {creator.discount_codes.length > 0 ? (
@@ -510,62 +590,6 @@ const CMODashboard = () => {
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">No creators yet. Share your referral link to onboard creators.</p>
             </div>
-          )}
-        </div>
-
-        {/* Payout History */}
-        <div className="glass-card p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-brand" />
-            <h2 className="font-semibold text-foreground">Your Payout History</h2>
-          </div>
-          {payouts.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Month</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Paid Users</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Base (8%)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Bonus (5%)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Total</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payouts.map((p) => (
-                    <tr key={p.payout_month} className="border-b border-border/50">
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        {format(new Date(p.payout_month), 'MMMM yyyy')}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">{p.total_paid_users}</td>
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        LKR {Number(p.base_commission_amount || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        LKR {Number(p.bonus_amount || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-sm font-medium text-foreground">
-                        LKR {Number(p.total_commission || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          p.status === 'paid' 
-                            ? 'bg-green-500/20 text-green-500' 
-                            : p.status === 'eligible'
-                            ? 'bg-brand/20 text-brand'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No payout records yet.</p>
           )}
         </div>
       </div>
