@@ -115,11 +115,22 @@ const CreatorSignup = () => {
         return;
       }
 
-      // Update profile with name (profile created by trigger)
-      await supabase
+      // Ensure profile exists and store name (profile id == auth user id)
+      const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: name })
-        .eq('id', authData.user.id);
+        .upsert(
+          {
+            id: authData.user.id,
+            user_id: authData.user.id,
+            email,
+            full_name: name,
+          },
+          { onConflict: 'id' }
+        );
+
+      if (profileError) {
+        console.error('Error upserting profile:', profileError);
+      }
 
       // Generate unique referral code for creator
       const creatorRefCode = `CRT${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
