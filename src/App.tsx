@@ -23,6 +23,7 @@ import PaidSignup from "./pages/PaidSignup";
 import Signup from "./pages/Signup";
 import CreatorSignup from "./pages/CreatorSignup";
 import AwaitingPayment from "./pages/AwaitingPayment";
+import BankSignup from "./pages/BankSignup";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
 import CMODashboard from "./pages/cmo/CMODashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -159,6 +160,7 @@ const App = () => (
             } />
             
             <Route path="/awaiting-payment" element={<AwaitingPayment />} />
+            <Route path="/bank-signup" element={<BankSignup />} />
             
             <Route path="*" element={<NotFound />} />
           </Routes>

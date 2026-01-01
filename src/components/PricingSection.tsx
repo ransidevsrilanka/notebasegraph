@@ -179,8 +179,23 @@ const PricingSection = () => {
   };
 
   const handleBankTransfer = () => {
-    // Redirect to access page for bank transfer flow
-    navigate('/access');
+    // Store selected tier info for bank transfer signup flow
+    const tier = selectedTier;
+    if (!tier) return;
+    
+    localStorage.setItem('bank_transfer_pending', JSON.stringify({
+      tier: tier.key,
+      tierName: tier.name,
+      amount: getDiscountedPrice(tier.price),
+      originalAmount: tier.price,
+      discountCode: appliedDiscount?.code || null,
+      refCreator: refCreator || localStorage.getItem('refCreator') || null,
+      timestamp: Date.now(),
+    }));
+    
+    // Close dialog and redirect to bank transfer signup
+    setPaymentDialogOpen(false);
+    navigate('/bank-signup');
   };
 
   if (loadingError) {

@@ -39,6 +39,7 @@ interface Stats {
   activeCodes: number;
   totalSubjects: number;
   pendingUpgrades: number;
+  pendingJoinRequests: number;
 }
 
 const AdminDashboard = () => {
@@ -50,6 +51,7 @@ const AdminDashboard = () => {
     activeCodes: 0,
     totalSubjects: 0,
     pendingUpgrades: 0,
+    pendingJoinRequests: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -63,6 +65,7 @@ const AdminDashboard = () => {
         { count: activeCodes },
         { count: totalSubjects },
         { count: pendingUpgrades },
+        { count: pendingJoinRequests },
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -70,6 +73,7 @@ const AdminDashboard = () => {
         supabase.from('access_codes').select('*', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('subjects').select('*', { count: 'exact', head: true }),
         supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       ]);
 
       setStats({
@@ -79,6 +83,7 @@ const AdminDashboard = () => {
         activeCodes: activeCodes || 0,
         totalSubjects: totalSubjects || 0,
         pendingUpgrades: pendingUpgrades || 0,
+        pendingJoinRequests: pendingJoinRequests || 0,
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -177,7 +182,7 @@ const AdminDashboard = () => {
   ];
 
   const menuItems = [
-    { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: 0 },
+    { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: stats.pendingJoinRequests },
     { label: 'View Payments', href: '/admin/payments', icon: DollarSign, description: 'All card & bank payments', badge: 0 },
     { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, description: 'CMOs, creators, payouts & commissions', badge: 0 },
     { label: 'Generate Access Codes', href: '/admin/codes', icon: Key, description: 'Create and manage access codes', badge: 0 },
