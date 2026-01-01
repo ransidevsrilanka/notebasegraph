@@ -6,7 +6,112 @@
 
 @layer base {
   :root {
-    /* Deep black/charcoal palette */
+    /* Original blue theme */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.75rem;
+
+    /* Brand tokens - Blue */
+    --brand: 221 83% 53%;
+    --brand-light: 221 83% 65%;
+    --brand-dark: 221 83% 45%;
+    --brand-glow: 221 83% 53%;
+    
+    /* Gold accent for special elements */
+    --gold: 45 93% 47%;
+    --gold-light: 45 93% 60%;
+    
+    /* Light surfaces */
+    --vault-dark: 222 47% 11%;
+    --vault-surface: 222 47% 15%;
+    --glass: 210 40% 96%;
+    --glass-border: 214 32% 91%;
+
+    /* Gradients */
+    --gradient-brand: linear-gradient(135deg, hsl(221 83% 53%), hsl(221 83% 65%));
+    --gradient-dark: linear-gradient(180deg, hsl(222 47% 11%), hsl(222 47% 8%));
+    --gradient-glass: linear-gradient(135deg, hsl(210 40% 98% / 0.8), hsl(210 40% 96% / 0.6));
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(221 83% 53% / 0.15), transparent);
+
+    /* Shadows */
+    --shadow-brand: 0 0 60px hsl(221 83% 53% / 0.15);
+    --shadow-lg: 0 25px 50px -12px hsl(0 0% 0% / 0.25);
+    --shadow-glow: 0 0 80px hsl(221 83% 53% / 0.1);
+
+    /* Fonts */
+    --font-display: 'Plus Jakarta Sans', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --font-accent: 'Inter', sans-serif;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+
+  /* Dashboard dark theme - scoped to admin/cmo/creator dashboards */
+  .dashboard-dark {
     --background: 0 0% 4%;
     --foreground: 0 0% 98%;
 
@@ -35,40 +140,32 @@
     --input: 0 0% 10%;
     --ring: 0 0% 80%;
 
-    --radius: 0.75rem;
-
-    /* Brand tokens - Elegant gold/amber accent */
+    /* Dashboard brand - Gold/Amber */
     --brand: 45 93% 47%;
     --brand-light: 45 93% 60%;
     --brand-dark: 45 80% 38%;
     --brand-glow: 45 93% 47%;
     
-    /* Gold accent for premium feel */
-    --gold: 45 93% 47%;
-    --gold-light: 45 93% 60%;
-    
-    /* Dark surfaces - deep blacks */
+    /* Dark surfaces */
     --vault-dark: 0 0% 2%;
     --vault-surface: 0 0% 5%;
     --glass: 0 0% 8%;
     --glass-border: 0 0% 18%;
 
-    /* Gradients */
+    /* Dashboard gradients */
     --gradient-brand: linear-gradient(135deg, hsl(45 93% 47%), hsl(45 93% 60%));
     --gradient-dark: linear-gradient(180deg, hsl(0 0% 5%), hsl(0 0% 2%));
     --gradient-glass: linear-gradient(135deg, hsl(0 0% 10% / 0.8), hsl(0 0% 6% / 0.6));
     --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(45 93% 47% / 0.1), transparent);
 
-    /* Shadows */
+    /* Dashboard shadows */
     --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
     --shadow-lg: 0 25px 50px -12px hsl(0 0% 0% / 0.8);
     --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
 
-    /* Fonts - Plus Jakarta Sans as primary */
+    /* Dashboard uses Plus Jakarta Sans */
     --font-display: 'Plus Jakarta Sans', sans-serif;
     --font-body: 'Plus Jakarta Sans', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
-    --font-accent: 'Inter', sans-serif;
 
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 0 0% 98%;
@@ -78,11 +175,6 @@
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 0 0% 16%;
     --sidebar-ring: 45 93% 47%;
-  }
-
-  .dark {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 98%;
   }
 }
 
@@ -110,7 +202,12 @@
 
 @layer components {
   .glass-card {
-    @apply bg-glass/40 backdrop-blur-xl border border-glass-border rounded-2xl;
+    @apply bg-card/80 backdrop-blur-xl border border-border rounded-2xl;
+    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .dashboard-dark .glass-card {
+    @apply bg-card/40 border-border;
     box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.3);
   }
 
