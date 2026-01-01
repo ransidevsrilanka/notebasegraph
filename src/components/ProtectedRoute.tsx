@@ -66,8 +66,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/activate" replace />;
   }
 
-  // Require subject selection for students with enrollment
-  if (requireSubjects && enrollment && !isAdmin && !hasSelectedSubjects) {
+  // Require subject selection for A/L students with enrollment
+  // O/L students don't need subject selection
+  const isALevel = enrollment?.grade?.startsWith('al_');
+  if (requireSubjects && enrollment && isALevel && !isAdmin && !hasSelectedSubjects) {
     return <Navigate to="/select-subjects" replace />;
   }
 

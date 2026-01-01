@@ -369,6 +369,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           medium: string | null
+          payment_order_id: string | null
           stream: string | null
           tier: string
           updated_at: string
@@ -383,6 +384,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           medium?: string | null
+          payment_order_id?: string | null
           stream?: string | null
           tier?: string
           updated_at?: string
@@ -397,6 +399,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           medium?: string | null
+          payment_order_id?: string | null
           stream?: string | null
           tier?: string
           updated_at?: string
