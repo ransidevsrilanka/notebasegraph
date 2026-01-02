@@ -215,23 +215,26 @@ const CMODashboard = () => {
               monthStart.setDate(1);
               monthStart.setHours(0, 0, 0, 0);
               
-              const monthEnd = i === 0 ? new Date() : subMonths(new Date(), i - 1);
+              // For the current month, use the end of today; for past months, use start of next month
+              const monthEnd = new Date(monthStart);
+              monthEnd.setMonth(monthEnd.getMonth() + 1);
               monthEnd.setDate(1);
               monthEnd.setHours(0, 0, 0, 0);
 
+              // Use created_at for accurate timestamp-based queries
               const { count: monthPaidUsers } = await supabase
                 .from('payment_attributions')
                 .select('*', { count: 'exact', head: true })
                 .in('creator_id', creatorIds)
-                .gte('payment_month', monthStart.toISOString().split('T')[0])
-                .lt('payment_month', monthEnd.toISOString().split('T')[0]);
+                .gte('created_at', monthStart.toISOString())
+                .lt('created_at', monthEnd.toISOString());
 
               const { data: monthRevenue } = await supabase
                 .from('payment_attributions')
-                .select('final_amount')
+                .select('final_amount, created_at')
                 .in('creator_id', creatorIds)
-                .gte('payment_month', monthStart.toISOString().split('T')[0])
-                .lt('payment_month', monthEnd.toISOString().split('T')[0]);
+                .gte('created_at', monthStart.toISOString())
+                .lt('created_at', monthEnd.toISOString());
 
               const creatorsAtMonth = creatorsWithStats.filter(c => 
                 new Date(c.created_at) <= monthEnd

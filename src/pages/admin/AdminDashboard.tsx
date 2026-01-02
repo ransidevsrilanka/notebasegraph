@@ -55,6 +55,7 @@ interface Stats {
   thisMonthRevenue: number;
   lastMonthRevenue: number;
   starterCount: number;
+  standardCount: number;
   lifetimeCount: number;
   cardPayments: number;
   bankPayments: number;
@@ -84,6 +85,7 @@ const AdminDashboard = () => {
     thisMonthRevenue: 0,
     lastMonthRevenue: 0,
     starterCount: 0,
+    standardCount: 0,
     lifetimeCount: 0,
     cardPayments: 0,
     bankPayments: 0,
@@ -136,6 +138,7 @@ const AdminDashboard = () => {
 
       // Count tiers
       const starterCount = (enrollmentTiers || []).filter(e => e.tier === 'starter').length;
+      const standardCount = (enrollmentTiers || []).filter(e => e.tier === 'standard').length;
       const lifetimeCount = (enrollmentTiers || []).filter(e => e.tier === 'lifetime').length;
 
       // Fetch revenue data from payment_attributions
@@ -251,6 +254,7 @@ const AdminDashboard = () => {
         thisMonthRevenue,
         lastMonthRevenue,
         starterCount,
+        standardCount,
         lifetimeCount,
         cardPayments,
         bankPayments,
@@ -326,6 +330,7 @@ const AdminDashboard = () => {
 
   const tierDistributionData = [
     { name: 'Starter', value: stats.starterCount },
+    { name: 'Standard', value: stats.standardCount },
     { name: 'Lifetime', value: stats.lifetimeCount },
   ];
 
@@ -498,12 +503,13 @@ const AdminDashboard = () => {
                 data={tierDistributionData} 
                 type="donut" 
                 height={140}
-                colors={['hsl(var(--brand))', 'hsl(142, 76%, 36%)']}
+                colors={['hsl(var(--brand))', 'hsl(199, 89%, 48%)', 'hsl(142, 76%, 36%)']}
               />
             </div>
             <ChartLegend 
               items={[
                 { name: 'Starter', color: 'hsl(var(--brand))', value: stats.starterCount },
+                { name: 'Standard', color: 'hsl(199, 89%, 48%)', value: stats.standardCount },
                 { name: 'Lifetime', color: 'hsl(142, 76%, 36%)', value: stats.lifetimeCount },
               ]}
               className="mt-4 justify-center"
