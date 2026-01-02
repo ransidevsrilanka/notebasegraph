@@ -213,8 +213,23 @@ serve(async (req) => {
         }
       }
 
+      // Check if attribution already exists
+      const { data: existingAttribution } = await supabase
+        .from("payment_attributions")
+        .select("id")
+        .eq("order_id", order_id)
+        .maybeSingle();
+
+      if (existingAttribution) {
+        console.log("Attribution already exists for order:", order_id);
+        return new Response(
+          JSON.stringify({ success: true, message: "Attribution already exists", creator_id: creatorId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       // Create payment attribution
-      const { error: paError } = await supabase.from("payment_attributions").upsert({
+      const { error: paError } = await supabase.from("payment_attributions").insert({
         order_id,
         user_id,
         creator_id: creatorId,
@@ -228,12 +243,17 @@ serve(async (req) => {
         payment_month: paymentMonth,
         tier,
         payment_type,
-      }, { onConflict: "order_id" });
+      });
 
       if (paError) {
-        console.error("Payment attribution error:", paError);
+        console.error("Payment attribution insert error:", paError);
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to create attribution: " + paError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
+      console.log("Payment attribution created successfully for order:", order_id);
       return new Response(
         JSON.stringify({ success: true, creator_id: creatorId, commission: creatorCommissionAmount }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -384,8 +404,23 @@ serve(async (req) => {
         }
       }
 
-      // Create payment attribution (idempotent via unique order_id index)
-      const { error: paError } = await supabase.from("payment_attributions").upsert({
+      // Check if attribution already exists
+      const { data: existingAttribution } = await supabase
+        .from("payment_attributions")
+        .select("id")
+        .eq("order_id", order_id)
+        .maybeSingle();
+
+      if (existingAttribution) {
+        console.log("Attribution already exists for order:", order_id);
+        return new Response(
+          JSON.stringify({ success: true, message: "Attribution already exists", creator_id: creatorId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Create payment attribution
+      const { error: paError } = await supabase.from("payment_attributions").insert({
         order_id,
         user_id,
         creator_id: creatorId,
@@ -399,13 +434,17 @@ serve(async (req) => {
         payment_month: paymentMonth,
         tier,
         payment_type,
-      }, { onConflict: "order_id" });
+      });
 
       if (paError) {
-        console.error("Payment attribution error:", paError);
-        // Don't fail - might be duplicate
+        console.error("Payment attribution insert error:", paError);
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to create attribution: " + paError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
+      console.log("Payment attribution created successfully for order:", order_id);
       return new Response(
         JSON.stringify({ success: true, creator_id: creatorId, commission: creatorCommissionAmount }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
