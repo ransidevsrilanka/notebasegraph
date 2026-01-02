@@ -13,7 +13,9 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Legend,
 } from 'recharts';
+import { cn } from '@/lib/utils';
 
 interface ChartDataPoint {
   name: string;
@@ -23,34 +25,39 @@ interface ChartDataPoint {
 
 interface MiniChartProps {
   data: ChartDataPoint[];
-  type?: 'line' | 'area' | 'bar' | 'pie';
+  type?: 'line' | 'area' | 'bar' | 'pie' | 'donut' | 'multi-bar' | 'multi-line';
   dataKey?: string;
+  dataKeys?: { key: string; color: string; name?: string }[];
   height?: number;
   showAxis?: boolean;
   showGrid?: boolean;
   showTooltip?: boolean;
+  showLegend?: boolean;
   colors?: string[];
   className?: string;
 }
 
 // Chart colors - uses CSS variable for brand color which adapts to context
-// In dashboard-theme: gold (45 93% 47%), otherwise: blue (199 89% 48%)
 const CHART_COLORS = [
   'hsl(var(--brand))',       // Primary brand color (dynamic)
   'hsl(142, 76%, 36%)',      // Green
   'hsl(262, 83%, 58%)',      // Purple
   'hsl(199, 89%, 48%)',      // Blue
   'hsl(0, 0%, 60%)',         // Gray
+  'hsl(45, 93%, 47%)',       // Amber/Gold
+  'hsl(0, 72%, 51%)',        // Red
 ];
 
 export const MiniChart = ({
   data,
   type = 'area',
   dataKey = 'value',
+  dataKeys,
   height = 120,
   showAxis = false,
   showGrid = false,
   showTooltip = true,
+  showLegend = false,
   colors = CHART_COLORS,
   className,
 }: MiniChartProps) => {
@@ -63,11 +70,13 @@ export const MiniChart = ({
           <p className="text-foreground font-medium text-sm">
             {payload[0].payload.name}
           </p>
-          <p className="text-muted-foreground text-xs">
-            {typeof payload[0].value === 'number' 
-              ? payload[0].value.toLocaleString() 
-              : payload[0].value}
-          </p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-xs" style={{ color: entry.color }}>
+              {entry.name || entry.dataKey}: {typeof entry.value === 'number' 
+                ? entry.value.toLocaleString() 
+                : entry.value}
+            </p>
+          ))}
         </div>
       );
     }
@@ -90,6 +99,28 @@ export const MiniChart = ({
               strokeWidth={2}
               dot={false}
             />
+          </LineChart>
+        );
+
+      case 'multi-line':
+        return (
+          <LineChart data={data}>
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="hsl(0 0% 16%)" />}
+            {showAxis && <XAxis dataKey="name" stroke="hsl(0 0% 55%)" fontSize={10} />}
+            {showAxis && <YAxis stroke="hsl(0 0% 55%)" fontSize={10} />}
+            {showTooltip && <Tooltip content={<CustomTooltip />} />}
+            {showLegend && <Legend />}
+            {dataKeys?.map((dk, index) => (
+              <Line 
+                key={dk.key}
+                type="monotone" 
+                dataKey={dk.key} 
+                stroke={dk.color || colors[index % colors.length]} 
+                strokeWidth={2}
+                dot={false}
+                name={dk.name || dk.key}
+              />
+            ))}
           </LineChart>
         );
       
@@ -130,8 +161,48 @@ export const MiniChart = ({
             />
           </BarChart>
         );
+
+      case 'multi-bar':
+        return (
+          <BarChart data={data}>
+            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="hsl(0 0% 16%)" />}
+            {showAxis && <XAxis dataKey="name" stroke="hsl(0 0% 55%)" fontSize={10} />}
+            {showAxis && <YAxis stroke="hsl(0 0% 55%)" fontSize={10} />}
+            {showTooltip && <Tooltip content={<CustomTooltip />} />}
+            {showLegend && <Legend />}
+            {dataKeys?.map((dk, index) => (
+              <Bar 
+                key={dk.key}
+                dataKey={dk.key} 
+                fill={dk.color || colors[index % colors.length]}
+                radius={[4, 4, 0, 0]}
+                name={dk.name || dk.key}
+              />
+            ))}
+          </BarChart>
+        );
       
       case 'pie':
+        return (
+          <PieChart>
+            {showTooltip && <Tooltip content={<CustomTooltip />} />}
+            <Pie
+              data={data}
+              dataKey={dataKey}
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={height * 0.4}
+              paddingAngle={2}
+            >
+              {data.map((_, index) => (
+                <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+              ))}
+            </Pie>
+          </PieChart>
+        );
+
+      case 'donut':
         return (
           <PieChart>
             {showTooltip && <Tooltip content={<CustomTooltip />} />}
@@ -158,7 +229,7 @@ export const MiniChart = ({
   };
 
   return (
-    <div className={className} style={{ height }}>
+    <div className={cn(className)} style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         {renderChart()}
       </ResponsiveContainer>
