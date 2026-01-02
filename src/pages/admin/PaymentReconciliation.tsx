@@ -99,6 +99,7 @@ const PaymentReconciliation = () => {
 
       if (!token) {
         toast.error('Not authenticated');
+        setFixingOrderId(null);
         return;
       }
 
@@ -121,8 +122,14 @@ const PaymentReconciliation = () => {
         throw new Error(response.error.message || 'Failed to create attribution');
       }
 
+      // Check if the response indicates actual success
+      const result = response.data;
+      if (result && result.success === false) {
+        throw new Error(result.error || 'Failed to create attribution');
+      }
+
       toast.success(`Fixed attribution for order ${payment.order_id}`);
-      fetchOrphanedPayments();
+      await fetchOrphanedPayments();
     } catch (error: any) {
       console.error('Error fixing payment:', error);
       toast.error('Failed to fix payment: ' + error.message);
@@ -140,6 +147,15 @@ const PaymentReconciliation = () => {
     let successCount = 0;
     let failCount = 0;
 
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    if (!token) {
+      toast.error('Not authenticated');
+      setIsReconciling(false);
+      return;
+    }
+
     for (const payment of orphanedPayments) {
       if (!payment.user_id) {
         failCount++;
@@ -147,11 +163,6 @@ const PaymentReconciliation = () => {
       }
 
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData?.session?.access_token;
-
-        if (!token) continue;
-
         const response = await supabase.functions.invoke('admin-finance/finalize-payment', {
           headers: { Authorization: `Bearer ${token}` },
           body: {
@@ -168,17 +179,29 @@ const PaymentReconciliation = () => {
         });
 
         if (response.error) {
+          console.error(`Failed to fix ${payment.order_id}:`, response.error);
           failCount++;
         } else {
-          successCount++;
+          const result = response.data;
+          if (result && result.success === false) {
+            console.error(`Failed to fix ${payment.order_id}:`, result.error);
+            failCount++;
+          } else {
+            successCount++;
+          }
         }
-      } catch {
+      } catch (err) {
+        console.error(`Error fixing ${payment.order_id}:`, err);
         failCount++;
       }
     }
 
-    toast.success(`Reconciliation complete: ${successCount} fixed, ${failCount} failed`);
-    fetchOrphanedPayments();
+    if (failCount > 0) {
+      toast.warning(`Reconciliation complete: ${successCount} fixed, ${failCount} failed`);
+    } else {
+      toast.success(`Reconciliation complete: ${successCount} payments fixed`);
+    }
+    await fetchOrphanedPayments();
     setIsReconciling(false);
   };
 
