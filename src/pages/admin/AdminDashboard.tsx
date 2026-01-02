@@ -32,9 +32,13 @@ import {
   Wallet,
   RefreshCw,
   GitCompare,
+  CreditCard,
+  Building2,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
+import { ChartLegend } from '@/components/dashboard/ChartLegend';
+import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { format } from 'date-fns';
 
 interface Stats {
@@ -49,6 +53,19 @@ interface Stats {
   pendingWithdrawals: number;
   totalRevenue: number;
   thisMonthRevenue: number;
+  lastMonthRevenue: number;
+  starterCount: number;
+  lifetimeCount: number;
+  cardPayments: number;
+  bankPayments: number;
+}
+
+interface TopCreator {
+  id: string;
+  display_name: string;
+  referral_code: string;
+  lifetime_paid_users: number;
+  revenue: number;
 }
 
 const AdminDashboard = () => {
@@ -65,10 +82,17 @@ const AdminDashboard = () => {
     pendingWithdrawals: 0,
     totalRevenue: 0,
     thisMonthRevenue: 0,
+    lastMonthRevenue: 0,
+    starterCount: 0,
+    lifetimeCount: 0,
+    cardPayments: 0,
+    bankPayments: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
   const [revenueData, setRevenueData] = useState<{ name: string; value: number }[]>([]);
+  const [enrollmentData, setEnrollmentData] = useState<{ name: string; value: number }[]>([]);
+  const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const fetchStats = async () => {
@@ -91,6 +115,7 @@ const AdminDashboard = () => {
         { count: pendingJoinRequests },
         { count: pendingWithdrawals },
         { count: totalCreators },
+        { data: enrollmentTiers },
       ] = await Promise.all([
         supabase.from('enrollments').select('user_id').eq('is_active', true),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -101,6 +126,7 @@ const AdminDashboard = () => {
         supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('enrollments').select('tier').eq('is_active', true),
       ]);
 
       // Count students = active enrollments excluding non-student roles
@@ -108,12 +134,24 @@ const AdminDashboard = () => {
         e => !nonStudentUserIds.has(e.user_id)
       ).length;
 
+      // Count tiers
+      const starterCount = (enrollmentTiers || []).filter(e => e.tier === 'starter').length;
+      const lifetimeCount = (enrollmentTiers || []).filter(e => e.tier === 'lifetime').length;
+
       // Fetch revenue data from payment_attributions
       const { data: allPayments } = await supabase
         .from('payment_attributions')
-        .select('final_amount, payment_month');
+        .select('final_amount, payment_month, payment_type');
 
       const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+
+      // Payment method breakdown
+      const cardPayments = (allPayments || [])
+        .filter(p => p.payment_type === 'card')
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      const bankPayments = (allPayments || [])
+        .filter(p => p.payment_type === 'bank')
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
       // This month's revenue
       const currentMonth = new Date();
@@ -123,14 +161,26 @@ const AdminDashboard = () => {
         .filter(p => p.payment_month && p.payment_month >= currentMonthStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
+      // Last month's revenue
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      lastMonth.setDate(1);
+      const lastMonthStr = lastMonth.toISOString().split('T')[0];
+      const lastMonthEnd = new Date(currentMonth);
+      lastMonthEnd.setDate(0);
+      const lastMonthRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= lastMonthStr && p.payment_month < currentMonthStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+
       // Generate revenue chart data (last 6 months)
       const monthlyRevenue: { [key: string]: number } = {};
+      const monthlyEnrollments: { [key: string]: number } = {};
       for (let i = 5; i >= 0; i--) {
         const date = new Date();
         date.setMonth(date.getMonth() - i);
-        const monthKey = date.toISOString().slice(0, 7); // YYYY-MM
-        const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+        const monthKey = date.toISOString().slice(0, 7);
         monthlyRevenue[monthKey] = 0;
+        monthlyEnrollments[monthKey] = 0;
       }
 
       (allPayments || []).forEach(p => {
@@ -138,6 +188,7 @@ const AdminDashboard = () => {
           const monthKey = p.payment_month.slice(0, 7);
           if (monthlyRevenue.hasOwnProperty(monthKey)) {
             monthlyRevenue[monthKey] += Number(p.final_amount || 0);
+            monthlyEnrollments[monthKey] += 1;
           }
         }
       });
@@ -150,7 +201,41 @@ const AdminDashboard = () => {
         };
       });
 
+      const enrollmentChartData = Object.entries(monthlyEnrollments).map(([key, value]) => {
+        const date = new Date(key + '-01');
+        return {
+          name: date.toLocaleDateString('en-US', { month: 'short' }),
+          value,
+        };
+      });
+
       setRevenueData(chartData);
+      setEnrollmentData(enrollmentChartData);
+
+      // Fetch top creators
+      const { data: creatorsData } = await supabase
+        .from('creator_profiles')
+        .select('id, display_name, referral_code, lifetime_paid_users')
+        .order('lifetime_paid_users', { ascending: false })
+        .limit(5);
+
+      if (creatorsData && creatorsData.length > 0) {
+        const creatorsWithRevenue = await Promise.all(
+          creatorsData.map(async (creator) => {
+            const { data: creatorPayments } = await supabase
+              .from('payment_attributions')
+              .select('final_amount')
+              .eq('creator_id', creator.id);
+            
+            const revenue = (creatorPayments || []).reduce(
+              (sum, p) => sum + Number(p.final_amount || 0), 0
+            );
+            
+            return { ...creator, revenue };
+          })
+        );
+        setTopCreators(creatorsWithRevenue);
+      }
 
       setStats({
         totalStudents,
@@ -164,6 +249,11 @@ const AdminDashboard = () => {
         pendingWithdrawals: pendingWithdrawals || 0,
         totalRevenue,
         thisMonthRevenue,
+        lastMonthRevenue,
+        starterCount,
+        lifetimeCount,
+        cardPayments,
+        bankPayments,
       });
 
     } catch (error) {
@@ -207,7 +297,6 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchStats();
 
-    // Subscribe to real-time payment updates
     const channel = supabase
       .channel('admin-payments-realtime')
       .on('postgres_changes', 
@@ -231,12 +320,47 @@ const AdminDashboard = () => {
     };
   }, []);
 
+  const revenueTrend = stats.lastMonthRevenue > 0 
+    ? Math.round(((stats.thisMonthRevenue - stats.lastMonthRevenue) / stats.lastMonthRevenue) * 100) 
+    : 0;
+
+  const tierDistributionData = [
+    { name: 'Starter', value: stats.starterCount },
+    { name: 'Lifetime', value: stats.lifetimeCount },
+  ];
+
+  const paymentMethodData = [
+    { name: 'Card', value: stats.cardPayments },
+    { name: 'Bank', value: stats.bankPayments },
+  ];
+
   const statCards = [
-    { label: 'Total Revenue', value: `Rs. ${stats.totalRevenue.toLocaleString()}`, icon: DollarSign },
-    { label: 'This Month', value: `Rs. ${stats.thisMonthRevenue.toLocaleString()}`, icon: TrendingUp },
-    { label: 'Total Creators', value: stats.totalCreators, icon: Users },
-    { label: 'Total Students', value: stats.totalStudents, icon: Users },
-    { label: 'Active Enrollments', value: stats.activeEnrollments, icon: TrendingUp },
+    { 
+      label: 'Total Revenue', 
+      value: `Rs. ${stats.totalRevenue.toLocaleString()}`, 
+      icon: DollarSign,
+      iconColor: 'amber' as const,
+      trend: revenueTrend !== 0 ? { value: Math.abs(revenueTrend), isPositive: revenueTrend > 0 } : undefined,
+    },
+    { 
+      label: 'This Month', 
+      value: `Rs. ${stats.thisMonthRevenue.toLocaleString()}`, 
+      icon: TrendingUp,
+      iconColor: 'green' as const,
+      subtitle: stats.lastMonthRevenue > 0 ? `Last: Rs. ${stats.lastMonthRevenue.toLocaleString()}` : undefined,
+    },
+    { 
+      label: 'Total Creators', 
+      value: stats.totalCreators, 
+      icon: Users,
+      iconColor: 'purple' as const,
+    },
+    { 
+      label: 'Total Students', 
+      value: stats.totalStudents, 
+      icon: Users,
+      iconColor: 'blue' as const,
+    },
   ];
 
   const menuItems = [
@@ -253,6 +377,8 @@ const AdminDashboard = () => {
     { label: 'Branding Settings', href: '/admin/branding', icon: Palette, description: 'Site name, logo, heading & pricing buttons', badge: 0 },
     { label: 'Security & Abuse', href: '/admin/security', icon: Shield, description: 'Monitor suspicious activity', badge: 0 },
   ];
+
+  const pendingTotal = stats.pendingJoinRequests + stats.pendingUpgrades + stats.pendingWithdrawals;
 
   return (
     <main className="min-h-screen bg-background dashboard-theme">
@@ -296,6 +422,45 @@ const AdminDashboard = () => {
           </Button>
         </div>
 
+        {/* Pending Actions Alert */}
+        {pendingTotal > 0 && (
+          <div className="glass-card p-4 mb-6 border-amber-500/30 bg-amber-500/5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center animate-pulse">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">{pendingTotal} Pending Actions</p>
+                  <p className="text-xs text-muted-foreground">
+                    {stats.pendingJoinRequests > 0 && `${stats.pendingJoinRequests} join requests`}
+                    {stats.pendingJoinRequests > 0 && stats.pendingUpgrades > 0 && ', '}
+                    {stats.pendingUpgrades > 0 && `${stats.pendingUpgrades} upgrades`}
+                    {(stats.pendingJoinRequests > 0 || stats.pendingUpgrades > 0) && stats.pendingWithdrawals > 0 && ', '}
+                    {stats.pendingWithdrawals > 0 && `${stats.pendingWithdrawals} withdrawals`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                {stats.pendingJoinRequests > 0 && (
+                  <Link to="/admin/join-requests">
+                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
+                      Join Requests
+                    </Button>
+                  </Link>
+                )}
+                {stats.pendingUpgrades > 0 && (
+                  <Link to="/admin/upgrades">
+                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
+                      Upgrades
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {statCards.map((stat) => (
@@ -304,20 +469,127 @@ const AdminDashboard = () => {
               label={stat.label}
               value={isLoading ? '...' : stat.value}
               icon={stat.icon}
+              iconColor={stat.iconColor}
+              trend={stat.trend}
+              subtitle={stat.subtitle}
             />
           ))}
         </div>
 
-        {/* Revenue Chart Section */}
-        <div className="glass-card p-6 mb-8">
-          <h3 className="font-semibold text-foreground mb-4">Revenue (Last 6 Months)</h3>
-          <MiniChart 
-            data={revenueData} 
-            type="area" 
-            height={180} 
-            showAxis 
-            showGrid 
-          />
+        {/* Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Revenue Chart */}
+          <div className="glass-card p-6 lg:col-span-2">
+            <h3 className="font-semibold text-foreground mb-4">Revenue (Last 6 Months)</h3>
+            <MiniChart 
+              data={revenueData} 
+              type="area" 
+              height={180} 
+              showAxis 
+              showGrid 
+            />
+          </div>
+
+          {/* Tier Distribution */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">User Tiers</h3>
+            <div className="flex items-center justify-center">
+              <MiniChart 
+                data={tierDistributionData} 
+                type="donut" 
+                height={140}
+                colors={['hsl(var(--brand))', 'hsl(142, 76%, 36%)']}
+              />
+            </div>
+            <ChartLegend 
+              items={[
+                { name: 'Starter', color: 'hsl(var(--brand))', value: stats.starterCount },
+                { name: 'Lifetime', color: 'hsl(142, 76%, 36%)', value: stats.lifetimeCount },
+              ]}
+              className="mt-4 justify-center"
+            />
+          </div>
+        </div>
+
+        {/* Second Row Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Payment Methods */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Payment Methods</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <CreditCard className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Card Payments</p>
+                    <p className="text-xs text-muted-foreground">Online gateway</p>
+                  </div>
+                </div>
+                <p className="font-semibold text-foreground">Rs. {stats.cardPayments.toLocaleString()}</p>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                    <Building2 className="w-4 h-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Bank Transfers</p>
+                    <p className="text-xs text-muted-foreground">Manual verification</p>
+                  </div>
+                </div>
+                <p className="font-semibold text-foreground">Rs. {stats.bankPayments.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Enrollments Trend */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">New Enrollments</h3>
+            <MiniChart 
+              data={enrollmentData} 
+              type="bar" 
+              height={140}
+              showAxis
+            />
+          </div>
+
+          {/* Top Creators */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Top Creators</h3>
+            {topCreators.length > 0 ? (
+              <div className="space-y-3">
+                {topCreators.slice(0, 5).map((creator, index) => (
+                  <div key={creator.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
+                        index === 0 ? 'bg-amber-500/20 text-amber-500' :
+                        index === 1 ? 'bg-gray-300/20 text-gray-400' :
+                        index === 2 ? 'bg-orange-500/20 text-orange-500' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {index + 1}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground truncate max-w-[120px]">
+                          {creator.display_name || creator.referral_code}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {creator.lifetime_paid_users} users
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-sm font-medium text-foreground">
+                      Rs. {creator.revenue.toLocaleString()}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No creators yet</p>
+            )}
+          </div>
         </div>
 
         {/* Quick Actions */}
@@ -352,17 +624,6 @@ const AdminDashboard = () => {
               </div>
             </Link>
           ))}
-        </div>
-
-        {/* Alerts Section */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
-            <h3 className="font-semibold text-foreground">Recent Alerts</h3>
-          </div>
-          <div className="text-muted-foreground text-sm">
-            No alerts at this time. The system is running smoothly.
-          </div>
         </div>
 
         {/* Danger Zone */}
