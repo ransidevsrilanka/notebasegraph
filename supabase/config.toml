@@ -1,16 +1,1 @@
-project_id = "eyoinqmxmeqganirexmh"
-
-[functions.payhere-checkout]
-verify_jwt = false
-
-[functions.send-upgrade-telegram]
-verify_jwt = false
-
-[functions.serve-pdf]
-verify_jwt = true
-
-[functions.admin-finance]
-verify_jwt = false
-
-[functions.admin-purge-data]
-verify_jwt = false
+project_id = "csqqorcnrwkkwpfbravh"

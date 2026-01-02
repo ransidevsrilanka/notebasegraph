@@ -780,6 +780,14 @@ ALTER TABLE ONLY public.notes
 
 
 --
+-- Name: payment_attributions payment_attributions_order_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_attributions
+    ADD CONSTRAINT payment_attributions_order_id_key UNIQUE (order_id);
+
+
+--
 -- Name: payment_attributions payment_attributions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -876,6 +884,14 @@ ALTER TABLE ONLY public.user_attributions
 
 
 --
+-- Name: user_attributions user_attributions_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_attributions
+    ADD CONSTRAINT user_attributions_user_id_unique UNIQUE (user_id);
+
+
+--
 -- Name: user_roles user_roles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -921,6 +937,13 @@ ALTER TABLE ONLY public.withdrawal_methods
 
 ALTER TABLE ONLY public.withdrawal_requests
     ADD CONSTRAINT withdrawal_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cmo_profiles_referral_code_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX cmo_profiles_referral_code_unique ON public.cmo_profiles USING btree (referral_code) WHERE (referral_code IS NOT NULL);
 
 
 --
@@ -1180,6 +1203,27 @@ CREATE POLICY "Admins can manage cmo payouts" ON public.cmo_payouts USING ((publ
 
 
 --
+-- Name: cmo_profiles Admins can manage cmo_profiles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage cmo_profiles" ON public.cmo_profiles USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role))) WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: site_settings Admins can manage site_settings; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage site_settings" ON public.site_settings USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role))) WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
+-- Name: user_roles Admins can manage user_roles; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can manage user_roles" ON public.user_roles USING ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role))) WITH CHECK ((public.has_role(auth.uid(), 'admin'::public.app_role) OR public.has_role(auth.uid(), 'super_admin'::public.app_role) OR public.has_role(auth.uid(), 'content_admin'::public.app_role) OR public.has_role(auth.uid(), 'support_admin'::public.app_role)));
+
+
+--
 -- Name: join_requests Admins can update all join requests; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1376,10 +1420,10 @@ CREATE POLICY "Authenticated can update access codes" ON public.access_codes FOR
 
 
 --
--- Name: site_settings Authenticated users can modify site_settings; Type: POLICY; Schema: public; Owner: -
+-- Name: cmo_profiles CMOs can update own profile; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Authenticated users can modify site_settings" ON public.site_settings TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "CMOs can update own profile" ON public.cmo_profiles FOR UPDATE USING ((auth.uid() = user_id));
 
 
 --
@@ -1539,13 +1583,6 @@ CREATE POLICY "Users can insert own enrollment" ON public.enrollments FOR INSERT
 --
 
 CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
-
-
---
--- Name: user_roles Users can insert own roles; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY "Users can insert own roles" ON public.user_roles FOR INSERT TO authenticated WITH CHECK ((auth.uid() = user_id));
 
 
 --
