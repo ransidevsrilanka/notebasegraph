@@ -36,8 +36,14 @@ import {
   Building2,
   Bitcoin,
   ArrowUpRight,
+  Target,
+  Award,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subMonths } from 'date-fns';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { ProgressRing } from '@/components/dashboard/ProgressRing';
+import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
+import { ChartLegend } from '@/components/dashboard/ChartLegend';
 
 interface CreatorProfile {
   id: string;
@@ -94,6 +100,15 @@ interface Stats {
   paidEarnings: number;
   commissionRate: number;
   availableBalance: number;
+  lastMonthReferred: number;
+  lastMonthPaidUsers: number;
+}
+
+interface MonthlyData {
+  month: string;
+  earnings: number;
+  referrals: number;
+  conversions: number;
 }
 
 const CRYPTO_TYPES = ['USDT', 'BTC', 'ETH', 'BNB'];
@@ -115,9 +130,12 @@ const CreatorDashboard = () => {
     paidEarnings: 0,
     commissionRate: 0.08,
     availableBalance: 0,
+    lastMonthReferred: 0,
+    lastMonthPaidUsers: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -189,17 +207,27 @@ const CreatorDashboard = () => {
           .limit(10);
         setWithdrawalRequests(wrData || []);
 
+        // Get dates for comparison
+        const currentMonth = new Date();
+        currentMonth.setDate(1);
+        currentMonth.setHours(0, 0, 0, 0);
+        
+        const lastMonth = subMonths(currentMonth, 1);
+
         // Fetch user attributions count (all referred users)
         const { count: totalReferred } = await supabase
           .from('user_attributions')
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', cpData.id);
 
+        // Fetch last month referred
+        const { count: lastMonthReferred } = await supabase
+          .from('user_attributions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', cpData.id)
+          .lt('created_at', currentMonth.toISOString());
+
         // Fetch payment attributions for this month (paid conversions)
-        const currentMonth = new Date();
-        currentMonth.setDate(1);
-        currentMonth.setHours(0, 0, 0, 0);
-        
         const { data: monthlyPayments } = await supabase
           .from('payment_attributions')
           .select('id')
@@ -207,6 +235,16 @@ const CreatorDashboard = () => {
           .gte('created_at', currentMonth.toISOString());
         
         const paidThisMonth = monthlyPayments?.length || 0;
+
+        // Fetch last month paid users
+        const { data: lastMonthPayments } = await supabase
+          .from('payment_attributions')
+          .select('id')
+          .eq('creator_id', cpData.id)
+          .gte('created_at', lastMonth.toISOString())
+          .lt('created_at', currentMonth.toISOString());
+        
+        const paidLastMonth = lastMonthPayments?.length || 0;
 
         // Fetch payouts
         const { data: payoutData } = await supabase
@@ -225,6 +263,40 @@ const CreatorDashboard = () => {
         const pendingEarnings = pendingPayouts.reduce((sum, p) => sum + Number(p.commission_amount || 0), 0);
         const paidEarnings = paidPayouts.reduce((sum, p) => sum + Number(p.commission_amount || 0), 0);
 
+        // Fetch monthly data for charts (last 6 months)
+        const monthlyChartData: MonthlyData[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const monthStart = subMonths(new Date(), i);
+          monthStart.setDate(1);
+          monthStart.setHours(0, 0, 0, 0);
+          
+          const monthEnd = i === 0 ? new Date() : subMonths(new Date(), i - 1);
+          monthEnd.setDate(1);
+          monthEnd.setHours(0, 0, 0, 0);
+
+          const { data: monthPayments } = await supabase
+            .from('payment_attributions')
+            .select('creator_commission_amount')
+            .eq('creator_id', cpData.id)
+            .gte('created_at', monthStart.toISOString())
+            .lt('created_at', monthEnd.toISOString());
+
+          const { count: monthReferrals } = await supabase
+            .from('user_attributions')
+            .select('*', { count: 'exact', head: true })
+            .eq('creator_id', cpData.id)
+            .gte('created_at', monthStart.toISOString())
+            .lt('created_at', monthEnd.toISOString());
+
+          monthlyChartData.push({
+            month: format(monthStart, 'MMM'),
+            earnings: (monthPayments || []).reduce((sum, p) => sum + Number(p.creator_commission_amount || 0), 0),
+            referrals: monthReferrals || 0,
+            conversions: monthPayments?.length || 0,
+          });
+        }
+        setMonthlyData(monthlyChartData);
+
         setStats({
           totalUsersReferred: totalReferred || 0,
           paidUsersThisMonth: paidThisMonth || 0,
@@ -233,6 +305,8 @@ const CreatorDashboard = () => {
           paidEarnings,
           commissionRate,
           availableBalance: cpData.available_balance || 0,
+          lastMonthReferred: lastMonthReferred || 0,
+          lastMonthPaidUsers: paidLastMonth,
         });
       }
     } catch (error) {
@@ -363,6 +437,39 @@ const CreatorDashboard = () => {
   const feePreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) * 0.03 : 0;
   const netPreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) - feePreview : 0;
 
+  // Calculate trends
+  const referredTrend = stats.lastMonthReferred > 0
+    ? Math.round(((stats.totalUsersReferred - stats.lastMonthReferred) / stats.lastMonthReferred) * 100)
+    : stats.totalUsersReferred > 0 ? 100 : 0;
+
+  const paidUsersTrend = stats.lastMonthPaidUsers > 0
+    ? Math.round(((stats.paidUsersThisMonth - stats.lastMonthPaidUsers) / stats.lastMonthPaidUsers) * 100)
+    : stats.paidUsersThisMonth > 0 ? 100 : 0;
+
+  // Commission tier progress (500 users for 12%)
+  const tierProgress = Math.min((stats.paidUsersLifetime / 500) * 100, 100);
+  const isHighTier = stats.paidUsersLifetime >= 500;
+
+  // Funnel data
+  const funnelData = [
+    { name: 'Referred', value: stats.totalUsersReferred, color: 'hsl(217, 91%, 60%)' },
+    { name: 'Converted', value: stats.paidUsersLifetime, color: 'hsl(45, 93%, 47%)' },
+  ];
+
+  const chartColors = {
+    primary: 'hsl(45, 93%, 47%)',
+    secondary: 'hsl(217, 91%, 60%)',
+    tertiary: 'hsl(142, 71%, 45%)',
+    quaternary: 'hsl(262, 83%, 58%)',
+  };
+
+  // Discount code performance data for chart
+  const discountCodeData = discountCodes.map(dc => ({
+    name: dc.code,
+    conversions: dc.paid_conversions,
+    usage: dc.usage_count,
+  }));
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
@@ -418,52 +525,230 @@ const CreatorDashboard = () => {
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards with Trends */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-card p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.totalUsersReferred}</p>
-                <p className="text-muted-foreground text-sm">Total Referred</p>
-              </div>
+              {referredTrend !== 0 && <TrendIndicator value={referredTrend} />}
             </div>
+            <p className="text-2xl font-bold text-foreground">{stats.totalUsersReferred}</p>
+            <p className="text-muted-foreground text-sm">Total Referred</p>
           </div>
 
           <div className="glass-card p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-green-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">{stats.paidUsersThisMonth}</p>
-                <p className="text-muted-foreground text-sm">Paid This Month</p>
-              </div>
+              {paidUsersTrend !== 0 && <TrendIndicator value={paidUsersTrend} />}
             </div>
+            <p className="text-2xl font-bold text-foreground">{stats.paidUsersThisMonth}</p>
+            <p className="text-muted-foreground text-sm">Paid This Month</p>
           </div>
 
           <div className="glass-card p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
                 <Wallet className="w-6 h-6 text-brand" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">LKR {stats.availableBalance.toLocaleString()}</p>
-                <p className="text-muted-foreground text-sm">Available Balance</p>
-              </div>
             </div>
+            <p className="text-2xl font-bold text-foreground">LKR {stats.availableBalance.toLocaleString()}</p>
+            <p className="text-muted-foreground text-sm">Available Balance</p>
           </div>
 
           <div className="glass-card p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
                 <DollarSign className="w-6 h-6 text-purple-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">LKR {(creatorProfile?.total_withdrawn || 0).toLocaleString()}</p>
-                <p className="text-muted-foreground text-sm">Total Withdrawn</p>
+            </div>
+            <p className="text-2xl font-bold text-foreground">LKR {(creatorProfile?.total_withdrawn || 0).toLocaleString()}</p>
+            <p className="text-muted-foreground text-sm">Total Withdrawn</p>
+          </div>
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Earnings Trend Chart */}
+          <div className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="w-5 h-5 text-brand" />
+              <h3 className="font-semibold text-foreground">Earnings Trend</h3>
+            </div>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={monthlyData}>
+                  <defs>
+                    <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={chartColors.primary} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground))'
+                    }}
+                    formatter={(value: number) => [`LKR ${value.toLocaleString()}`, 'Earnings']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="earnings" 
+                    stroke={chartColors.primary} 
+                    fill="url(#earningsGradient)" 
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Monthly Performance Comparison */}
+          <div className="glass-card p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar className="w-5 h-5 text-brand" />
+              <h3 className="font-semibold text-foreground">Monthly Performance</h3>
+            </div>
+            <div className="h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData}>
+                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground))'
+                    }} 
+                  />
+                  <Bar dataKey="referrals" fill={chartColors.secondary} radius={[4, 4, 0, 0]} name="Referrals" />
+                  <Bar dataKey="conversions" fill={chartColors.tertiary} radius={[4, 4, 0, 0]} name="Conversions" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <ChartLegend 
+              items={[
+                { name: 'Referrals', color: chartColors.secondary },
+                { name: 'Conversions', color: chartColors.tertiary },
+              ]} 
+              className="mt-3 justify-center"
+            />
+          </div>
+        </div>
+
+        {/* Commission Tier Progress */}
+        <div className="glass-card p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Award className="w-5 h-5 text-brand" />
+            <h3 className="font-semibold text-foreground">Commission Tier Progress</h3>
+          </div>
+          <div className="flex items-center gap-6">
+            <ProgressRing 
+              progress={tierProgress} 
+              size={100} 
+              strokeWidth={10}
+              color={isHighTier ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'}
+              label="of 500"
+            />
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">Progress to 12% Commission</span>
+                <span className="text-sm font-medium text-foreground">{stats.paidUsersLifetime}/500</span>
+              </div>
+              <div className="h-3 bg-muted rounded-full overflow-hidden mb-3">
+                <div 
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ 
+                    width: `${tierProgress}%`,
+                    backgroundColor: isHighTier ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0</span>
+                <span>125</span>
+                <span>250</span>
+                <span>375</span>
+                <span>500</span>
+              </div>
+              <div className="flex items-center gap-4 mt-4">
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isHighTier ? 'bg-muted/50' : 'bg-brand/10 border border-brand/30'}`}>
+                  <div className={`w-2 h-2 rounded-full ${isHighTier ? 'bg-muted-foreground' : 'bg-brand'}`} />
+                  <span className={`text-sm ${isHighTier ? 'text-muted-foreground' : 'text-brand font-medium'}`}>8% Tier</span>
+                </div>
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isHighTier ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
+                  <div className={`w-2 h-2 rounded-full ${isHighTier ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+                  <span className={`text-sm ${isHighTier ? 'text-green-500 font-medium' : 'text-muted-foreground'}`}>12% Tier</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Referral Funnel */}
+        <div className="glass-card p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="w-5 h-5 text-brand" />
+            <h3 className="font-semibold text-foreground">Referral Funnel</h3>
+          </div>
+          <div className="flex items-center gap-8">
+            <div className="h-48 w-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={funnelData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={70}
+                    dataKey="value"
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    {funnelData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      color: 'hsl(var(--foreground))'
+                    }} 
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex-1 space-y-4">
+              <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <span className="text-foreground font-medium">Total Referred</span>
+                </div>
+                <span className="text-xl font-bold text-foreground">{stats.totalUsersReferred}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-brand/10 rounded-lg border border-brand/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-brand" />
+                  <span className="text-foreground font-medium">Paid Conversions</span>
+                </div>
+                <span className="text-xl font-bold text-foreground">{stats.paidUsersLifetime}</span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Conversion Rate: <span className="text-brand font-semibold">
+                  {stats.totalUsersReferred > 0 
+                    ? ((stats.paidUsersLifetime / stats.totalUsersReferred) * 100).toFixed(1) 
+                    : 0}%
+                </span>
               </div>
             </div>
           </div>
@@ -631,7 +916,7 @@ const CreatorDashboard = () => {
             </p>
           </div>
 
-          {/* Discount Codes */}
+          {/* Discount Codes with Performance */}
           <div className="glass-card p-6">
             <div className="flex items-center gap-2 mb-4">
               <Tag className="w-5 h-5 text-brand" />
@@ -639,23 +924,43 @@ const CreatorDashboard = () => {
             </div>
             {discountCodes.length > 0 ? (
               <div className="space-y-3">
-                {discountCodes.map((dc) => (
-                  <div key={dc.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                    <div>
-                      <p className="font-mono font-medium text-foreground">{dc.code}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {dc.discount_percent}% off • {dc.paid_conversions} conversions
-                      </p>
+                {discountCodes.map((dc) => {
+                  const conversionRate = dc.usage_count > 0 
+                    ? ((dc.paid_conversions / dc.usage_count) * 100).toFixed(1) 
+                    : '0';
+                  return (
+                    <div key={dc.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono font-medium text-foreground">{dc.code}</p>
+                          <span className="text-xs bg-brand/10 text-brand px-1.5 py-0.5 rounded">
+                            {dc.discount_percent}% off
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            {dc.paid_conversions} conversions
+                          </p>
+                          <span className="text-xs text-muted-foreground">•</span>
+                          <p className="text-xs text-muted-foreground">
+                            {dc.usage_count} uses
+                          </p>
+                          <span className="text-xs text-muted-foreground">•</span>
+                          <p className="text-xs text-brand">
+                            {conversionRate}% conv. rate
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => copyToClipboard(dc.code, 'Discount code')}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={() => copyToClipboard(dc.code, 'Discount code')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
@@ -895,11 +1200,11 @@ const CreatorDashboard = () => {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Fee (3%):</span>
-                  <span className="text-red-500">- LKR {feePreview.toLocaleString()}</span>
+                  <span className="text-foreground">-LKR {feePreview.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm font-medium border-t border-border pt-1 mt-1">
+                <div className="flex justify-between text-sm font-medium pt-1 border-t border-border">
                   <span className="text-foreground">You'll receive:</span>
-                  <span className="text-green-500">LKR {netPreview.toLocaleString()}</span>
+                  <span className="text-brand">LKR {netPreview.toLocaleString()}</span>
                 </div>
               </div>
             )}
@@ -909,12 +1214,8 @@ const CreatorDashboard = () => {
             <Button variant="outline" onClick={() => setWithdrawDialogOpen(false)}>
               Cancel
             </Button>
-            <Button 
-              variant="brand" 
-              onClick={handleWithdraw} 
-              disabled={isSubmitting || !selectedMethodId || !withdrawAmount}
-            >
-              {isSubmitting ? 'Submitting...' : 'Request Withdrawal'}
+            <Button variant="brand" onClick={handleWithdraw} disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting...' : 'Submit Request'}
             </Button>
           </DialogFooter>
         </DialogContent>
