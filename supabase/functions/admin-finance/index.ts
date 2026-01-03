@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 // Commission rates
-const CREATOR_BASE_RATE = 0.12; // 12% for creators
-const CREATOR_BONUS_RATE = 0.17; // 17% (12% + 5% bonus) after 1000 users
-const CREATOR_BONUS_THRESHOLD = 1000;
+const CREATOR_BASE_RATE = 0.08; // 8% for creators under 500 users
+const CREATOR_BONUS_RATE = 0.12; // 12% after 500 users
+const CREATOR_BONUS_THRESHOLD = 500;
 const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
 const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
 const CMO_ANNUAL_USER_GOAL = 280; // 280 users annually for bonus
