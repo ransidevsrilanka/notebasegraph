@@ -815,9 +815,19 @@ const PaidSignup = () => {
                     variant="brand" 
                     className="w-full"
                     onClick={handleEnrollmentChoice}
+                    disabled={isLoading}
                   >
-                    {isALevel ? 'Continue to Subject Selection' : 'Complete Enrollment'}
-                    <ArrowRight className="w-4 h-4 ml-2" />
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        {isALevel ? 'Continue to Subject Selection' : 'Complete Enrollment'}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </>
+                    )}
                   </Button>
 
                   <button 

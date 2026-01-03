@@ -225,18 +225,54 @@ serve(async (req) => {
   const url = new URL(req.url);
   const path = url.pathname.split("/").pop();
 
-  const merchantId = Deno.env.get("PAYHERE_MERCHANT_ID") || "";
-  const merchantSecret = Deno.env.get("PAYHERE_MERCHANT_SECRET") || "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+  // Fetch payment mode from site_settings
+  let paymentMode = { mode: "test", test_environment: "web" };
+  try {
+    const { data: modeData } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "payment_mode")
+      .maybeSingle();
+    
+    if (modeData?.value && typeof modeData.value === "object") {
+      paymentMode = modeData.value as { mode: string; test_environment: string };
+    }
+  } catch (err) {
+    console.error("Failed to fetch payment mode, using default (test/web):", err);
+  }
+
+  // Select credentials based on payment mode
+  let merchantId: string;
+  let merchantSecret: string;
+  let isSandbox: boolean;
+
+  if (paymentMode.mode === "live") {
+    merchantId = Deno.env.get("PAYHERE_MERCHANT_ID") || "";
+    merchantSecret = Deno.env.get("PAYHERE_MERCHANT_SECRET") || "";
+    isSandbox = false;
+    console.log("Using LIVE mode credentials");
+  } else if (paymentMode.test_environment === "localhost") {
+    merchantId = Deno.env.get("PAYHERE_MERCHANT_SANDOBOX_ID") || "";
+    merchantSecret = Deno.env.get("PAYHERE_MERCHANT_SECRET_SANDBOX_LOCALHOST") || "";
+    isSandbox = true;
+    console.log("Using TEST mode credentials (localhost)");
+  } else {
+    merchantId = Deno.env.get("PAYHERE_MERCHANT_SANDOBOX_ID") || "";
+    merchantSecret = Deno.env.get("PAYHERE_MERCHANT_SANDBOX_SECRET_WEB") || "";
+    isSandbox = true;
+    console.log("Using TEST mode credentials (web)");
+  }
+
   try {
     // Generate hash for checkout
     if (path === "generate-hash" && req.method === "POST") {
       const body: CheckoutRequest = await req.json();
-      console.log("Generating hash for checkout:", body.order_id);
+      console.log("Generating hash for checkout:", body.order_id, "Mode:", paymentMode.mode);
 
       const hash = generateHash(merchantId, body.order_id, body.amount, body.currency, merchantSecret);
 
@@ -264,7 +300,7 @@ serve(async (req) => {
         JSON.stringify({
           merchant_id: merchantId,
           hash: hash,
-          sandbox: true, // Sandbox mode enabled for testing
+          sandbox: isSandbox,
         }),
         {
           status: 200,
