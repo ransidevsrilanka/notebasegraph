@@ -14,14 +14,16 @@ interface RefundRequest {
   admin_user_id: string;
 }
 
-// PayHere Refund API endpoint
-const PAYHERE_REFUND_API = "https://sandbox.payhere.lk/merchant/v1/payment/refund";
-const PAYHERE_TOKEN_API = "https://sandbox.payhere.lk/merchant/v1/oauth/token";
+// PayHere API endpoints (will be set dynamically based on mode)
+const PAYHERE_LIVE_REFUND_API = "https://www.payhere.lk/merchant/v1/payment/refund";
+const PAYHERE_SANDBOX_REFUND_API = "https://sandbox.payhere.lk/merchant/v1/payment/refund";
+const PAYHERE_LIVE_TOKEN_API = "https://www.payhere.lk/merchant/v1/oauth/token";
+const PAYHERE_SANDBOX_TOKEN_API = "https://sandbox.payhere.lk/merchant/v1/oauth/token";
 
 // Cache for OAuth token
 let cachedToken: { access_token: string; expires_at: number } | null = null;
 
-async function getAccessToken(appId: string, appSecret: string): Promise<string> {
+async function getAccessToken(appId: string, appSecret: string, tokenApi: string): Promise<string> {
   // Check if we have a valid cached token
   if (cachedToken && cachedToken.expires_at > Date.now()) {
     console.log("Using cached access token");
@@ -33,7 +35,7 @@ async function getAccessToken(appId: string, appSecret: string): Promise<string>
   // Create Base64 encoded authorization string
   const authString = btoa(`${appId}:${appSecret}`);
 
-  const response = await fetch(PAYHERE_TOKEN_API, {
+  const response = await fetch(tokenApi, {
     method: "POST",
     headers: {
       "Authorization": `Basic ${authString}`,
@@ -63,11 +65,12 @@ async function getAccessToken(appId: string, appSecret: string): Promise<string>
 async function processRefund(
   accessToken: string,
   paymentId: string,
-  description: string
+  description: string,
+  refundApi: string
 ): Promise<{ success: boolean; message: string; data?: any }> {
   console.log("Processing refund for payment:", paymentId);
 
-  const response = await fetch(PAYHERE_REFUND_API, {
+  const response = await fetch(refundApi, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${accessToken}`,
@@ -114,11 +117,45 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const payHereAppId = Deno.env.get("PAYHERE_APP_ID") || "";
-  const payHereAppSecret = Deno.env.get("PAYHERE_APP_SECRET") || "";
   const refundOtpCode = Deno.env.get("REFUND_OTP_CODE") || "";
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Fetch payment mode from site_settings
+  let paymentMode = { mode: "test", test_environment: "web" };
+  try {
+    const { data: modeData } = await supabase
+      .from("site_settings")
+      .select("value")
+      .eq("key", "payment_mode")
+      .maybeSingle();
+    
+    if (modeData?.value && typeof modeData.value === "object") {
+      paymentMode = modeData.value as { mode: string; test_environment: string };
+    }
+  } catch (err) {
+    console.error("Failed to fetch payment mode, using default (test/web):", err);
+  }
+
+  // Select credentials and APIs based on payment mode
+  let payHereAppId: string;
+  let payHereAppSecret: string;
+  let tokenApi: string;
+  let refundApi: string;
+
+  if (paymentMode.mode === "live") {
+    payHereAppId = Deno.env.get("PAYHERE_APP_ID") || "";
+    payHereAppSecret = Deno.env.get("PAYHERE_APP_SECRET") || "";
+    tokenApi = PAYHERE_LIVE_TOKEN_API;
+    refundApi = PAYHERE_LIVE_REFUND_API;
+    console.log("Using LIVE mode credentials for refund");
+  } else {
+    payHereAppId = Deno.env.get("PAYHERE_SANDBOX_APP_ID") || "";
+    payHereAppSecret = Deno.env.get("PAYHERE_SANDBOX_APP_SECRET") || "";
+    tokenApi = PAYHERE_SANDBOX_TOKEN_API;
+    refundApi = PAYHERE_SANDBOX_REFUND_API;
+    console.log("Using TEST mode credentials for refund");
+  }
 
   try {
     if (req.method !== "POST") {
@@ -219,7 +256,7 @@ serve(async (req) => {
     // Get access token
     let accessToken: string;
     try {
-      accessToken = await getAccessToken(payHereAppId, payHereAppSecret);
+      accessToken = await getAccessToken(payHereAppId, payHereAppSecret, tokenApi);
     } catch (tokenError) {
       console.error("Failed to get access token:", tokenError);
       return new Response(
@@ -232,7 +269,8 @@ serve(async (req) => {
     const refundResult = await processRefund(
       accessToken,
       payment_id,
-      description || `Refund for order ${payment.order_id}`
+      description || `Refund for order ${payment.order_id}`,
+      refundApi
     );
 
     if (!refundResult.success) {

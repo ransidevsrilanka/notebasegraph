@@ -39,6 +39,7 @@ import JoinRequests from "./pages/admin/JoinRequests";
 import Payments from "./pages/admin/Payments";
 import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
 import PaymentReconciliation from "./pages/admin/PaymentReconciliation";
+import PaymentSettings from "./pages/admin/PaymentSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -170,6 +171,11 @@ const App = () => (
             <Route path="/admin/reconciliation" element={
               <ProtectedRoute requireAdmin>
                 <PaymentReconciliation />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/payment-settings" element={
+              <ProtectedRoute requireAdmin>
+                <PaymentSettings />
               </ProtectedRoute>
             } />
             
