@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
@@ -19,6 +19,9 @@ import {
   CheckCircle2,
   BookOpen,
   GraduationCap,
+  AlertCircle,
+  Loader2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -47,6 +50,7 @@ interface PaymentData {
   timestamp: number;
   refCreator?: string;
   discountCode?: string;
+  status?: string;
 }
 
 const PaidSignup = () => {
@@ -56,6 +60,11 @@ const PaidSignup = () => {
   
   // Check for payment data
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
+  
+  // Payment verification state
+  const [isVerifying, setIsVerifying] = useState(true);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [paymentVerified, setPaymentVerified] = useState(false);
   
   // Step management
   const [step, setStep] = useState<'account' | 'enrollment' | 'subjects' | 'success'>('account');
@@ -85,7 +94,58 @@ const PaidSignup = () => {
     }
   }, [user, enrollment, navigate]);
 
-  // Load payment data from localStorage
+  // Verify payment status with polling
+  const verifyPayment = useCallback(async (orderId: string, attempt = 1): Promise<boolean> => {
+    const MAX_ATTEMPTS = 15; // 15 attempts x 2 seconds = 30 seconds max
+    const POLL_INTERVAL = 2000; // 2 seconds
+    
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "payhere-checkout/verify-payment",
+        { body: { order_id: orderId } }
+      );
+      
+      if (error) {
+        console.error("Payment verification error:", error);
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+          return verifyPayment(orderId, attempt + 1);
+        }
+        return false;
+      }
+      
+      console.log("Payment verification response:", data);
+      
+      if (data.status === "completed") {
+        return true;
+      } else if (data.status === "failed" || data.status === "cancelled" || data.status === "chargedback") {
+        // Payment failed - show specific error
+        const reason = data.failure_reason || 
+          (data.status === "cancelled" ? "Payment was cancelled" : "Payment failed");
+        setVerificationError(reason);
+        return false;
+      } else if (data.status === "pending" && attempt < MAX_ATTEMPTS) {
+        // Still pending - keep polling
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        return verifyPayment(orderId, attempt + 1);
+      }
+      
+      // Max attempts reached, still pending
+      if (attempt >= MAX_ATTEMPTS) {
+        setVerificationError("Payment verification timed out. If payment was successful, please contact support.");
+      }
+      return false;
+    } catch (err) {
+      console.error("Payment verification failed:", err);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        return verifyPayment(orderId, attempt + 1);
+      }
+      return false;
+    }
+  }, []);
+
+  // Load payment data from localStorage and verify
   useEffect(() => {
     const storedPayment = localStorage.getItem('pending_payment');
     if (storedPayment) {
@@ -94,6 +154,18 @@ const PaidSignup = () => {
         // Check if payment is less than 24 hours old
         if (Date.now() - data.timestamp < 24 * 60 * 60 * 1000) {
           setPaymentData(data);
+          
+          // Start payment verification
+          setIsVerifying(true);
+          verifyPayment(data.orderId).then((verified) => {
+            setIsVerifying(false);
+            if (verified) {
+              setPaymentVerified(true);
+              toast.success("Payment verified successfully!");
+            } else if (!verificationError) {
+              setVerificationError("Payment could not be verified. Please try again or contact support.");
+            }
+          });
         } else {
           localStorage.removeItem('pending_payment');
           toast.error("Payment session expired. Please try again.");
@@ -107,7 +179,7 @@ const PaidSignup = () => {
       toast.error("No payment found. Please complete payment first.");
       navigate('/pricing');
     }
-  }, [navigate]);
+  }, [navigate, verifyPayment, verificationError]);
 
   // Fetch subjects when stream is selected
   useEffect(() => {
@@ -427,7 +499,8 @@ const PaidSignup = () => {
     .filter(s => s.is_mandatory)
     .map(s => s.subject_name);
 
-  if (!paymentData) {
+  // Show loading state while verifying payment
+  if (isVerifying || !paymentData) {
     return (
       <main className="min-h-screen bg-background">
         <Navbar />
@@ -436,11 +509,79 @@ const PaidSignup = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-md mx-auto">
               <div className="glass-card p-6 text-center">
+                <Loader2 className="w-12 h-12 text-brand animate-spin mx-auto mb-4" />
                 <h1 className="font-display text-xl font-bold text-foreground mb-2">
-                  Complete payment to continue
+                  Verifying Payment
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Please wait while we confirm your payment status...
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <Footer />
+      </main>
+    );
+  }
+
+  // Show error state if payment verification failed
+  if (verificationError && !paymentVerified) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+
+        <section className="pt-28 pb-20">
+          <div className="container mx-auto px-4">
+            <div className="max-w-md mx-auto">
+              <div className="glass-card p-6 text-center">
+                <div className="w-16 h-16 rounded-full bg-destructive/20 flex items-center justify-center mx-auto mb-4">
+                  <XCircle className="w-8 h-8 text-destructive" />
+                </div>
+                <h1 className="font-display text-xl font-bold text-foreground mb-2">
+                  Payment Failed
                 </h1>
                 <p className="text-sm text-muted-foreground mb-5">
-                  We couldn’t find your payment session. Please go back to pricing and complete the payment first.
+                  {verificationError}
+                </p>
+                <div className="space-y-3">
+                  <Button variant="brand" className="w-full" onClick={() => {
+                    localStorage.removeItem('pending_payment');
+                    navigate('/pricing');
+                  }}>
+                    Try Again
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    If you believe this is an error, please contact support with your order ID: {paymentData?.orderId}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <Footer />
+      </main>
+    );
+  }
+
+  // Only show signup flow if payment is verified
+  if (!paymentVerified) {
+    return (
+      <main className="min-h-screen bg-background">
+        <Navbar />
+
+        <section className="pt-28 pb-20">
+          <div className="container mx-auto px-4">
+            <div className="max-w-md mx-auto">
+              <div className="glass-card p-6 text-center">
+                <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                <h1 className="font-display text-xl font-bold text-foreground mb-2">
+                  Payment Pending
+                </h1>
+                <p className="text-sm text-muted-foreground mb-5">
+                  Your payment is still being processed. Please wait or try again.
                 </p>
                 <Button variant="brand" className="w-full" onClick={() => navigate('/pricing')}>
                   Go to Pricing

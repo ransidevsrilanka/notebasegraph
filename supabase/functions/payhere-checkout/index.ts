@@ -25,6 +25,24 @@ interface CheckoutRequest {
   discount_code?: string; // discount code
 }
 
+// PayHere status code to failure reason mapping
+const FAILURE_REASONS: Record<string, string> = {
+  "-1": "Payment was cancelled",
+  "-2": "Payment failed - Your card was declined",
+  "-3": "Payment was charged back",
+};
+
+// Common card decline reasons from PayHere
+const DECLINE_REASONS: Record<string, string> = {
+  "insufficient_funds": "Your card has insufficient funds. Please try a different payment method.",
+  "card_declined": "Your bank declined this transaction. Please try a different card.",
+  "do_not_honor": "Your bank declined this transaction. Please contact your bank.",
+  "limit_exceeded": "Your card limit has been exceeded. Please contact your bank.",
+  "expired_card": "Your card has expired. Please use a different card.",
+  "invalid_card": "Invalid card details. Please check and try again.",
+  "network_error": "A network error occurred. Please try again.",
+};
+
 function md5(input: string): string {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
@@ -287,6 +305,7 @@ serve(async (req) => {
         );
       }
 
+      // Return detailed status information
       return new Response(
         JSON.stringify({
           verified: payment.status === "completed",
@@ -296,6 +315,7 @@ serve(async (req) => {
           tier: payment.tier,
           ref_creator: payment.ref_creator,
           discount_code: payment.discount_code,
+          failure_reason: payment.failure_reason,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -315,11 +335,13 @@ serve(async (req) => {
       const custom1 = formData.get("custom_1")?.toString() || ""; // tier
       const custom2 = formData.get("custom_2")?.toString() || ""; // enrollment_id or 'new'
       const method = formData.get("method")?.toString() || "";
+      const statusMessage = formData.get("status_message")?.toString() || "";
 
       console.log("Payment notification received:", {
         orderId,
         paymentId,
         statusCode,
+        statusMessage,
         custom1,
         custom2,
         method,
@@ -338,34 +360,60 @@ serve(async (req) => {
 
       if (!isValid) {
         console.error("Invalid payment signature for order:", orderId);
-        // Update payment status to failed
+        // Update payment status to failed with reason
         await supabase
           .from("payments")
-          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .update({ 
+            status: "failed", 
+            failure_reason: "Invalid payment signature - possible tampering detected",
+            updated_at: new Date().toISOString() 
+          })
           .eq("order_id", orderId);
         return new Response("Invalid signature", { status: 400 });
       }
 
-      // Map status codes
+      // Map status codes to status and failure reason
       let paymentStatus = "pending";
+      let failureReason: string | null = null;
+
       if (statusCode === "2") {
         paymentStatus = "completed";
       } else if (statusCode === "-1") {
         paymentStatus = "cancelled";
+        failureReason = statusMessage || FAILURE_REASONS["-1"];
       } else if (statusCode === "-2") {
         paymentStatus = "failed";
+        // Try to get a more specific reason from the status message
+        failureReason = statusMessage || FAILURE_REASONS["-2"];
+        // Check for common decline reasons in the message
+        const lowerMessage = (statusMessage || "").toLowerCase();
+        if (lowerMessage.includes("insufficient")) {
+          failureReason = DECLINE_REASONS["insufficient_funds"];
+        } else if (lowerMessage.includes("limit") || lowerMessage.includes("exceeded")) {
+          failureReason = DECLINE_REASONS["limit_exceeded"];
+        } else if (lowerMessage.includes("honor") || lowerMessage.includes("declined")) {
+          failureReason = DECLINE_REASONS["do_not_honor"];
+        } else if (lowerMessage.includes("expired")) {
+          failureReason = DECLINE_REASONS["expired_card"];
+        } else if (lowerMessage.includes("network") || lowerMessage.includes("timeout")) {
+          failureReason = DECLINE_REASONS["network_error"];
+        }
       } else if (statusCode === "-3") {
         paymentStatus = "chargedback";
+        failureReason = statusMessage || FAILURE_REASONS["-3"];
       } else if (statusCode === "0") {
         paymentStatus = "pending";
       }
 
-      // Update payment record
+      console.log("Payment status mapped:", { paymentStatus, failureReason });
+
+      // Update payment record with status and failure reason
       const { error: updateError } = await supabase
         .from("payments")
         .update({
           status: paymentStatus,
           payment_id: paymentId,
+          failure_reason: failureReason,
           processed_at: paymentStatus === "completed" ? new Date().toISOString() : null,
           updated_at: new Date().toISOString(),
         })
@@ -432,7 +480,7 @@ serve(async (req) => {
           tier: custom1,
         });
       } else {
-        console.log("Payment not successful. Status code:", statusCode);
+        console.log("Payment not successful. Status code:", statusCode, "Reason:", failureReason);
       }
 
       return new Response("OK", { status: 200 });
@@ -476,12 +524,14 @@ serve(async (req) => {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("PayHere checkout error:", error);
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  } catch (error) {
+    console.error("Error in payhere-checkout function:", error);
+    return new Response(
+      JSON.stringify({ error: "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });
