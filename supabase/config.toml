@@ -1,1 +1,7 @@
 project_id = "csqqorcnrwkkwpfbravh"
+
+[functions.payhere-checkout]
+verify_jwt = false
+
+[functions.payhere-refund]
+verify_jwt = true

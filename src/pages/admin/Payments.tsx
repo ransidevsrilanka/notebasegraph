@@ -10,6 +10,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+} from "@/components/ui/input-otp";
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { 
   ArrowLeft,
@@ -18,10 +32,14 @@ import {
   Search,
   DollarSign,
   TrendingUp,
-  Users,
+  RotateCcw,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { TIER_LABELS } from '@/types/database';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface PaymentRecord {
   id: string;
@@ -43,9 +61,14 @@ interface PaymentRecord {
     display_name: string | null;
     referral_code: string | null;
   };
+  // Payment table fields for refund
+  payment_id?: string;
+  payment_status?: string;
+  refund_status?: string | null;
 }
 
 const Payments = () => {
+  const { user } = useAuth();
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,6 +79,12 @@ const Payments = () => {
     bankPayments: 0,
     totalCommissions: 0,
   });
+
+  // Refund dialog state
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
+  const [otpCode, setOtpCode] = useState('');
+  const [isRefunding, setIsRefunding] = useState(false);
 
   useEffect(() => {
     fetchPayments();
@@ -82,10 +111,10 @@ const Payments = () => {
       return;
     }
 
-    // Fetch profile and creator info for each payment
+    // Fetch profile, creator, and payment info for each payment
     const paymentsWithDetails = await Promise.all(
       (data || []).map(async (payment) => {
-        const [profileResult, creatorResult] = await Promise.all([
+        const [profileResult, creatorResult, paymentResult] = await Promise.all([
           supabase
             .from('profiles')
             .select('email, full_name')
@@ -98,12 +127,23 @@ const Payments = () => {
                 .eq('id', payment.creator_id)
                 .maybeSingle()
             : Promise.resolve({ data: null }),
+          // Fetch payment details for refund functionality
+          payment.order_id
+            ? supabase
+                .from('payments')
+                .select('payment_id, status, refund_status')
+                .eq('order_id', payment.order_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
         ]);
 
         return {
           ...payment,
           profile: profileResult.data,
           creator: creatorResult.data,
+          payment_id: paymentResult.data?.payment_id,
+          payment_status: paymentResult.data?.status,
+          refund_status: paymentResult.data?.refund_status,
         };
       })
     );
@@ -127,6 +167,63 @@ const Payments = () => {
     setIsLoading(false);
   };
 
+  const openRefundDialog = (payment: PaymentRecord) => {
+    setSelectedPayment(payment);
+    setOtpCode('');
+    setRefundDialogOpen(true);
+  };
+
+  const handleRefund = async () => {
+    if (!selectedPayment || !selectedPayment.payment_id || !user) {
+      toast.error('Invalid payment or not logged in');
+      return;
+    }
+
+    if (otpCode.length !== 6) {
+      toast.error('Please enter the complete 6-digit OTP code');
+      return;
+    }
+
+    setIsRefunding(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('payhere-refund', {
+        body: {
+          payment_id: selectedPayment.payment_id,
+          description: `Refund processed by admin for order ${selectedPayment.order_id}`,
+          otp_code: otpCode,
+          admin_user_id: user.id,
+        },
+      });
+
+      if (error) {
+        console.error('Refund error:', error);
+        toast.error(error.message || 'Failed to process refund');
+        setIsRefunding(false);
+        return;
+      }
+
+      if (data.error) {
+        toast.error(data.error);
+        setIsRefunding(false);
+        return;
+      }
+
+      toast.success('Refund processed successfully!');
+      setRefundDialogOpen(false);
+      setSelectedPayment(null);
+      setOtpCode('');
+      
+      // Refresh payments list
+      fetchPayments();
+    } catch (err) {
+      console.error('Refund error:', err);
+      toast.error('Failed to process refund');
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
   const filteredPayments = payments.filter((payment) => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -138,6 +235,15 @@ const Payments = () => {
     );
   });
 
+  const canRefund = (payment: PaymentRecord) => {
+    return (
+      payment.payment_type === 'card' &&
+      payment.payment_id &&
+      payment.payment_status === 'completed' &&
+      payment.refund_status !== 'refunded'
+    );
+  };
+
   return (
     <main className="min-h-screen bg-background dashboard-theme">
       <header className="bg-vault-surface border-b border-border">
@@ -148,7 +254,7 @@ const Payments = () => {
             </Link>
             <div>
               <h1 className="font-display text-xl font-bold text-foreground">Payments</h1>
-              <p className="text-muted-foreground text-sm">View all student payments</p>
+              <p className="text-muted-foreground text-sm">View and manage student payments</p>
             </div>
           </div>
         </div>
@@ -252,8 +358,10 @@ const Payments = () => {
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Tier</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Amount</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Type</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Status</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Referrer</th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Commission</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-muted-foreground uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -292,6 +400,21 @@ const Payments = () => {
                           )}
                         </span>
                       </td>
+                      <td className="py-3 px-4">
+                        {payment.refund_status === 'refunded' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-yellow-500/20 text-yellow-500">
+                            <RotateCcw className="w-3 h-3" /> Refunded
+                          </span>
+                        ) : payment.payment_status === 'completed' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-500">
+                            <CheckCircle2 className="w-3 h-3" /> Completed
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-secondary text-muted-foreground">
+                            {payment.payment_status || 'Unknown'}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-sm text-foreground">
                         {payment.creator?.display_name || (
                           <span className="text-muted-foreground">Direct</span>
@@ -304,6 +427,25 @@ const Payments = () => {
                           <span className="text-muted-foreground">-</span>
                         )}
                       </td>
+                      <td className="py-3 px-4">
+                        {canRefund(payment) ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openRefundDialog(payment)}
+                            className="text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10"
+                          >
+                            <RotateCcw className="w-3 h-3 mr-1" />
+                            Refund
+                          </Button>
+                        ) : payment.refund_status === 'refunded' ? (
+                          <span className="text-xs text-muted-foreground">Refunded</span>
+                        ) : payment.payment_type === 'bank' ? (
+                          <span className="text-xs text-muted-foreground">N/A</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -312,6 +454,96 @@ const Payments = () => {
           </div>
         )}
       </div>
+
+      {/* Refund Confirmation Dialog */}
+      <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-yellow-500">
+              <RotateCcw className="w-5 h-5" />
+              Confirm Refund
+            </DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. The payment will be refunded and the user's enrollment will be deactivated.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedPayment && (
+            <div className="space-y-4">
+              <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Order ID:</span>
+                  <span className="font-mono">{selectedPayment.order_id}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">User:</span>
+                  <span>{selectedPayment.profile?.full_name || selectedPayment.profile?.email}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Amount:</span>
+                  <span className="font-medium">Rs. {(selectedPayment.final_amount || selectedPayment.amount || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tier:</span>
+                  <span>{selectedPayment.tier ? TIER_LABELS[selectedPayment.tier as keyof typeof TIER_LABELS] : 'N/A'}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="otp" className="text-sm font-medium">
+                  Enter 2FA Code to Confirm
+                </Label>
+                <div className="flex justify-center">
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={setOtpCode}
+                  >
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+                <p className="text-xs text-muted-foreground text-center">
+                  Enter the 6-digit security code to authorize this refund
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setRefundDialogOpen(false)}
+              disabled={isRefunding}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleRefund}
+              disabled={isRefunding || otpCode.length !== 6}
+            >
+              {isRefunding ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Confirm Refund
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };
