@@ -143,38 +143,44 @@ const PaymentMethodDialog = ({
       const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
 
       // Setup PayHere callbacks
+      // IMPORTANT: onCompleted fires when popup closes - NOT when payment succeeds
+      // The actual payment status is only confirmed via the server-side notify webhook
       window.payhere.onCompleted = (completedOrderId: string) => {
-        console.log("Payment completed. OrderID:", completedOrderId);
+        console.log("PayHere popup closed. OrderID:", completedOrderId);
         
         if (isNewUser) {
-          // Store payment data for the signup flow including referral info
+          // Store payment data with PENDING status - will verify on PaidSignup page
           localStorage.setItem('pending_payment', JSON.stringify({
             tier,
             amount,
             originalAmount: originalAmount || amount,
             orderId: completedOrderId,
             timestamp: Date.now(),
-            refCreator: refCreator || undefined,
-            discountCode: discountCode || undefined,
+            refCreator: effectiveRefCreator || undefined,
+            discountCode: effectiveDiscountCode || undefined,
+            status: 'pending', // Mark as pending - needs verification
           }));
-          toast.success("Payment successful! Complete your signup.");
+          
+          // Don't show success message - payment status is unknown at this point
+          toast.info("Processing payment... Please wait while we verify.");
           onOpenChange(false);
           navigate('/paid-signup');
         } else {
-          toast.success("Payment successful! Your access has been activated.");
+          // For upgrades, redirect and let the page verify
+          toast.info("Processing payment... Please wait while we verify.");
           onOpenChange(false);
-          window.location.href = returnUrl;
+          window.location.href = `${returnUrl}&orderId=${completedOrderId}`;
         }
       };
 
       window.payhere.onDismissed = () => {
-        console.log("Payment dismissed");
+        console.log("Payment dismissed by user");
         toast.info("Payment cancelled");
         setIsLoading(false);
       };
 
       window.payhere.onError = (error: string) => {
-        console.error("Payment error:", error);
+        console.error("PayHere SDK error:", error);
         toast.error("Payment failed. Please try again.");
         setIsLoading(false);
       };

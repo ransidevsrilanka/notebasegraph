@@ -626,12 +626,17 @@ export type Database = {
           currency: string | null
           discount_code: string | null
           enrollment_id: string | null
+          failure_reason: string | null
           id: string
           order_id: string
           payment_id: string | null
           payment_method: string | null
           processed_at: string | null
           ref_creator: string | null
+          refund_amount: number | null
+          refund_status: string | null
+          refunded_at: string | null
+          refunded_by: string | null
           status: string | null
           tier: string | null
           updated_at: string
@@ -643,12 +648,17 @@ export type Database = {
           currency?: string | null
           discount_code?: string | null
           enrollment_id?: string | null
+          failure_reason?: string | null
           id?: string
           order_id: string
           payment_id?: string | null
           payment_method?: string | null
           processed_at?: string | null
           ref_creator?: string | null
+          refund_amount?: number | null
+          refund_status?: string | null
+          refunded_at?: string | null
+          refunded_by?: string | null
           status?: string | null
           tier?: string | null
           updated_at?: string
@@ -660,12 +670,17 @@ export type Database = {
           currency?: string | null
           discount_code?: string | null
           enrollment_id?: string | null
+          failure_reason?: string | null
           id?: string
           order_id?: string
           payment_id?: string | null
           payment_method?: string | null
           processed_at?: string | null
           ref_creator?: string | null
+          refund_amount?: number | null
+          refund_status?: string | null
+          refunded_at?: string | null
+          refunded_by?: string | null
           status?: string | null
           tier?: string | null
           updated_at?: string

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/storageClient';
 import type { Profile, Enrollment, AppRole } from '@/types/database';
 
@@ -368,6 +369,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEnrollment(null);
     setUserSubjects(null);
     setPendingJoinRequest(null);
+    // Redirect to auth page after sign out
+    window.location.href = '/auth';
   };
 
   const refreshEnrollment = async () => {
