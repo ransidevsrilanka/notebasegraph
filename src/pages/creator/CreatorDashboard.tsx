@@ -39,19 +39,29 @@ import {
   Target,
   Award,
 } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 
-interface CreatorProfile {
+interface CreatorAnalytics {
   id: string;
-  display_name: string;
+  user_id: string;
+  display_name: string | null;
   referral_code: string;
+  cmo_id: string | null;
+  is_active: boolean | null;
+  created_at: string;
+  total_withdrawn: number | null;
+  available_balance: number | null;
+  cmo_name: string | null;
   lifetime_paid_users: number;
-  available_balance: number;
-  total_withdrawn: number;
+  commission_rate: number;
+  monthly_paid_users: number;
+  total_commission_earned: number;
+  discount_code_count: number;
+  total_referred_users: number;
 }
 
 interface DiscountCode {
@@ -61,13 +71,6 @@ interface DiscountCode {
   usage_count: number;
   paid_conversions: number;
   is_active: boolean;
-}
-
-interface PayoutSummary {
-  payout_month: string;
-  paid_users_count: number;
-  commission_amount: number;
-  status: string;
 }
 
 interface WithdrawalMethod {
@@ -92,18 +95,6 @@ interface WithdrawalRequest {
   created_at: string;
 }
 
-interface Stats {
-  totalUsersReferred: number;
-  paidUsersThisMonth: number;
-  paidUsersLifetime: number;
-  pendingEarnings: number;
-  paidEarnings: number;
-  commissionRate: number;
-  availableBalance: number;
-  lastMonthReferred: number;
-  lastMonthPaidUsers: number;
-}
-
 interface MonthlyData {
   month: string;
   earnings: number;
@@ -117,25 +108,13 @@ const CRYPTO_NETWORKS = ['TRC20', 'ERC20', 'BEP20'];
 const CreatorDashboard = () => {
   const { user, profile, isCreator, signOut } = useAuth();
   const navigate = useNavigate();
-  const [creatorProfile, setCreatorProfile] = useState<CreatorProfile | null>(null);
+  const [creatorData, setCreatorData] = useState<CreatorAnalytics | null>(null);
   const [discountCodes, setDiscountCodes] = useState<DiscountCode[]>([]);
-  const [payouts, setPayouts] = useState<PayoutSummary[]>([]);
   const [withdrawalMethods, setWithdrawalMethods] = useState<WithdrawalMethod[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
-  const [stats, setStats] = useState<Stats>({
-    totalUsersReferred: 0,
-    paidUsersThisMonth: 0,
-    paidUsersLifetime: 0,
-    pendingEarnings: 0,
-    paidEarnings: 0,
-    commissionRate: 0.08,
-    availableBalance: 0,
-    lastMonthReferred: 0,
-    lastMonthPaidUsers: 0,
-  });
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -170,146 +149,120 @@ const CreatorDashboard = () => {
     if (!user) return;
 
     try {
-      // Fetch creator profile
-      const { data: cpData, error: cpError } = await supabase
+      // First get creator profile to get ID
+      const { data: creatorProfile, error: profileError } = await supabase
         .from('creator_profiles')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (cpError) throw cpError;
-      if (cpData) {
-        setCreatorProfile(cpData);
+      if (profileError) {
+        console.error('Error fetching creator profile:', profileError);
+        throw profileError;
+      }
 
-        // Determine commission rate based on lifetime paid users
-        const commissionRate = cpData.lifetime_paid_users >= 500 ? 0.12 : 0.08;
+      if (creatorProfile) {
+        // Get CMO name if exists
+        let cmoName: string | null = null;
+        if (creatorProfile.cmo_id) {
+          const { data: cmoData } = await supabase
+            .from('cmo_profiles')
+            .select('display_name')
+            .eq('id', creatorProfile.cmo_id)
+            .maybeSingle();
+          cmoName = cmoData?.display_name || null;
+        }
+
+        // Get monthly stats from payment_attributions
+        const currentMonth = new Date();
+        currentMonth.setDate(1);
+        currentMonth.setHours(0, 0, 0, 0);
+
+        const { count: monthlyPaidUsers } = await supabase
+          .from('payment_attributions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', creatorProfile.id)
+          .gte('created_at', currentMonth.toISOString());
+
+        const { data: totalCommissionData } = await supabase
+          .from('payment_attributions')
+          .select('creator_commission_amount')
+          .eq('creator_id', creatorProfile.id);
+
+        const totalCommission = (totalCommissionData || []).reduce(
+          (sum, p) => sum + Number(p.creator_commission_amount || 0), 0
+        );
+
+        const { count: totalReferred } = await supabase
+          .from('user_attributions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', creatorProfile.id);
+
+        const { count: discountCodeCount } = await supabase
+          .from('discount_codes')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', creatorProfile.id);
+
+        // Build analytics object
+        const analyticsData: CreatorAnalytics = {
+          id: creatorProfile.id,
+          user_id: creatorProfile.user_id,
+          display_name: creatorProfile.display_name,
+          referral_code: creatorProfile.referral_code,
+          cmo_id: creatorProfile.cmo_id,
+          is_active: creatorProfile.is_active,
+          created_at: creatorProfile.created_at,
+          total_withdrawn: creatorProfile.total_withdrawn,
+          available_balance: creatorProfile.available_balance,
+          cmo_name: cmoName,
+          lifetime_paid_users: creatorProfile.lifetime_paid_users || 0,
+          commission_rate: (creatorProfile.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08,
+          monthly_paid_users: monthlyPaidUsers || 0,
+          total_commission_earned: totalCommission,
+          discount_code_count: discountCodeCount || 0,
+          total_referred_users: totalReferred || 0,
+        };
+
+        setCreatorData(analyticsData);
 
         // Fetch discount codes
         const { data: dcData } = await supabase
           .from('discount_codes')
           .select('*')
-          .eq('creator_id', cpData.id);
+          .eq('creator_id', creatorProfile.id);
         setDiscountCodes(dcData || []);
 
         // Fetch withdrawal methods
         const { data: wmData } = await supabase
           .from('withdrawal_methods')
           .select('*')
-          .eq('creator_id', cpData.id);
+          .eq('creator_id', creatorProfile.id);
         setWithdrawalMethods(wmData || []);
 
         // Fetch withdrawal requests
         const { data: wrData } = await supabase
           .from('withdrawal_requests')
           .select('*')
-          .eq('creator_id', cpData.id)
+          .eq('creator_id', creatorProfile.id)
           .order('created_at', { ascending: false })
           .limit(10);
         setWithdrawalRequests(wrData || []);
 
-        // Get dates for comparison
-        const currentMonth = new Date();
-        currentMonth.setDate(1);
-        currentMonth.setHours(0, 0, 0, 0);
-        
-        const lastMonth = subMonths(currentMonth, 1);
-
-        // Fetch user attributions count (all referred users)
-        const { count: totalReferred } = await supabase
-          .from('user_attributions')
-          .select('*', { count: 'exact', head: true })
-          .eq('creator_id', cpData.id);
-
-        // Fetch last month referred
-        const { count: lastMonthReferred } = await supabase
-          .from('user_attributions')
-          .select('*', { count: 'exact', head: true })
-          .eq('creator_id', cpData.id)
-          .lt('created_at', currentMonth.toISOString());
-
-        // Fetch payment attributions for this month (paid conversions)
-        const { data: monthlyPayments } = await supabase
-          .from('payment_attributions')
-          .select('id')
-          .eq('creator_id', cpData.id)
-          .gte('created_at', currentMonth.toISOString());
-        
-        const paidThisMonth = monthlyPayments?.length || 0;
-
-        // Fetch last month paid users
-        const { data: lastMonthPayments } = await supabase
-          .from('payment_attributions')
-          .select('id')
-          .eq('creator_id', cpData.id)
-          .gte('created_at', lastMonth.toISOString())
-          .lt('created_at', currentMonth.toISOString());
-        
-        const paidLastMonth = lastMonthPayments?.length || 0;
-
-        // Fetch payouts
-        const { data: payoutData } = await supabase
-          .from('creator_payouts')
-          .select('*')
-          .eq('creator_id', cpData.id)
-          .order('payout_month', { ascending: false })
-          .limit(12);
-
-        setPayouts(payoutData || []);
-
-        // Calculate earnings
-        const pendingPayouts = (payoutData || []).filter(p => p.status !== 'paid');
-        const paidPayouts = (payoutData || []).filter(p => p.status === 'paid');
-        
-        const pendingEarnings = pendingPayouts.reduce((sum, p) => sum + Number(p.commission_amount || 0), 0);
-        const paidEarnings = paidPayouts.reduce((sum, p) => sum + Number(p.commission_amount || 0), 0);
-
-        // Fetch monthly data for charts (last 6 months)
-        const monthlyChartData: MonthlyData[] = [];
-        for (let i = 5; i >= 0; i--) {
-          const monthStart = subMonths(new Date(), i);
-          monthStart.setDate(1);
-          monthStart.setHours(0, 0, 0, 0);
-          
-          // For the current month, use the end of today; for past months, use start of next month
-          const monthEnd = new Date(monthStart);
-          monthEnd.setMonth(monthEnd.getMonth() + 1);
-          monthEnd.setDate(1);
-          monthEnd.setHours(0, 0, 0, 0);
-
-          const { data: monthPayments } = await supabase
-            .from('payment_attributions')
-            .select('creator_commission_amount, created_at')
-            .eq('creator_id', cpData.id)
-            .gte('created_at', monthStart.toISOString())
-            .lt('created_at', monthEnd.toISOString());
-
-          const { count: monthReferrals } = await supabase
-            .from('user_attributions')
-            .select('*', { count: 'exact', head: true })
-            .eq('creator_id', cpData.id)
-            .gte('created_at', monthStart.toISOString())
-            .lt('created_at', monthEnd.toISOString());
-
-          monthlyChartData.push({
-            month: format(monthStart, 'MMM'),
-            earnings: (monthPayments || []).reduce((sum, p) => sum + Number(p.creator_commission_amount || 0), 0),
-            referrals: monthReferrals || 0,
-            conversions: monthPayments?.length || 0,
+        // Fetch monthly data using RPC function
+        const { data: monthlyRpcData, error: monthlyError } = await supabase
+          .rpc('get_creator_monthly_data', { 
+            p_creator_id: creatorProfile.id,
+            p_months: 6 
           });
-        }
-        setMonthlyData(monthlyChartData);
 
-        setStats({
-          totalUsersReferred: totalReferred || 0,
-          paidUsersThisMonth: paidThisMonth || 0,
-          paidUsersLifetime: cpData.lifetime_paid_users || 0,
-          pendingEarnings,
-          paidEarnings,
-          commissionRate,
-          availableBalance: cpData.available_balance || 0,
-          lastMonthReferred: lastMonthReferred || 0,
-          lastMonthPaidUsers: paidLastMonth,
-        });
+        if (!monthlyError && monthlyRpcData) {
+          setMonthlyData(monthlyRpcData.map((m: any) => ({
+            month: m.month,
+            earnings: Number(m.earnings) || 0,
+            referrals: Number(m.referrals) || 0,
+            conversions: Number(m.conversions) || 0,
+          })));
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -325,7 +278,7 @@ const CreatorDashboard = () => {
   };
 
   const handleAddWithdrawalMethod = async () => {
-    if (!creatorProfile) return;
+    if (!creatorData) return;
 
     if (methodType === 'bank') {
       if (!bankName || !accountNumber || !accountHolderName) {
@@ -343,7 +296,7 @@ const CreatorDashboard = () => {
 
     try {
       const { error } = await supabase.from('withdrawal_methods').insert({
-        creator_id: creatorProfile.id,
+        creator_id: creatorData.id,
         method_type: methodType,
         bank_name: methodType === 'bank' ? bankName : null,
         account_number: methodType === 'bank' ? accountNumber : null,
@@ -370,18 +323,20 @@ const CreatorDashboard = () => {
   };
 
   const handleWithdraw = async () => {
-    if (!creatorProfile || !selectedMethodId) {
+    if (!creatorData || !selectedMethodId) {
       toast.error('Please select a withdrawal method');
       return;
     }
 
     const amount = parseFloat(withdrawAmount);
+    const availableBalance = creatorData.available_balance || 0;
+    
     if (isNaN(amount) || amount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
 
-    if (amount > stats.availableBalance) {
+    if (amount > availableBalance) {
       toast.error('Insufficient balance');
       return;
     }
@@ -394,7 +349,7 @@ const CreatorDashboard = () => {
       const netAmount = amount - feeAmount;
 
       const { error } = await supabase.from('withdrawal_requests').insert({
-        creator_id: creatorProfile.id,
+        creator_id: creatorData.id,
         withdrawal_method_id: selectedMethodId,
         amount,
         fee_percent: feePercent,
@@ -428,34 +383,32 @@ const CreatorDashboard = () => {
   };
 
   const handleWithdrawAll = () => {
-    setWithdrawAmount(stats.availableBalance.toString());
+    setWithdrawAmount((creatorData?.available_balance || 0).toString());
   };
 
-  const referralLink = creatorProfile 
-    ? `${window.location.origin}/signup?ref_creator=${creatorProfile.referral_code}`
+  const referralLink = creatorData 
+    ? `${window.location.origin}/signup?ref_creator=${creatorData.referral_code}`
     : '';
 
-  const isEligibleForPayout = stats.paidUsersThisMonth >= 100;
+  const availableBalance = creatorData?.available_balance || 0;
+  const lifetimePaidUsers = creatorData?.lifetime_paid_users || 0;
+  const monthlyPaidUsers = creatorData?.monthly_paid_users || 0;
+  const totalReferred = creatorData?.total_referred_users || 0;
+  const commissionRate = creatorData?.commission_rate || 0.08;
+  const totalCommission = creatorData?.total_commission_earned || 0;
+
+  const isEligibleForPayout = monthlyPaidUsers >= 100;
   const feePreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) * 0.03 : 0;
   const netPreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) - feePreview : 0;
 
-  // Calculate trends
-  const referredTrend = stats.lastMonthReferred > 0
-    ? Math.round(((stats.totalUsersReferred - stats.lastMonthReferred) / stats.lastMonthReferred) * 100)
-    : stats.totalUsersReferred > 0 ? 100 : 0;
-
-  const paidUsersTrend = stats.lastMonthPaidUsers > 0
-    ? Math.round(((stats.paidUsersThisMonth - stats.lastMonthPaidUsers) / stats.lastMonthPaidUsers) * 100)
-    : stats.paidUsersThisMonth > 0 ? 100 : 0;
-
   // Commission tier progress (500 users for 12%)
-  const tierProgress = Math.min((stats.paidUsersLifetime / 500) * 100, 100);
-  const isHighTier = stats.paidUsersLifetime >= 500;
+  const tierProgress = Math.min((lifetimePaidUsers / 500) * 100, 100);
+  const isHighTier = lifetimePaidUsers >= 500;
 
   // Funnel data
   const funnelData = [
-    { name: 'Referred', value: stats.totalUsersReferred, color: 'hsl(217, 91%, 60%)' },
-    { name: 'Converted', value: stats.paidUsersLifetime, color: 'hsl(45, 93%, 47%)' },
+    { name: 'Referred', value: totalReferred, color: 'hsl(217, 91%, 60%)' },
+    { name: 'Converted', value: lifetimePaidUsers, color: 'hsl(45, 93%, 47%)' },
   ];
 
   const chartColors = {
@@ -515,29 +468,23 @@ const CreatorDashboard = () => {
         {/* Welcome */}
         <div className="mb-8">
           <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-            Welcome back, {creatorProfile?.display_name || 'Creator'}
+            Welcome back, {creatorData?.display_name || profile?.full_name || 'Creator'}
           </h1>
           <p className="text-muted-foreground">
-            Commission Rate: <span className="text-brand font-semibold">{stats.commissionRate * 100}%</span>
-            {stats.paidUsersLifetime < 500 && (
-              <span className="text-xs ml-2">
-                ({500 - stats.paidUsersLifetime} more paid users until 12%)
-              </span>
-            )}
+            Here's how your referrals are performing
           </p>
         </div>
 
-        {/* Stats Cards with Trends */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-card p-6">
             <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
-              {referredTrend !== 0 && <TrendIndicator value={referredTrend} />}
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.totalUsersReferred}</p>
-            <p className="text-muted-foreground text-sm">Total Referred</p>
+            <p className="text-2xl font-bold text-foreground">{totalReferred}</p>
+            <p className="text-muted-foreground text-sm">Total Users Referred</p>
           </div>
 
           <div className="glass-card p-6">
@@ -545,10 +492,19 @@ const CreatorDashboard = () => {
               <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-green-500" />
               </div>
-              {paidUsersTrend !== 0 && <TrendIndicator value={paidUsersTrend} />}
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.paidUsersThisMonth}</p>
-            <p className="text-muted-foreground text-sm">Paid This Month</p>
+            <p className="text-2xl font-bold text-foreground">{monthlyPaidUsers}</p>
+            <p className="text-muted-foreground text-sm">Paid Users This Month</p>
+          </div>
+
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <Award className="w-6 h-6 text-purple-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{lifetimePaidUsers}</p>
+            <p className="text-muted-foreground text-sm">Lifetime Paid Users</p>
           </div>
 
           <div className="glass-card p-6">
@@ -557,31 +513,18 @@ const CreatorDashboard = () => {
                 <Wallet className="w-6 h-6 text-brand" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">LKR {stats.availableBalance.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
             <p className="text-muted-foreground text-sm">Available Balance</p>
-          </div>
-
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-purple-500" />
-              </div>
-            </div>
-            <p className="text-2xl font-bold text-foreground">LKR {(creatorProfile?.total_withdrawn || 0).toLocaleString()}</p>
-            <p className="text-muted-foreground text-sm">Total Withdrawn</p>
           </div>
         </div>
 
-        {/* Charts Section */}
+        {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Earnings Trend Chart */}
+          {/* Earnings Chart */}
           <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-brand" />
-              <h3 className="font-semibold text-foreground">Earnings Trend</h3>
-            </div>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+            <h3 className="font-semibold text-foreground mb-4">Monthly Earnings</h3>
+            {monthlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={monthlyData}>
                   <defs>
                     <linearGradient id="earningsGradient" x1="0" y1="0" x2="0" y2="1">
@@ -589,436 +532,242 @@ const CreatorDashboard = () => {
                       <stop offset="95%" stopColor={chartColors.primary} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <XAxis dataKey="month" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                     formatter={(value: number) => [`LKR ${value.toLocaleString()}`, 'Earnings']}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="earnings" 
-                    stroke={chartColors.primary} 
-                    fill="url(#earningsGradient)" 
-                    strokeWidth={2}
-                  />
+                  <Area type="monotone" dataKey="earnings" stroke={chartColors.primary} fill="url(#earningsGradient)" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                No data available yet
+              </div>
+            )}
           </div>
 
-          {/* Monthly Performance Comparison */}
+          {/* Conversion Funnel */}
           <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Calendar className="w-5 h-5 text-brand" />
-              <h3 className="font-semibold text-foreground">Monthly Performance</h3>
-            </div>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData}>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }} 
-                  />
-                  <Bar dataKey="referrals" fill={chartColors.secondary} radius={[4, 4, 0, 0]} name="Referrals" />
-                  <Bar dataKey="conversions" fill={chartColors.tertiary} radius={[4, 4, 0, 0]} name="Conversions" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <ChartLegend 
-              items={[
-                { name: 'Referrals', color: chartColors.secondary },
-                { name: 'Conversions', color: chartColors.tertiary },
-              ]} 
-              className="mt-3 justify-center"
-            />
+            <h3 className="font-semibold text-foreground mb-4">Conversion Funnel</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={funnelData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                >
+                  {funnelData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <ChartLegend items={funnelData.map(d => ({ name: d.name, color: d.color }))} />
           </div>
         </div>
 
         {/* Commission Tier Progress */}
         <div className="glass-card p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="w-5 h-5 text-brand" />
-            <h3 className="font-semibold text-foreground">Commission Tier Progress</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-foreground">Commission Tier</h3>
+              <p className="text-sm text-muted-foreground">
+                {isHighTier ? 'You\'ve unlocked the 12% commission rate!' : `Get ${500 - lifetimePaidUsers} more paid users for 12% rate`}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-bold text-foreground">{Math.round(commissionRate * 100)}%</p>
+              <p className="text-xs text-muted-foreground">Current Rate</p>
+            </div>
           </div>
-          <div className="flex items-center gap-6">
-            <ProgressRing 
-              progress={tierProgress} 
-              size={100} 
-              strokeWidth={10}
-              color={isHighTier ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'}
-              label="of 500"
+          <div className="w-full bg-muted rounded-full h-3">
+            <div 
+              className={`h-3 rounded-full transition-all ${isHighTier ? 'bg-green-500' : 'bg-brand'}`}
+              style={{ width: `${tierProgress}%` }}
             />
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">Progress to 12% Commission</span>
-                <span className="text-sm font-medium text-foreground">{stats.paidUsersLifetime}/500</span>
-              </div>
-              <div className="h-3 bg-muted rounded-full overflow-hidden mb-3">
-                <div 
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${tierProgress}%`,
-                    backgroundColor: isHighTier ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>0</span>
-                <span>125</span>
-                <span>250</span>
-                <span>375</span>
-                <span>500</span>
-              </div>
-              <div className="flex items-center gap-4 mt-4">
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isHighTier ? 'bg-muted/50' : 'bg-brand/10 border border-brand/30'}`}>
-                  <div className={`w-2 h-2 rounded-full ${isHighTier ? 'bg-muted-foreground' : 'bg-brand'}`} />
-                  <span className={`text-sm ${isHighTier ? 'text-muted-foreground' : 'text-brand font-medium'}`}>8% Tier</span>
-                </div>
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${isHighTier ? 'bg-green-500/10 border border-green-500/30' : 'bg-muted/50'}`}>
-                  <div className={`w-2 h-2 rounded-full ${isHighTier ? 'bg-green-500' : 'bg-muted-foreground'}`} />
-                  <span className={`text-sm ${isHighTier ? 'text-green-500 font-medium' : 'text-muted-foreground'}`}>12% Tier</span>
-                </div>
-              </div>
-            </div>
+          </div>
+          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+            <span>0</span>
+            <span>500 users (12% rate)</span>
           </div>
         </div>
 
-        {/* Referral Funnel */}
+        {/* Referral Link */}
         <div className="glass-card p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Target className="w-5 h-5 text-brand" />
-            <h3 className="font-semibold text-foreground">Referral Funnel</h3>
-          </div>
-          <div className="flex items-center gap-8">
-            <div className="h-48 w-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={funnelData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={40}
-                    outerRadius={70}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={-270}
-                  >
-                    {funnelData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }} 
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center">
+              <LinkIcon className="w-5 h-5 text-brand" />
             </div>
-            <div className="flex-1 space-y-4">
-              <div className="flex items-center justify-between p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
-                  <span className="text-foreground font-medium">Total Referred</span>
-                </div>
-                <span className="text-xl font-bold text-foreground">{stats.totalUsersReferred}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-brand/10 rounded-lg border border-brand/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-brand" />
-                  <span className="text-foreground font-medium">Paid Conversions</span>
-                </div>
-                <span className="text-xl font-bold text-foreground">{stats.paidUsersLifetime}</span>
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Conversion Rate: <span className="text-brand font-semibold">
-                  {stats.totalUsersReferred > 0 
-                    ? ((stats.paidUsersLifetime / stats.totalUsersReferred) * 100).toFixed(1) 
-                    : 0}%
-                </span>
-              </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Your Referral Link</h3>
+              <p className="text-sm text-muted-foreground">Share to earn commissions</p>
             </div>
           </div>
-        </div>
-
-        {/* Payout Eligibility & Withdraw Button */}
-        <div className={`glass-card p-4 mb-8 ${isEligibleForPayout ? 'bg-green-500/10 border-green-500/30' : 'bg-muted/50'}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {isEligibleForPayout ? (
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
-              ) : (
-                <Clock className="w-5 h-5 text-muted-foreground" />
-              )}
-              <div>
-                <p className="text-sm font-medium">
-                  {isEligibleForPayout ? (
-                    <span className="text-green-500">Eligible for withdrawal!</span>
-                  ) : (
-                    <span className="text-foreground">Not yet eligible for withdrawal</span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {isEligibleForPayout 
-                    ? 'You can now request a withdrawal.'
-                    : `Need ${100 - stats.paidUsersThisMonth} more paid users this month (minimum 100 required)`}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="brand"
-              size="sm"
-              disabled={!isEligibleForPayout || withdrawalMethods.length === 0 || stats.availableBalance <= 0}
-              onClick={() => setWithdrawDialogOpen(true)}
+          <div className="flex gap-2">
+            <Input 
+              value={referralLink}
+              readOnly
+              className="font-mono text-sm"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => copyToClipboard(referralLink, 'Referral link')}
             >
-              <ArrowUpRight className="w-4 h-4 mr-1" />
-              Withdraw
+              <Copy className="w-4 h-4" />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Referral Code: <span className="font-mono font-medium">{creatorData?.referral_code}</span>
+          </p>
         </div>
 
-        {/* Withdrawal Methods */}
+        {/* Discount Codes */}
         <div className="glass-card p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Withdrawal Methods</h2>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                <Tag className="w-5 h-5 text-purple-500" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground">Discount Codes</h3>
+                <p className="text-sm text-muted-foreground">Share with your audience</p>
+              </div>
             </div>
-            <Button variant="outline" size="sm" onClick={() => setAddMethodDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              Add Method
-            </Button>
           </div>
-          
-          {withdrawalMethods.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {withdrawalMethods.map((method) => (
-                <div key={method.id} className="p-4 bg-secondary/50 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    {method.method_type === 'bank' ? (
-                      <Building2 className="w-4 h-4 text-blue-500" />
-                    ) : (
-                      <Bitcoin className="w-4 h-4 text-orange-500" />
-                    )}
-                    <span className="text-sm font-medium text-foreground">
-                      {method.method_type === 'bank' ? method.bank_name : method.crypto_type}
-                    </span>
-                    {method.is_primary && (
-                      <span className="px-1.5 py-0.5 bg-brand/20 text-brand text-xs rounded">Primary</span>
-                    )}
+          {discountCodes.length > 0 ? (
+            <div className="space-y-3">
+              {discountCodes.map((dc) => (
+                <div key={dc.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <code className="font-mono font-medium text-foreground">{dc.code}</code>
+                    <span className="text-xs text-muted-foreground">({dc.discount_percent}% off)</span>
                   </div>
-                  {method.method_type === 'bank' ? (
-                    <p className="text-xs text-muted-foreground">
-                      {method.account_holder_name} • ****{method.account_number?.slice(-4)}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {method.network} • {method.wallet_address?.slice(0, 10)}...{method.wallet_address?.slice(-6)}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm text-muted-foreground">{dc.paid_conversions} conversions</span>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => copyToClipboard(dc.code, 'Discount code')}
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              No withdrawal methods added yet. Add a bank account or crypto wallet to receive payments.
-            </p>
+            <p className="text-muted-foreground text-sm">No discount codes yet. Contact your CMO to get one.</p>
           )}
         </div>
 
-        {/* Withdrawal History */}
-        {withdrawalRequests.length > 0 && (
-          <div className="glass-card p-6 mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <ArrowUpRight className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Withdrawal History</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Date</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Fee</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Net</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {withdrawalRequests.map((wr) => (
-                    <tr key={wr.id} className="border-b border-border/50">
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        {format(new Date(wr.created_at), 'MMM d, yyyy')}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        LKR {wr.amount.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        LKR {wr.fee_amount.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 text-sm font-medium text-foreground">
-                        LKR {wr.net_amount.toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          wr.status === 'paid' ? 'bg-green-500/20 text-green-500' :
-                          wr.status === 'approved' ? 'bg-blue-500/20 text-blue-500' :
-                          wr.status === 'rejected' ? 'bg-red-500/20 text-red-500' :
-                          'bg-orange-500/20 text-orange-500'
-                        }`}>
-                          {wr.status.charAt(0).toUpperCase() + wr.status.slice(1)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Referral Link */}
+        {/* Withdrawal Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Withdrawal Methods */}
           <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <LinkIcon className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Your Referral Link</h2>
-            </div>
-            <div className="flex gap-2">
-              <Input 
-                value={referralLink} 
-                readOnly 
-                className="bg-secondary text-foreground text-sm"
-              />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-foreground">Withdrawal Methods</h3>
               <Button 
                 variant="outline" 
-                size="icon"
-                onClick={() => copyToClipboard(referralLink, 'Referral link')}
+                size="sm"
+                onClick={() => setAddMethodDialogOpen(true)}
               >
-                <Copy className="w-4 h-4" />
+                <Plus className="w-4 h-4 mr-1" />
+                Add
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Share this link to earn commissions on every paid signup.
-            </p>
-          </div>
-
-          {/* Discount Codes with Performance */}
-          <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Tag className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Your Discount Codes</h2>
-            </div>
-            {discountCodes.length > 0 ? (
+            {withdrawalMethods.length > 0 ? (
               <div className="space-y-3">
-                {discountCodes.map((dc) => {
-                  const conversionRate = dc.usage_count > 0 
-                    ? ((dc.paid_conversions / dc.usage_count) * 100).toFixed(1) 
-                    : '0';
-                  return (
-                    <div key={dc.id} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-medium text-foreground">{dc.code}</p>
-                          <span className="text-xs bg-brand/10 text-brand px-1.5 py-0.5 rounded">
-                            {dc.discount_percent}% off
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1">
-                          <p className="text-xs text-muted-foreground">
-                            {dc.paid_conversions} conversions
-                          </p>
-                          <span className="text-xs text-muted-foreground">•</span>
-                          <p className="text-xs text-muted-foreground">
-                            {dc.usage_count} uses
-                          </p>
-                          <span className="text-xs text-muted-foreground">•</span>
-                          <p className="text-xs text-brand">
-                            {conversionRate}% conv. rate
-                          </p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon"
-                        onClick={() => copyToClipboard(dc.code, 'Discount code')}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+                {withdrawalMethods.map((wm) => (
+                  <div key={wm.id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
+                    {wm.method_type === 'bank' ? (
+                      <Building2 className="w-5 h-5 text-blue-500" />
+                    ) : (
+                      <Bitcoin className="w-5 h-5 text-orange-500" />
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {wm.method_type === 'bank' ? wm.bank_name : wm.crypto_type}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {wm.method_type === 'bank' 
+                          ? `****${wm.account_number?.slice(-4)}` 
+                          : `${wm.wallet_address?.slice(0, 8)}...`}
+                      </p>
                     </div>
-                  );
-                })}
+                    {wm.is_primary && (
+                      <span className="text-xs bg-brand/20 text-brand px-2 py-0.5 rounded">Primary</span>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                No discount codes assigned yet. Contact your CMO to get one.
+              <p className="text-muted-foreground text-sm">Add a withdrawal method to cash out</p>
+            )}
+          </div>
+
+          {/* Quick Withdraw */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Withdraw Funds</h3>
+            <div className="mb-4">
+              <p className="text-sm text-muted-foreground">Available Balance</p>
+              <p className="text-3xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
+            </div>
+            <Button 
+              variant="brand" 
+              className="w-full"
+              disabled={availableBalance < 100 || withdrawalMethods.length === 0}
+              onClick={() => setWithdrawDialogOpen(true)}
+            >
+              <ArrowUpRight className="w-4 h-4 mr-2" />
+              Withdraw
+            </Button>
+            {withdrawalMethods.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Add a withdrawal method first
+              </p>
+            )}
+            {availableBalance < 100 && withdrawalMethods.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Minimum withdrawal: LKR 100
               </p>
             )}
           </div>
         </div>
 
-        {/* Payout History */}
-        <div className="glass-card p-6 mt-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-brand" />
-            <h2 className="font-semibold text-foreground">Payout History</h2>
-          </div>
-          {payouts.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Month</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Paid Users</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Commission</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payouts.map((p) => (
-                    <tr key={p.payout_month} className="border-b border-border/50">
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        {format(new Date(p.payout_month), 'MMMM yyyy')}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">{p.paid_users_count}</td>
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        LKR {Number(p.commission_amount || 0).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          p.status === 'paid' 
-                            ? 'bg-green-500/20 text-green-500' 
-                            : p.status === 'eligible'
-                            ? 'bg-brand/20 text-brand'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Recent Withdrawals */}
+        {withdrawalRequests.length > 0 && (
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Recent Withdrawals</h3>
+            <div className="space-y-3">
+              {withdrawalRequests.map((wr) => (
+                <div key={wr.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">LKR {wr.amount.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(wr.created_at), 'PP')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      wr.status === 'paid' ? 'bg-green-500/20 text-green-500' :
+                      wr.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' :
+                      'bg-red-500/20 text-red-500'
+                    }`}>
+                      {wr.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No payout records yet.</p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Add Withdrawal Method Dialog */}
@@ -1027,117 +776,87 @@ const CreatorDashboard = () => {
           <DialogHeader>
             <DialogTitle>Add Withdrawal Method</DialogTitle>
             <DialogDescription>
-              Add a bank account or crypto wallet to receive payments.
+              Add a bank account or crypto wallet for withdrawals
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm text-muted-foreground">Method Type</label>
-              <Select value={methodType} onValueChange={(v) => setMethodType(v as 'bank' | 'crypto')}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="bank">
-                    <span className="flex items-center gap-2">
-                      <Building2 className="w-4 h-4" /> Bank Account
-                    </span>
-                  </SelectItem>
-                  <SelectItem value="crypto">
-                    <span className="flex items-center gap-2">
-                      <Bitcoin className="w-4 h-4" /> Crypto Wallet
-                    </span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="space-y-4 py-4">
+            <div className="flex gap-2">
+              <Button
+                variant={methodType === 'bank' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setMethodType('bank')}
+              >
+                <Building2 className="w-4 h-4 mr-2" />
+                Bank
+              </Button>
+              <Button
+                variant={methodType === 'crypto' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setMethodType('crypto')}
+              >
+                <Bitcoin className="w-4 h-4 mr-2" />
+                Crypto
+              </Button>
             </div>
 
             {methodType === 'bank' ? (
               <>
-                <div>
-                  <label className="text-sm text-muted-foreground">Bank Name *</label>
-                  <Input
-                    value={bankName}
-                    onChange={(e) => setBankName(e.target.value)}
-                    placeholder="e.g. Commercial Bank"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Account Number *</label>
-                  <Input
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder="Enter account number"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Account Holder Name *</label>
-                  <Input
-                    value={accountHolderName}
-                    onChange={(e) => setAccountHolderName(e.target.value)}
-                    placeholder="Name as shown on bank account"
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Branch Name (optional)</label>
-                  <Input
-                    value={branchName}
-                    onChange={(e) => setBranchName(e.target.value)}
-                    placeholder="e.g. Colombo 03"
-                    className="mt-1"
-                  />
-                </div>
+                <Input
+                  placeholder="Bank Name"
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                />
+                <Input
+                  placeholder="Account Number"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                />
+                <Input
+                  placeholder="Account Holder Name"
+                  value={accountHolderName}
+                  onChange={(e) => setAccountHolderName(e.target.value)}
+                />
+                <Input
+                  placeholder="Branch Name (Optional)"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                />
               </>
             ) : (
               <>
-                <div>
-                  <label className="text-sm text-muted-foreground">Cryptocurrency *</label>
-                  <Select value={cryptoType} onValueChange={setCryptoType}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CRYPTO_TYPES.map((ct) => (
-                        <SelectItem key={ct} value={ct}>{ct}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Network *</label>
-                  <Select value={network} onValueChange={setNetwork}>
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CRYPTO_NETWORKS.map((n) => (
-                        <SelectItem key={n} value={n}>{n}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground">Wallet Address *</label>
-                  <Input
-                    value={walletAddress}
-                    onChange={(e) => setWalletAddress(e.target.value)}
-                    placeholder="Enter your wallet address"
-                    className="mt-1 font-mono text-sm"
-                  />
-                </div>
+                <Select value={cryptoType} onValueChange={setCryptoType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select crypto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CRYPTO_TYPES.map((ct) => (
+                      <SelectItem key={ct} value={ct}>{ct}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={network} onValueChange={setNetwork}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select network" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CRYPTO_NETWORKS.map((n) => (
+                      <SelectItem key={n} value={n}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder="Wallet Address"
+                  value={walletAddress}
+                  onChange={(e) => setWalletAddress(e.target.value)}
+                />
               </>
             )}
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddMethodDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handleAddWithdrawalMethod} disabled={isSubmitting}>
+            <Button onClick={handleAddWithdrawalMethod} disabled={isSubmitting}>
               {isSubmitting ? 'Adding...' : 'Add Method'}
             </Button>
           </DialogFooter>
@@ -1148,76 +867,65 @@ const CreatorDashboard = () => {
       <Dialog open={withdrawDialogOpen} onOpenChange={setWithdrawDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Request Withdrawal</DialogTitle>
+            <DialogTitle>Withdraw Funds</DialogTitle>
             <DialogDescription>
-              Available balance: LKR {stats.availableBalance.toLocaleString()}
+              Enter the amount you want to withdraw
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
+          <div className="space-y-4 py-4">
             <div>
-              <label className="text-sm text-muted-foreground">Withdrawal Method *</label>
-              <Select value={selectedMethodId} onValueChange={setSelectedMethodId}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select a method" />
-                </SelectTrigger>
-                <SelectContent>
-                  {withdrawalMethods.map((method) => (
-                    <SelectItem key={method.id} value={method.id}>
-                      <span className="flex items-center gap-2">
-                        {method.method_type === 'bank' ? (
-                          <><Building2 className="w-4 h-4" /> {method.bank_name}</>
-                        ) : (
-                          <><Bitcoin className="w-4 h-4" /> {method.crypto_type} ({method.network})</>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <p className="text-sm text-muted-foreground mb-1">Available Balance</p>
+              <p className="text-2xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
             </div>
-
-            <div>
-              <div className="flex items-center justify-between">
-                <label className="text-sm text-muted-foreground">Amount (LKR) *</label>
-                <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={handleWithdrawAll}>
-                  Withdraw All
-                </Button>
-              </div>
+            <div className="flex gap-2">
               <Input
                 type="number"
+                placeholder="Amount"
                 value={withdrawAmount}
                 onChange={(e) => setWithdrawAmount(e.target.value)}
-                placeholder="Enter amount"
-                className="mt-1"
-                max={stats.availableBalance}
               />
+              <Button variant="outline" onClick={handleWithdrawAll}>
+                Max
+              </Button>
             </div>
-
             {parseFloat(withdrawAmount) > 0 && (
-              <div className="bg-secondary/50 rounded-lg p-3 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Amount:</span>
+              <div className="p-3 bg-muted/30 rounded-lg text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-muted-foreground">Amount</span>
                   <span className="text-foreground">LKR {parseFloat(withdrawAmount).toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Fee (3%):</span>
-                  <span className="text-foreground">-LKR {feePreview.toLocaleString()}</span>
+                <div className="flex justify-between mb-1">
+                  <span className="text-muted-foreground">Fee (3%)</span>
+                  <span className="text-red-500">-LKR {feePreview.toLocaleString()}</span>
                 </div>
-                <div className="flex justify-between text-sm font-medium pt-1 border-t border-border">
-                  <span className="text-foreground">You'll receive:</span>
-                  <span className="text-brand">LKR {netPreview.toLocaleString()}</span>
+                <div className="flex justify-between font-medium">
+                  <span className="text-foreground">You'll receive</span>
+                  <span className="text-green-500">LKR {netPreview.toLocaleString()}</span>
                 </div>
               </div>
             )}
+            <Select value={selectedMethodId} onValueChange={setSelectedMethodId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select withdrawal method" />
+              </SelectTrigger>
+              <SelectContent>
+                {withdrawalMethods.map((wm) => (
+                  <SelectItem key={wm.id} value={wm.id}>
+                    {wm.method_type === 'bank' 
+                      ? `${wm.bank_name} - ****${wm.account_number?.slice(-4)}`
+                      : `${wm.crypto_type} - ${wm.wallet_address?.slice(0, 8)}...`
+                    }
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setWithdrawDialogOpen(false)}>
               Cancel
             </Button>
-            <Button variant="brand" onClick={handleWithdraw} disabled={isSubmitting}>
-              {isSubmitting ? 'Submitting...' : 'Submit Request'}
+            <Button onClick={handleWithdraw} disabled={isSubmitting}>
+              {isSubmitting ? 'Processing...' : 'Withdraw'}
             </Button>
           </DialogFooter>
         </DialogContent>

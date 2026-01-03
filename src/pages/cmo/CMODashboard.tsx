@@ -32,22 +32,25 @@ import { ChartLegend } from '@/components/dashboard/ChartLegend';
 
 interface CMOProfile {
   id: string;
-  display_name: string;
-  referral_code: string;
+  user_id: string;
+  display_name: string | null;
+  referral_code: string | null;
+  is_active: boolean | null;
+  created_at: string;
 }
 
 interface CreatorWithStats {
   id: string;
   user_id: string;
-  display_name: string;
+  display_name: string | null;
   referral_code: string;
   lifetime_paid_users: number;
-  available_balance: number;
-  is_active: boolean;
+  available_balance: number | null;
+  is_active: boolean | null;
   created_at: string;
   discount_codes: { code: string; paid_conversions: number }[];
   monthly_paid_users: number;
-  lastMonthPaidUsers?: number;
+  commission_rate: number;
 }
 
 interface Stats {
@@ -55,8 +58,6 @@ interface Stats {
   totalPaidUsersThisMonth: number;
   totalRevenueGenerated: number;
   annualPaidUsers: number;
-  lastMonthPaidUsers: number;
-  lastMonthCreators: number;
 }
 
 interface Goal {
@@ -71,7 +72,7 @@ interface Goal {
 interface MonthlyData {
   month: string;
   creators: number;
-  paidUsers: number;
+  paid_users: number;
   revenue: number;
 }
 
@@ -85,8 +86,6 @@ const CMODashboard = () => {
     totalPaidUsersThisMonth: 0,
     totalRevenueGenerated: 0,
     annualPaidUsers: 0,
-    lastMonthPaidUsers: 0,
-    lastMonthCreators: 0,
   });
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -120,6 +119,7 @@ const CMODashboard = () => {
         .maybeSingle();
 
       if (cmoError) throw cmoError;
+
       if (cmoData) {
         setCmoProfile(cmoData);
 
@@ -128,139 +128,95 @@ const CMODashboard = () => {
           .from('creator_profiles')
           .select('*')
           .eq('cmo_id', cmoData.id)
-          .order('created_at', { ascending: false });
+          .order('lifetime_paid_users', { ascending: false });
 
         if (creatorsData) {
-          // Get dates for comparison
           const currentMonth = new Date();
           currentMonth.setDate(1);
           currentMonth.setHours(0, 0, 0, 0);
-          
-          const lastMonth = subMonths(currentMonth, 1);
 
-          // Fetch discount codes and monthly stats for each creator
-          const creatorsWithStats = await Promise.all(
-            creatorsData.map(async (creator) => {
-              const { data: dcData } = await supabase
-                .from('discount_codes')
-                .select('code, paid_conversions')
-                .eq('creator_id', creator.id);
-              
-              const { count: monthlyPaid } = await supabase
-                .from('payment_attributions')
-                .select('*', { count: 'exact', head: true })
-                .eq('creator_id', creator.id)
-                .gte('payment_month', currentMonth.toISOString().split('T')[0]);
+          const creatorIds = creatorsData.map(c => c.id);
 
-              const { count: lastMonthPaid } = await supabase
-                .from('payment_attributions')
-                .select('*', { count: 'exact', head: true })
-                .eq('creator_id', creator.id)
-                .gte('payment_month', lastMonth.toISOString().split('T')[0])
-                .lt('payment_month', currentMonth.toISOString().split('T')[0]);
+          // Batch fetch discount codes
+          const { data: allDiscountCodes } = await supabase
+            .from('discount_codes')
+            .select('id, code, paid_conversions, creator_id')
+            .in('creator_id', creatorIds.length > 0 ? creatorIds : ['00000000-0000-0000-0000-000000000000']);
 
-              return {
-                ...creator,
-                discount_codes: dcData || [],
-                monthly_paid_users: monthlyPaid || 0,
-                lastMonthPaidUsers: lastMonthPaid || 0,
-              };
-            })
-          );
+          // Batch fetch monthly payment counts
+          const { data: monthlyPayments } = await supabase
+            .from('payment_attributions')
+            .select('creator_id')
+            .in('creator_id', creatorIds.length > 0 ? creatorIds : ['00000000-0000-0000-0000-000000000000'])
+            .gte('created_at', currentMonth.toISOString());
+
+          // Batch fetch total revenue
+          const { data: allPayments } = await supabase
+            .from('payment_attributions')
+            .select('creator_id, final_amount')
+            .in('creator_id', creatorIds.length > 0 ? creatorIds : ['00000000-0000-0000-0000-000000000000']);
+
+          // Aggregate monthly counts per creator
+          const monthlyCountsByCreator: Record<string, number> = {};
+          (monthlyPayments || []).forEach(p => {
+            monthlyCountsByCreator[p.creator_id] = (monthlyCountsByCreator[p.creator_id] || 0) + 1;
+          });
+
+          // Map creators with stats
+          const creatorsWithStats: CreatorWithStats[] = creatorsData.map(creator => ({
+            ...creator,
+            lifetime_paid_users: creator.lifetime_paid_users || 0,
+            discount_codes: (allDiscountCodes || [])
+              .filter(dc => dc.creator_id === creator.id)
+              .map(dc => ({ code: dc.code, paid_conversions: dc.paid_conversions || 0 })),
+            monthly_paid_users: monthlyCountsByCreator[creator.id] || 0,
+            commission_rate: (creator.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08,
+          }));
 
           setCreators(creatorsWithStats);
 
           // Calculate stats
-          const totalPaidThisMonth = creatorsWithStats.reduce((sum, c) => sum + c.monthly_paid_users, 0);
-          const totalPaidLastMonth = creatorsWithStats.reduce((sum, c) => sum + (c.lastMonthPaidUsers || 0), 0);
-          const creatorIds = creatorsWithStats.map(c => c.id);
+          const totalPaidThisMonth = Object.values(monthlyCountsByCreator).reduce((sum, count) => sum + count, 0);
+          const totalRevenueGenerated = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-          // Count creators created last month
-          const creatorsLastMonth = creatorsWithStats.filter(c => {
-            const createdAt = new Date(c.created_at);
-            return createdAt < currentMonth;
-          }).length;
+          // Get annual paid users
+          const yearStart = new Date();
+          yearStart.setMonth(0, 1);
+          yearStart.setHours(0, 0, 0, 0);
 
-          // Fetch revenue generated by CMO's creators only
-          let totalRevenueGenerated = 0;
-          let annualPaidUsers = 0;
-          
-          if (creatorIds.length > 0) {
-            const { data: cmoPayments } = await supabase
-              .from('payment_attributions')
-              .select('final_amount')
-              .in('creator_id', creatorIds);
-
-            totalRevenueGenerated = (cmoPayments || []).reduce(
-              (sum, p) => sum + Number(p.final_amount || 0), 0
-            );
-
-            // Get annual paid users (for bonus tracking)
-            const yearStart = new Date();
-            yearStart.setMonth(0, 1);
-            yearStart.setHours(0, 0, 0, 0);
-            
-            const { count: annualCount } = await supabase
-              .from('payment_attributions')
-              .select('*', { count: 'exact', head: true })
-              .in('creator_id', creatorIds)
-              .gte('payment_month', yearStart.toISOString().split('T')[0]);
-            
-            annualPaidUsers = annualCount || 0;
-
-            // Fetch monthly data for charts (last 6 months)
-            const monthlyChartData: MonthlyData[] = [];
-            for (let i = 5; i >= 0; i--) {
-              const monthStart = subMonths(new Date(), i);
-              monthStart.setDate(1);
-              monthStart.setHours(0, 0, 0, 0);
-              
-              // For the current month, use the end of today; for past months, use start of next month
-              const monthEnd = new Date(monthStart);
-              monthEnd.setMonth(monthEnd.getMonth() + 1);
-              monthEnd.setDate(1);
-              monthEnd.setHours(0, 0, 0, 0);
-
-              // Use created_at for accurate timestamp-based queries
-              const { count: monthPaidUsers } = await supabase
-                .from('payment_attributions')
-                .select('*', { count: 'exact', head: true })
-                .in('creator_id', creatorIds)
-                .gte('created_at', monthStart.toISOString())
-                .lt('created_at', monthEnd.toISOString());
-
-              const { data: monthRevenue } = await supabase
-                .from('payment_attributions')
-                .select('final_amount, created_at')
-                .in('creator_id', creatorIds)
-                .gte('created_at', monthStart.toISOString())
-                .lt('created_at', monthEnd.toISOString());
-
-              const creatorsAtMonth = creatorsWithStats.filter(c => 
-                new Date(c.created_at) <= monthEnd
-              ).length;
-
-              monthlyChartData.push({
-                month: format(monthStart, 'MMM'),
-                creators: creatorsAtMonth,
-                paidUsers: monthPaidUsers || 0,
-                revenue: (monthRevenue || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0),
-              });
-            }
-            setMonthlyData(monthlyChartData);
-          }
+          const { count: annualCount } = await supabase
+            .from('payment_attributions')
+            .select('*', { count: 'exact', head: true })
+            .in('creator_id', creatorIds.length > 0 ? creatorIds : ['00000000-0000-0000-0000-000000000000'])
+            .gte('created_at', yearStart.toISOString());
 
           setStats({
             totalCreators: creatorsWithStats.length,
             totalPaidUsersThisMonth: totalPaidThisMonth,
             totalRevenueGenerated,
-            annualPaidUsers,
-            lastMonthPaidUsers: totalPaidLastMonth,
-            lastMonthCreators: creatorsLastMonth,
+            annualPaidUsers: annualCount || 0,
           });
 
-          // Set goals - Updated for CMO: 180 active creators as current goal
+          // Fetch monthly data using RPC function
+          const { data: monthlyRpcData, error: monthlyError } = await supabase
+            .rpc('get_cmo_monthly_data', { 
+              p_cmo_id: cmoData.id,
+              p_months: 6 
+            });
+
+          if (!monthlyError && monthlyRpcData) {
+            setMonthlyData(monthlyRpcData.map((m: any) => ({
+              month: m.month,
+              creators: Number(m.creators) || 0,
+              paid_users: Number(m.paid_users) || 0,
+              revenue: Number(m.revenue) || 0,
+            })));
+          }
+
+          // Set goals
           const creatorCount = creatorsWithStats.length;
+          const annualPaidUsers = annualCount || 0;
+
           setGoals([
             {
               id: '1',
@@ -371,19 +327,8 @@ const CMODashboard = () => {
   const bonusEligible = stats.annualPaidUsers >= 280;
   const bonusProgress = Math.min((stats.annualPaidUsers / 280) * 100, 100);
 
-  // Calculate trend percentages
-  const creatorsTrend = stats.lastMonthCreators > 0 
-    ? Math.round(((stats.totalCreators - stats.lastMonthCreators) / stats.lastMonthCreators) * 100)
-    : stats.totalCreators > 0 ? 100 : 0;
-  
-  const paidUsersTrend = stats.lastMonthPaidUsers > 0
-    ? Math.round(((stats.totalPaidUsersThisMonth - stats.lastMonthPaidUsers) / stats.lastMonthPaidUsers) * 100)
-    : stats.totalPaidUsersThisMonth > 0 ? 100 : 0;
-
   // Get top 5 creators by revenue
-  const topCreators = [...creators]
-    .sort((a, b) => b.lifetime_paid_users - a.lifetime_paid_users)
-    .slice(0, 5);
+  const topCreators = [...creators].slice(0, 5);
 
   const chartColors = {
     primary: 'hsl(45, 93%, 47%)',
@@ -442,14 +387,13 @@ const CMODashboard = () => {
           </p>
         </div>
 
-        {/* Stats Cards with Trends */}
+        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <div className="glass-card p-6">
             <div className="flex items-center justify-between mb-2">
               <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
                 <Users className="w-6 h-6 text-purple-500" />
               </div>
-              {creatorsTrend !== 0 && <TrendIndicator value={creatorsTrend} />}
             </div>
             <p className="text-2xl font-bold text-foreground">{stats.totalCreators}</p>
             <p className="text-muted-foreground text-sm">Total Creators</p>
@@ -460,7 +404,6 @@ const CMODashboard = () => {
               <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-green-500" />
               </div>
-              {paidUsersTrend !== 0 && <TrendIndicator value={paidUsersTrend} />}
             </div>
             <p className="text-2xl font-bold text-foreground">{stats.totalPaidUsersThisMonth}</p>
             <p className="text-muted-foreground text-sm">Paid Users This Month</p>
@@ -487,369 +430,269 @@ const CMODashboard = () => {
           </div>
         </div>
 
-        {/* Charts Section */}
+        {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Creator Growth Chart */}
           <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-5 h-5 text-brand" />
-              <h3 className="font-semibold text-foreground">Creator Growth</h3>
-            </div>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+            <h3 className="font-semibold text-foreground mb-4">Creator Growth</h3>
+            {monthlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={monthlyData}>
                   <defs>
-                    <linearGradient id="creatorGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={chartColors.quaternary} stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor={chartColors.quaternary} stopOpacity={0}/>
+                    <linearGradient id="creatorsGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={chartColors.secondary} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={chartColors.secondary} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <XAxis dataKey="month" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }} 
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="creators" 
-                    stroke={chartColors.quaternary} 
-                    fill="url(#creatorGradient)" 
-                    strokeWidth={2}
-                  />
+                  <Area type="monotone" dataKey="creators" stroke={chartColors.secondary} fill="url(#creatorsGradient)" name="Creators" />
                 </AreaChart>
               </ResponsiveContainer>
-            </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                No data available yet
+              </div>
+            )}
           </div>
 
-          {/* Monthly Paid Users Trend */}
+          {/* Paid Users Trend */}
           <div className="glass-card p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-brand" />
-              <h3 className="font-semibold text-foreground">Monthly Paid Users</h3>
-            </div>
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
+            <h3 className="font-semibold text-foreground mb-4">Paid Users Trend</h3>
+            {monthlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={monthlyData}>
-                  <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                  <XAxis dataKey="month" stroke="#888" fontSize={12} />
+                  <YAxis stroke="#888" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }} 
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                   />
-                  <Line 
-                    type="monotone" 
-                    dataKey="paidUsers" 
-                    stroke={chartColors.tertiary} 
-                    strokeWidth={2}
-                    dot={{ fill: chartColors.tertiary, strokeWidth: 0, r: 4 }}
-                  />
+                  <Line type="monotone" dataKey="paid_users" stroke={chartColors.tertiary} strokeWidth={2} name="Paid Users" />
                 </LineChart>
               </ResponsiveContainer>
-            </div>
+            ) : (
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                No data available yet
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Revenue by Creator - Bar Chart */}
-        {topCreators.length > 0 && (
-          <div className="glass-card p-6 mb-8">
-            <div className="flex items-center gap-2 mb-4">
-              <BarChart3 className="w-5 h-5 text-brand" />
-              <h3 className="font-semibold text-foreground">Top Creators by Lifetime Users</h3>
-            </div>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topCreators} layout="vertical">
-                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
-                  <YAxis 
-                    type="category" 
-                    dataKey="display_name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-                    width={120}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      color: 'hsl(var(--foreground))'
-                    }} 
-                  />
-                  <Bar dataKey="lifetime_paid_users" radius={[0, 4, 4, 0]}>
-                    {topCreators.map((_, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={index === 0 ? chartColors.primary : index === 1 ? chartColors.secondary : chartColors.tertiary} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* Bonus Progress Tracker */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Award className="w-5 h-5 text-brand" />
-            <h3 className="font-semibold text-foreground">Annual Bonus Progress</h3>
-          </div>
-          <div className="flex items-center gap-6">
-            <ProgressRing 
-              progress={bonusProgress} 
-              size={100} 
-              strokeWidth={10}
-              color={bonusEligible ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'}
-              label="of 280"
-            />
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-muted-foreground">Progress to +5% Bonus</span>
-                <span className="text-sm font-medium text-foreground">{stats.annualPaidUsers}/280</span>
-              </div>
-              <div className="h-3 bg-muted rounded-full overflow-hidden mb-3">
-                <div 
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{ 
-                    width: `${bonusProgress}%`,
-                    backgroundColor: bonusEligible ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>0</span>
-                <span>70</span>
-                <span>140</span>
-                <span>210</span>
-                <span>280</span>
-              </div>
-              {bonusEligible ? (
-                <p className="mt-3 text-sm text-green-500 font-medium">
-                  🎉 Congratulations! You've earned the +5% performance bonus!
+        {/* Bonus Progress & Goals */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Bonus Progress */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Annual Bonus Progress</h3>
+            <div className="flex items-center gap-6">
+              <ProgressRing 
+                progress={bonusProgress} 
+                size={100} 
+                strokeWidth={8}
+                color={bonusEligible ? 'hsl(142, 71%, 45%)' : 'hsl(45, 93%, 47%)'}
+              />
+              <div>
+                <p className="text-2xl font-bold text-foreground">{stats.annualPaidUsers} / 280</p>
+                <p className="text-sm text-muted-foreground">
+                  {bonusEligible 
+                    ? '🎉 Bonus unlocked! +5% commission' 
+                    : `${280 - stats.annualPaidUsers} more paid users for +5% bonus`
+                  }
                 </p>
-              ) : (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {280 - stats.annualPaidUsers} more paid users needed for +5% bonus
-                </p>
-              )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Goals Section with Progress Rings */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Target className="w-5 h-5 text-brand" />
-            <h2 className="font-semibold text-foreground">Goals & Milestones</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {goals.slice(0, 4).map((goal) => (
-              <div 
-                key={goal.id} 
-                className={`flex items-center gap-4 p-4 rounded-lg border ${
-                  goal.completed 
-                    ? 'bg-green-500/10 border-green-500/30' 
-                    : 'bg-muted/30 border-border'
-                }`}
-              >
-                <ProgressRing 
-                  progress={Math.min((goal.current / goal.target) * 100, 100)} 
-                  size={60} 
-                  strokeWidth={6}
-                  color={goal.completed ? 'hsl(142, 71%, 45%)' : 'hsl(var(--brand))'}
-                  showLabel={false}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    {goal.completed ? (
-                      <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                    )}
-                    <p className={`font-medium text-sm ${goal.completed ? 'text-green-500' : 'text-foreground'}`}>
+          {/* Goals */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4">Goals</h3>
+            <div className="space-y-3">
+              {goals.map((goal) => (
+                <div key={goal.id} className="flex items-center gap-3">
+                  {goal.completed ? (
+                    <CheckCircle2 className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <Circle className="w-5 h-5 text-muted-foreground" />
+                  )}
+                  <div className="flex-1">
+                    <p className={`text-sm ${goal.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                       {goal.title}
                     </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">{goal.description}</p>
-                  <p className={`text-xs mt-1 ${goal.completed ? 'text-green-500' : 'text-foreground'}`}>
+                  <span className="text-xs text-muted-foreground">
                     {goal.current}/{goal.target}
-                  </p>
+                  </span>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Referral Link */}
         <div className="glass-card p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Recruit Content Creators</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center">
+              <LinkIcon className="w-5 h-5 text-brand" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Your Creator Onboarding Link</h3>
+              <p className="text-sm text-muted-foreground">Share with potential creators to join your network</p>
             </div>
           </div>
-          {referralLink ? (
-            <>
-              <div className="flex gap-2">
-                <Input 
-                  value={referralLink} 
-                  readOnly 
-                  className="bg-secondary text-foreground text-sm"
-                />
-                <Button 
-                  variant="outline" 
-                  size="icon"
-                  onClick={() => copyToClipboard(referralLink, 'Referral link')}
-                >
-                  <Copy className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Share this link to onboard new content creators under your management.
-              </p>
-            </>
-          ) : (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
-              <p className="text-amber-500 text-sm font-medium">CMO profile not fully initialized</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Please contact admin to generate your referral code.
-              </p>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <Input 
+              value={referralLink}
+              readOnly
+              className="font-mono text-sm"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => copyToClipboard(referralLink, 'Referral link')}
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
-        {/* Creator Leaderboard */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-brand" />
-              <h2 className="font-semibold text-foreground">Your Creators</h2>
-            </div>
+        {/* Top Creators Bar Chart */}
+        {topCreators.length > 0 && (
+          <div className="glass-card p-6 mb-8">
+            <h3 className="font-semibold text-foreground mb-4">Top Creators by Paid Users</h3>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={topCreators.map(c => ({ 
+                name: c.display_name?.substring(0, 10) || 'Unknown', 
+                value: c.lifetime_paid_users 
+              }))}>
+                <XAxis dataKey="name" stroke="#888" fontSize={12} />
+                <YAxis stroke="#888" fontSize={12} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                />
+                <Bar dataKey="value" fill={chartColors.primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Creators Table */}
+        <div className="glass-card overflow-hidden">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <h3 className="font-semibold text-foreground">Your Creators</h3>
+            <span className="text-sm text-muted-foreground">{creators.length} creators</span>
           </div>
           {creators.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Creator</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">This Month</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Lifetime</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Balance</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Trend</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Discount Codes</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                <thead className="bg-muted/30 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Creator</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Referral Code</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">This Month</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Lifetime</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Commission</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Discount Codes</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {creators.map((creator) => {
-                    const trend = creator.lastMonthPaidUsers && creator.lastMonthPaidUsers > 0
-                      ? Math.round(((creator.monthly_paid_users - creator.lastMonthPaidUsers) / creator.lastMonthPaidUsers) * 100)
-                      : creator.monthly_paid_users > 0 ? 100 : 0;
-                    
-                    return (
-                      <tr key={creator.id} className="border-b border-border/50">
-                        <td className="py-3 px-4">
-                          <p className="text-sm font-medium text-foreground">{creator.display_name}</p>
-                          <p className="text-xs text-muted-foreground">{creator.referral_code}</p>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-foreground">{creator.monthly_paid_users}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">{creator.lifetime_paid_users}</td>
-                        <td className="py-3 px-4 text-sm text-foreground">
-                          LKR {(creator.available_balance || 0).toLocaleString()}
-                        </td>
-                        <td className="py-3 px-4">
-                          {trend !== 0 && <TrendIndicator value={trend} />}
-                        </td>
-                        <td className="py-3 px-4">
-                          {creator.discount_codes.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {creator.discount_codes.map((dc) => (
-                                <span key={dc.code} className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded">
-                                  {dc.code}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Dialog open={dialogOpen && selectedCreatorId === creator.id} onOpenChange={(open) => {
-                            setDialogOpen(open);
-                            if (open) setSelectedCreatorId(creator.id);
-                          }}>
-                            <DialogTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <Tag className="w-4 h-4 mr-1" />
-                                Add Code
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Create Discount Code for {creator.display_name}</DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-4 py-4">
-                                <div className="flex items-center gap-4">
-                                  <Button 
-                                    variant={isAutoGenerate ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setIsAutoGenerate(true)}
-                                  >
-                                    Auto-generate
-                                  </Button>
-                                  <Button 
-                                    variant={!isAutoGenerate ? 'default' : 'outline'}
-                                    size="sm"
-                                    onClick={() => setIsAutoGenerate(false)}
-                                  >
-                                    Custom
-                                  </Button>
-                                </div>
-                                {!isAutoGenerate && (
-                                  <div>
-                                    <Label>Custom Code</Label>
-                                    <Input 
-                                      placeholder="MYCODE10"
-                                      value={newCodeValue}
-                                      onChange={(e) => setNewCodeValue(e.target.value.toUpperCase())}
-                                      className="mt-1"
-                                    />
-                                  </div>
-                                )}
-                                <p className="text-xs text-muted-foreground">
-                                  This code will give users 10% off and track conversions for this creator.
-                                </p>
+                <tbody className="divide-y divide-border">
+                  {creators.map((creator) => (
+                    <tr key={creator.id} className="hover:bg-muted/10">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{creator.display_name || 'Unknown'}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <code className="text-xs bg-muted/50 px-2 py-1 rounded font-mono">
+                          {creator.referral_code}
+                        </code>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{creator.monthly_paid_users}</td>
+                      <td className="px-4 py-3 text-foreground">{creator.lifetime_paid_users}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          creator.commission_rate === 0.12 
+                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {Math.round(creator.commission_rate * 100)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {creator.discount_codes.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {creator.discount_codes.map((dc) => (
+                              <span key={dc.code} className="text-xs bg-purple-500/20 text-purple-400 px-2 py-0.5 rounded">
+                                {dc.code}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">None</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Dialog open={dialogOpen && selectedCreatorId === creator.id} onOpenChange={(open) => {
+                          setDialogOpen(open);
+                          if (!open) setSelectedCreatorId(null);
+                        }}>
+                          <DialogTrigger asChild>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => setSelectedCreatorId(creator.id)}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Add Code
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Create Discount Code</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                              <p className="text-sm text-muted-foreground">
+                                Creating code for: <span className="font-medium text-foreground">{creator.display_name}</span>
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  id="autoGenerate"
+                                  checked={isAutoGenerate}
+                                  onChange={(e) => setIsAutoGenerate(e.target.checked)}
+                                  className="rounded"
+                                />
+                                <Label htmlFor="autoGenerate">Auto-generate code</Label>
                               </div>
-                              <DialogFooter>
-                                <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-                                <Button onClick={handleCreateDiscountCode} disabled={isCreatingCode}>
-                                  {isCreatingCode ? 'Creating...' : 'Create Code'}
-                                </Button>
-                              </DialogFooter>
-                            </DialogContent>
-                          </Dialog>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                              {!isAutoGenerate && (
+                                <Input
+                                  placeholder="Enter custom code"
+                                  value={newCodeValue}
+                                  onChange={(e) => setNewCodeValue(e.target.value.toUpperCase())}
+                                />
+                              )}
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                              <Button onClick={handleCreateDiscountCode} disabled={isCreatingCode}>
+                                {isCreatingCode ? 'Creating...' : 'Create Code'}
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="text-center py-8">
-              <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-              <p className="text-muted-foreground">No creators yet. Share your referral link to onboard creators.</p>
+            <div className="p-8 text-center">
+              <UserPlus className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground mb-4">No creators yet</p>
+              <p className="text-sm text-muted-foreground">
+                Share your referral link to onboard creators
+              </p>
             </div>
           )}
         </div>
