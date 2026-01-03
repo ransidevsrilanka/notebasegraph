@@ -547,10 +547,15 @@ const PaidSignup = () => {
                 </p>
                 <div className="space-y-3">
                   <Button variant="brand" className="w-full" onClick={() => {
+                    const refCreator = paymentData?.refCreator || localStorage.getItem('refCreator');
                     localStorage.removeItem('pending_payment');
-                    navigate('/pricing');
+                    if (refCreator) {
+                      navigate(`/signup?ref_creator=${refCreator}`);
+                    } else {
+                      navigate('/pricing');
+                    }
                   }}>
-                    Try Again
+                    Back to Signup
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     If you believe this is an error, please contact support with your order ID: {paymentData?.orderId}

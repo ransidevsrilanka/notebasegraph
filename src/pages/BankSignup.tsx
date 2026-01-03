@@ -148,10 +148,15 @@ const BankSignup = () => {
   };
 
   const generateReferenceNumber = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let result = 'JR-';
-    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    return result;
+    // Format: [Month Letter][Week Number][Day Number][Random 2 digits]
+    // Example: J2589 = January, Week 2, 5th day, request #89
+    const months = 'JFMAYULGSONDD'; // Unique letter per month
+    const now = new Date();
+    const monthLetter = months[now.getMonth()];
+    const weekNumber = Math.ceil(now.getDate() / 7);
+    const dayDigit = now.getDate() % 10;
+    const randomPart = Math.floor(Math.random() * 100).toString().padStart(2, '0');
+    return `${monthLetter}${weekNumber}${dayDigit}${randomPart}`;
   };
 
   const handleCreateAccount = async (e: React.FormEvent) => {

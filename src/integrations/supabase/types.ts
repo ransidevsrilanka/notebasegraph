@@ -125,6 +125,13 @@ export type Database = {
             foreignKeyName: "cmo_payouts_cmo_id_fkey"
             columns: ["cmo_id"]
             isOneToOne: false
+            referencedRelation: "cmo_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cmo_payouts_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
             referencedRelation: "cmo_profiles"
             referencedColumns: ["id"]
           },
@@ -240,6 +247,13 @@ export type Database = {
             foreignKeyName: "creator_payouts_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_payouts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -286,6 +300,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_analytics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "creator_profiles_cmo_id_fkey"
             columns: ["cmo_id"]
@@ -603,6 +624,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_analytics"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payment_attributions_creator_id_fkey"
             columns: ["creator_id"]
@@ -985,6 +1013,13 @@ export type Database = {
             foreignKeyName: "user_attributions_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1152,6 +1187,13 @@ export type Database = {
             foreignKeyName: "withdrawal_methods_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawal_methods_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1217,6 +1259,13 @@ export type Database = {
             foreignKeyName: "withdrawal_requests_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "withdrawal_requests_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1231,9 +1280,141 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cmo_analytics: {
+        Row: {
+          annual_paid_users: number | null
+          created_at: string | null
+          creators_count: number | null
+          display_name: string | null
+          id: string | null
+          is_active: boolean | null
+          monthly_paid_users: number | null
+          pending_commission: number | null
+          referral_code: string | null
+          total_lifetime_paid_users: number | null
+          total_revenue_generated: number | null
+          user_id: string | null
+        }
+        Insert: {
+          annual_paid_users?: never
+          created_at?: string | null
+          creators_count?: never
+          display_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          monthly_paid_users?: never
+          pending_commission?: never
+          referral_code?: string | null
+          total_lifetime_paid_users?: never
+          total_revenue_generated?: never
+          user_id?: string | null
+        }
+        Update: {
+          annual_paid_users?: never
+          created_at?: string | null
+          creators_count?: never
+          display_name?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          monthly_paid_users?: never
+          pending_commission?: never
+          referral_code?: string | null
+          total_lifetime_paid_users?: never
+          total_revenue_generated?: never
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      creator_analytics: {
+        Row: {
+          available_balance: number | null
+          cmo_id: string | null
+          cmo_name: string | null
+          commission_rate: number | null
+          created_at: string | null
+          discount_code_count: number | null
+          display_name: string | null
+          id: string | null
+          is_active: boolean | null
+          lifetime_paid_users: number | null
+          monthly_paid_users: number | null
+          referral_code: string | null
+          total_commission_earned: number | null
+          total_referred_users: number | null
+          total_withdrawn: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_stats: {
+        Row: {
+          this_month_revenue: number | null
+          total_attributed_users: number | null
+          total_cmos: number | null
+          total_creator_balances: number | null
+          total_creators: number | null
+          total_paid_users_all_time: number | null
+          total_revenue: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_admin_dashboard_stats: {
+        Args: never
+        Returns: {
+          active_codes: number
+          active_enrollments: number
+          bank_payments: number
+          card_payments: number
+          last_month_revenue: number
+          lifetime_count: number
+          pending_join_requests: number
+          pending_upgrades: number
+          pending_withdrawals: number
+          standard_count: number
+          starter_count: number
+          this_month_revenue: number
+          total_codes: number
+          total_creators: number
+          total_revenue: number
+          total_students: number
+          total_subjects: number
+        }[]
+      }
+      get_cmo_monthly_data: {
+        Args: { p_cmo_id: string; p_months?: number }
+        Returns: {
+          creators: number
+          month: string
+          paid_users: number
+          revenue: number
+        }[]
+      }
+      get_creator_monthly_data: {
+        Args: { p_creator_id: string; p_months?: number }
+        Returns: {
+          conversions: number
+          earnings: number
+          month: string
+          referrals: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

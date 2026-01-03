@@ -28,9 +28,9 @@ import { MiniChart } from '@/components/dashboard/MiniChart';
 interface CMOData {
   id: string;
   user_id: string;
-  display_name: string;
-  referral_code: string;
-  is_active: boolean;
+  display_name: string | null;
+  referral_code: string | null;
+  is_active: boolean | null;
   created_at: string;
   creators_count: number;
   total_paid_users: number;
@@ -40,13 +40,13 @@ interface CMOData {
 interface CreatorData {
   id: string;
   user_id: string;
-  display_name: string;
+  display_name: string | null;
   referral_code: string;
   cmo_id: string | null;
-  cmo_name: string;
+  cmo_name: string | null;
   lifetime_paid_users: number;
   monthly_paid_users: number;
-  available_balance: number;
+  available_balance: number | null;
   commission_rate: number;
 }
 
@@ -94,69 +94,85 @@ const Analytics = () => {
 
   const fetchData = async () => {
     try {
-      // Fetch all creators with their actual data
+      const currentMonth = new Date();
+      currentMonth.setDate(1);
+      currentMonth.setHours(0, 0, 0, 0);
+
+      // Fetch all creators
       const { data: creatorData } = await supabase
         .from('creator_profiles')
         .select('*')
         .order('lifetime_paid_users', { ascending: false });
 
-      const currentMonth = new Date();
-      currentMonth.setDate(1);
-      currentMonth.setHours(0, 0, 0, 0);
-
-      // Enrich creators with CMO name and monthly stats
-      const enrichedCreators = await Promise.all(
-        (creatorData || []).map(async (creator) => {
-          let cmoName = 'Direct';
-          if (creator.cmo_id) {
-            const { data: cmoData } = await supabase
-              .from('cmo_profiles')
-              .select('display_name')
-              .eq('id', creator.cmo_id)
-              .maybeSingle();
-            if (cmoData) {
-              cmoName = cmoData.display_name || 'Unknown CMO';
-            }
-          }
-
-          const { count: monthlyPaid } = await supabase
-            .from('payment_attributions')
-            .select('*', { count: 'exact', head: true })
-            .eq('creator_id', creator.id)
-            .gte('created_at', currentMonth.toISOString());
-
-          return {
-            ...creator,
-            cmo_name: cmoName,
-            monthly_paid_users: monthlyPaid || 0,
-            commission_rate: (creator.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08,
-          };
-        })
-      );
-
-      setCreators(enrichedCreators);
-
-      // Fetch CMOs
+      // Fetch all CMOs
       const { data: cmoData } = await supabase
         .from('cmo_profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      // Enrich CMOs with stats - calculate from creators under them
-      const enrichedCMOs = await Promise.all(
-        (cmoData || []).map(async (cmo) => {
-          const creatorsUnderCMO = enrichedCreators.filter(c => c.cmo_id === cmo.id);
-          const totalPaidUsers = creatorsUnderCMO.reduce((sum, c) => sum + (c.lifetime_paid_users || 0), 0);
-          const pendingEarnings = creatorsUnderCMO.reduce((sum, c) => sum + (c.available_balance || 0), 0) * 0.03; // CMO gets 3% of creator earnings
+      // Batch fetch CMO names for creators
+      const cmoIds = [...new Set((creatorData || []).map(c => c.cmo_id).filter(Boolean))];
+      const cmoNameMap: Record<string, string> = {};
+      if (cmoIds.length > 0) {
+        const { data: cmoNames } = await supabase
+          .from('cmo_profiles')
+          .select('id, display_name')
+          .in('id', cmoIds);
+        (cmoNames || []).forEach(c => {
+          cmoNameMap[c.id] = c.display_name || 'Unknown CMO';
+        });
+      }
 
-          return {
-            ...cmo,
-            creators_count: creatorsUnderCMO.length,
-            total_paid_users: totalPaidUsers,
-            pending_earnings: pendingEarnings,
-          };
-        })
-      );
+      // Get all creator IDs for batch queries
+      const creatorIds = (creatorData || []).map(c => c.id);
+
+      // Batch fetch monthly payment counts
+      const { data: monthlyPayments } = await supabase
+        .from('payment_attributions')
+        .select('creator_id')
+        .in('creator_id', creatorIds.length > 0 ? creatorIds : ['00000000-0000-0000-0000-000000000000'])
+        .gte('created_at', currentMonth.toISOString());
+
+      // Aggregate monthly counts
+      const monthlyCountsByCreator: Record<string, number> = {};
+      (monthlyPayments || []).forEach(p => {
+        monthlyCountsByCreator[p.creator_id] = (monthlyCountsByCreator[p.creator_id] || 0) + 1;
+      });
+
+      // Enrich creators
+      const enrichedCreators: CreatorData[] = (creatorData || []).map(creator => ({
+        id: creator.id,
+        user_id: creator.user_id,
+        display_name: creator.display_name,
+        referral_code: creator.referral_code,
+        cmo_id: creator.cmo_id,
+        cmo_name: creator.cmo_id ? cmoNameMap[creator.cmo_id] || 'Unknown CMO' : 'Direct',
+        lifetime_paid_users: creator.lifetime_paid_users || 0,
+        monthly_paid_users: monthlyCountsByCreator[creator.id] || 0,
+        available_balance: creator.available_balance,
+        commission_rate: (creator.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08,
+      }));
+
+      setCreators(enrichedCreators);
+
+      // Enrich CMOs with stats
+      const enrichedCMOs: CMOData[] = (cmoData || []).map(cmo => {
+        const creatorsUnderCMO = enrichedCreators.filter(c => c.cmo_id === cmo.id);
+        const totalPaidUsers = creatorsUnderCMO.reduce((sum, c) => sum + c.lifetime_paid_users, 0);
+        const pendingEarnings = creatorsUnderCMO.reduce((sum, c) => sum + (c.available_balance || 0), 0) * 0.03;
+
+        return {
+          id: cmo.id,
+          user_id: cmo.user_id,
+          display_name: cmo.display_name,
+          referral_code: cmo.referral_code,
+          is_active: cmo.is_active,
+          created_at: cmo.created_at,
+          creators_count: creatorsUnderCMO.length,
+          total_paid_users: totalPaidUsers,
+          pending_earnings: pendingEarnings,
+        };
+      });
 
       setCMOs(enrichedCMOs);
 
@@ -211,8 +227,7 @@ const Analytics = () => {
         .from('user_attributions')
         .select('*', { count: 'exact', head: true });
 
-      // Total paid users = sum of all creators' lifetime_paid_users
-      const totalPaidUsersAllTime = enrichedCreators.reduce((sum, c) => sum + (c.lifetime_paid_users || 0), 0);
+      const totalPaidUsersAllTime = enrichedCreators.reduce((sum, c) => sum + c.lifetime_paid_users, 0);
       const totalCreatorBalances = enrichedCreators.reduce((sum, c) => sum + (c.available_balance || 0), 0);
 
       setStats({
@@ -484,16 +499,15 @@ const Analytics = () => {
                                     ? 'bg-emerald-500/20 text-emerald-400' 
                                     : 'bg-muted text-muted-foreground'
                                 }`}>
-                                  {creator.commission_rate * 100}%
+                                  {Math.round(creator.commission_rate * 100)}%
                                 </span>
-                                <p className="text-sm font-medium text-amber-400">
-                                  Rs. {(creator.available_balance || 0).toLocaleString()}
-                                </p>
                               </div>
                             </div>
                           ))}
                         {creators.filter(c => c.cmo_id === cmo.id).length === 0 && (
-                          <p className="text-sm text-muted-foreground">No creators yet</p>
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            No creators under this CMO yet
+                          </p>
                         )}
                       </div>
                     </div>
@@ -502,61 +516,122 @@ const Analytics = () => {
               ))
             ) : (
               <div className="glass-card p-8 text-center">
-                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">No CMOs yet. Click "Add CMO" to get started.</p>
+                <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No CMOs yet</p>
               </div>
             )}
-          </TabsContent>
 
-          {/* All Creators View */}
-          <TabsContent value="creators">
+            {/* Direct Creators (no CMO) */}
             <div className="glass-card overflow-hidden">
-              {creators.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Creator</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">CMO</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">This Month</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Lifetime</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Rate</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Balance</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {creators.map((creator) => (
-                        <tr key={creator.id} className="border-b border-border/50">
-                          <td className="py-3 px-4">
-                            <p className="text-sm font-medium text-foreground">{creator.display_name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{creator.referral_code}</p>
-                          </td>
-                          <td className="py-3 px-4 text-sm text-muted-foreground">{creator.cmo_name}</td>
-                          <td className="py-3 px-4 text-sm text-foreground">{creator.monthly_paid_users}</td>
-                          <td className="py-3 px-4 text-sm text-foreground font-medium">{creator.lifetime_paid_users}</td>
-                          <td className="py-3 px-4">
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              creator.commission_rate === 0.12 
-                                ? 'bg-emerald-500/20 text-emerald-400' 
-                                : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {creator.commission_rate * 100}%
-                            </span>
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-amber-400">
-                            Rs. {(creator.available_balance || 0).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <button
+                className="w-full p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                onClick={() => setExpandedCMO(expandedCMO === 'direct' ? null : 'direct')}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-foreground/80" />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-foreground">Direct Creators</p>
+                    <p className="text-xs text-muted-foreground">
+                      {creators.filter(c => !c.cmo_id).length} creators without CMO
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <div className="p-8 text-center">
-                  <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground">No creators yet.</p>
+                {expandedCMO === 'direct' ? (
+                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                )}
+              </button>
+              
+              {expandedCMO === 'direct' && (
+                <div className="border-t border-border bg-muted/20 p-4">
+                  <div className="space-y-2">
+                    {creators
+                      .filter(c => !c.cmo_id)
+                      .map((creator) => (
+                        <div key={creator.id} className="flex items-center justify-between p-3 bg-card rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-muted/50 flex items-center justify-center">
+                              <Users className="w-4 h-4 text-foreground/80" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{creator.display_name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {creator.monthly_paid_users} this month • {creator.lifetime_paid_users} lifetime
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            creator.commission_rate === 0.12 
+                              ? 'bg-emerald-500/20 text-emerald-400' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {Math.round(creator.commission_rate * 100)}%
+                          </span>
+                        </div>
+                      ))}
+                    {creators.filter(c => !c.cmo_id).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No direct creators
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
+            </div>
+          </TabsContent>
+
+          {/* All Creators */}
+          <TabsContent value="creators">
+            <div className="glass-card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-muted/30 border-b border-border">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Creator</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">CMO</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Referral Code</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">This Month</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Lifetime</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Balance</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {creators.map((creator) => (
+                      <tr key={creator.id} className="hover:bg-muted/10">
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          {creator.display_name || 'Unknown'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-muted-foreground">
+                          {creator.cmo_name || 'Direct'}
+                        </td>
+                        <td className="px-4 py-3">
+                          <code className="text-xs bg-muted/50 px-2 py-1 rounded">
+                            {creator.referral_code}
+                          </code>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-foreground">{creator.monthly_paid_users}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">{creator.lifetime_paid_users}</td>
+                        <td className="px-4 py-3 text-sm text-foreground">
+                          Rs. {(creator.available_balance || 0).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs px-2 py-0.5 rounded ${
+                            creator.commission_rate === 0.12 
+                              ? 'bg-emerald-500/20 text-emerald-400' 
+                              : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {Math.round(creator.commission_rate * 100)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </TabsContent>
 
@@ -566,55 +641,44 @@ const Analytics = () => {
               {pendingPayouts.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/30">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Name</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Type</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Month</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Amount</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                    <thead className="bg-muted/30 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Type</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Name</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Month</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Status</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Action</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-border">
                       {pendingPayouts.map((payout) => (
-                        <tr key={`${payout.type}-${payout.id}`} className="border-b border-border/50">
-                          <td className="py-3 px-4 text-sm font-medium text-foreground">{payout.name}</td>
-                          <td className="py-3 px-4">
+                        <tr key={payout.id} className="hover:bg-muted/10">
+                          <td className="px-4 py-3">
                             <span className={`text-xs px-2 py-0.5 rounded ${
                               payout.type === 'cmo' 
-                                ? 'bg-muted text-foreground' 
-                                : 'bg-amber-500/20 text-amber-400'
+                                ? 'bg-purple-500/20 text-purple-400' 
+                                : 'bg-blue-500/20 text-blue-400'
                             }`}>
                               {payout.type.toUpperCase()}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-sm text-muted-foreground">
-                            {format(new Date(payout.payout_month), 'MMM yyyy')}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-foreground">
+                          <td className="px-4 py-3 text-sm text-foreground">{payout.name}</td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">{payout.payout_month}</td>
+                          <td className="px-4 py-3 text-sm font-medium text-amber-400">
                             Rs. {payout.amount.toLocaleString()}
                           </td>
-                          <td className="py-3 px-4">
-                            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded ${
-                              payout.status === 'eligible' 
-                                ? 'bg-emerald-500/20 text-emerald-400' 
-                                : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {payout.status === 'eligible' ? (
-                                <CheckCircle2 className="w-3 h-3" />
-                              ) : (
-                                <Clock className="w-3 h-3" />
-                              )}
-                              {payout.status.charAt(0).toUpperCase() + payout.status.slice(1)}
+                          <td className="px-4 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400">
+                              {payout.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="px-4 py-3">
                             <Button 
                               size="sm" 
                               variant="outline"
-                              className="border-muted-foreground/30"
                               onClick={() => handleMarkPaid(payout)}
+                              className="text-green-500 border-green-500/30 hover:bg-green-500/10"
                             >
                               <CheckCircle2 className="w-4 h-4 mr-1" />
                               Mark Paid
@@ -627,8 +691,8 @@ const Analytics = () => {
                 </div>
               ) : (
                 <div className="p-8 text-center">
-                  <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-muted-foreground">No pending payouts.</p>
+                  <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No pending payouts</p>
                 </div>
               )}
             </div>
