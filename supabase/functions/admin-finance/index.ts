@@ -162,6 +162,12 @@ serve(async (req) => {
         }
       }
 
+      // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
+      if (!creatorId) {
+        console.log("NO REFERRAL - 100% revenue to platform. User:", user_id, "Amount:", final_amount);
+        creatorCommissionAmount = 0; // Explicit enforcement
+      }
+
       // STEP 3: Create payment attribution FIRST (this is the source of truth)
       const { error: paError } = await supabase.from("payment_attributions").insert({
         order_id,
@@ -330,6 +336,12 @@ serve(async (req) => {
             console.log("Creator found by discount code:", creatorId, "Commission:", creatorCommissionAmount);
           }
         }
+      }
+
+      // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
+      if (!creatorId) {
+        console.log("NO REFERRAL - 100% revenue to platform. User:", user_id, "Amount:", final_amount);
+        creatorCommissionAmount = 0; // Explicit enforcement
       }
 
       // STEP 3: Create payment attribution FIRST (this is the source of truth)
@@ -563,6 +575,12 @@ serve(async (req) => {
             creatorCommissionAmount = request.amount * commissionRate;
           }
         }
+      }
+
+      // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
+      if (!creatorId) {
+        console.log("NO REFERRAL (join request) - 100% revenue to platform. User:", request.user_id, "Amount:", request.amount);
+        creatorCommissionAmount = 0; // Explicit enforcement
       }
 
       // STEP 3: Create payment attribution FIRST (source of truth)

@@ -8,9 +8,13 @@ interface PDFViewerState {
   errorCode: string | null;
   pdfUrl: string | null;
   watermark: {
+    fullName?: string;
     email: string;
-    orderId: string;
+    oderId: string;
+    timestamp?: string;
+    userId?: string;
   } | null;
+  canDownload: boolean;
   noteTitle: string | null;
   currentPage: number;
   totalPages: number;
@@ -45,6 +49,7 @@ export function usePDFViewer(): UsePDFViewerReturn {
     errorCode: null,
     pdfUrl: null,
     watermark: null,
+    canDownload: false,
     noteTitle: null,
     currentPage: 1,
     totalPages: 0,
@@ -108,9 +113,13 @@ export function usePDFViewer(): UsePDFViewerReturn {
         isLoading: false,
         pdfUrl: data.signedUrl,
         watermark: data.watermark ? {
+          fullName: data.watermark.fullName,
           email: data.watermark.email,
-          orderId: data.watermark.oderId,
+          oderId: data.watermark.oderId,
+          timestamp: data.watermark.timestamp,
+          userId: data.watermark.userId,
         } : null,
+        canDownload: data.canDownload ?? false,
         noteTitle: data.noteTitle,
         currentPage: savedPage,
         error: null,
@@ -205,6 +214,7 @@ export function usePDFViewer(): UsePDFViewerReturn {
       errorCode: null,
       pdfUrl: null,
       watermark: null,
+      canDownload: false,
       noteTitle: null,
       currentPage: 1,
       totalPages: 0,

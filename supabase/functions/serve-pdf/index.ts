@@ -201,29 +201,66 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get user profile for watermark
+    // Get user profile for enhanced watermark
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('email')
-      .eq('id', user.id)
+      .select('email, full_name, downloads_disabled')
+      .eq('user_id', user.id)
       .single()
+
+    // Check if downloads are disabled globally or for this user
+    const { data: downloadSettings } = await supabaseAdmin
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'download_settings')
+      .single()
+
+    const globalDownloadsEnabled = downloadSettings?.value?.globalEnabled !== false
+    const userDownloadsDisabled = profile?.downloads_disabled === true
+    const disabledUsersList = downloadSettings?.value?.disabledUsers || []
+    const isUserInDisabledList = disabledUsersList.includes(user.id)
+
+    // Determine if user can download (only standard and lifetime tiers)
+    // Get user's enrollment tier for download permission
+    const { data: enrollment } = await supabaseAdmin
+      .from('enrollments')
+      .select('tier')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    const userTier = enrollment?.tier || 'starter'
+    const tierAllowsDownload = TIER_HIERARCHY[userTier] >= 2 // standard or lifetime only
+    const canDownload = globalDownloadsEnabled && 
+                        !userDownloadsDisabled && 
+                        !isUserInDisabledList && 
+                        tierAllowsDownload
 
     // Log this access attempt
     await supabaseAdmin.from('download_logs').insert({
       user_id: user.id,
       note_id: noteId,
-      ip_address: req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown'
+      ip_address: req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || 'unknown',
+      user_agent: req.headers.get('user-agent') || 'unknown',
+      file_name: note.title
     })
 
-    console.log(`PDF access granted: user=${user.id}, note=${noteId}`)
+    console.log(`PDF access granted: user=${user.id}, note=${noteId}, canDownload=${canDownload}`)
+
+    // Generate timestamp for watermark
+    const accessTimestamp = new Date().toISOString()
 
     return new Response(
       JSON.stringify({
         signedUrl: signedData.signedUrl,
         expiresIn: 300,
+        canDownload: canDownload,
         watermark: {
+          fullName: profile?.full_name || 'User',
           email: profile?.email || user.email,
-          oderId: user.id.slice(0, 8).toUpperCase()
+          oderId: user.id.slice(0, 8).toUpperCase(),
+          timestamp: accessTimestamp,
+          userId: user.id
         },
         noteTitle: note.title
       }),

@@ -80,6 +80,30 @@ export type Database = {
         }
         Relationships: []
       }
+      business_phases: {
+        Row: {
+          current_phase: number | null
+          id: string
+          phase_name: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          current_phase?: number | null
+          id?: string
+          phase_name?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          current_phase?: number | null
+          id?: string
+          phase_name?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       cmo_payouts: {
         Row: {
           amount: number | null
@@ -143,6 +167,7 @@ export type Database = {
           display_name: string | null
           id: string
           is_active: boolean | null
+          is_head_ops: boolean | null
           referral_code: string | null
           user_id: string
         }
@@ -151,6 +176,7 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_head_ops?: boolean | null
           referral_code?: string | null
           user_id: string
         }
@@ -159,8 +185,33 @@ export type Database = {
           display_name?: string | null
           id?: string
           is_active?: boolean | null
+          is_head_ops?: boolean | null
           referral_code?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      cmo_targets: {
+        Row: {
+          created_at: string | null
+          creators_target: number
+          id: string
+          phase: number
+          users_per_creator_target: number
+        }
+        Insert: {
+          created_at?: string | null
+          creators_target: number
+          id?: string
+          phase: number
+          users_per_creator_target: number
+        }
+        Update: {
+          created_at?: string | null
+          creators_target?: number
+          id?: string
+          phase?: number
+          users_per_creator_target?: number
         }
         Relationships: []
       }
@@ -442,6 +493,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      head_ops_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          request_type: string
+          requester_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          target_id: string | null
+          target_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          request_type: string
+          requester_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          request_type?: string
+          requester_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          target_id?: string | null
+          target_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       join_requests: {
         Row: {
@@ -730,6 +826,7 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           device_fingerprint: string | null
+          downloads_disabled: boolean | null
           email: string | null
           full_name: string | null
           id: string
@@ -744,6 +841,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           device_fingerprint?: string | null
+          downloads_disabled?: boolean | null
           email?: string | null
           full_name?: string | null
           id?: string
@@ -758,6 +856,7 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           device_fingerprint?: string | null
+          downloads_disabled?: boolean | null
           email?: string | null
           full_name?: string | null
           id?: string
@@ -765,6 +864,42 @@ export type Database = {
           max_devices?: number | null
           phone?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_rewards: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_claimed: boolean | null
+          referral_count: number | null
+          unlocked_at: string | null
+          unlocked_tier: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_claimed?: boolean | null
+          referral_count?: number | null
+          unlocked_at?: string | null
+          unlocked_tier?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_claimed?: boolean | null
+          referral_count?: number | null
+          unlocked_at?: string | null
+          unlocked_tier?: string | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []

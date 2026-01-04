@@ -34,6 +34,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isCMO: boolean;
   isCreator: boolean;
+  isHeadOps: boolean;
   signUp: (email: string, password: string, accessCode: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -52,6 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [userSubjects, setUserSubjects] = useState<UserSubjects | null>(null);
   const [pendingJoinRequest, setPendingJoinRequest] = useState<PendingJoinRequest | null>(null);
+  const [isHeadOps, setIsHeadOps] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const lastUserIdRef = useRef<string | null>(null);
 
@@ -95,6 +97,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setRoles((rolesData ?? []).map((r) => r.role as AppRole));
       }
+
+      // Check if user is Head of Ops (via cmo_profiles.is_head_ops flag)
+      const { data: cmoProfile } = await supabase
+        .from('cmo_profiles')
+        .select('is_head_ops')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      setIsHeadOps(cmoProfile?.is_head_ops === true);
 
       // Fetch active enrollment
       const { data: enrollmentData, error: enrollmentError } = await supabase
@@ -152,6 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEnrollment(null);
         setUserSubjects(null);
         setPendingJoinRequest(null);
+        setIsHeadOps(false);
       }
     }
   };
@@ -193,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEnrollment(null);
         setUserSubjects(null);
         setPendingJoinRequest(null);
+        setIsHeadOps(false);
         setIsLoading(false);
         return;
       }
@@ -210,6 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEnrollment(null);
         setUserSubjects(null);
         setPendingJoinRequest(null);
+        setIsHeadOps(false);
         setIsLoading(false);
         return;
       }
@@ -221,6 +235,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEnrollment(null);
         setUserSubjects(null);
         setPendingJoinRequest(null);
+        setIsHeadOps(false);
         setIsLoading(true);
         fetchUserData(nextUserId).finally(() => setIsLoading(false));
       } else if (event === 'USER_UPDATED') {
@@ -426,6 +441,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAdmin,
         isCMO,
         isCreator,
+        isHeadOps,
         signUp,
         signIn,
         signOut,

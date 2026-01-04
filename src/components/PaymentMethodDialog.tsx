@@ -96,10 +96,48 @@ const PaymentMethodDialog = ({
   };
 
   const handleCardPayment = async () => {
+    // CRITICAL: Close dialog IMMEDIATELY before anything else
+    onOpenChange(false);
     setIsLoading(true);
 
+    // Helper to notify admin via Telegram
+    const notifyPaymentFailure = async (reason: string) => {
+      try {
+        await supabase.functions.invoke('send-telegram-notification', {
+          body: {
+            type: 'payhere_popup_failed',
+            message: `PayHere payment failed to initiate`,
+            data: {
+              user: userEmail || 'Unknown',
+              tier: tierName,
+              amount: amount,
+              reason: reason,
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Failed to send Telegram notification:', e);
+      }
+    };
+
     try {
-      await loadPayHereScript();
+      // Load PayHere with retry logic
+      try {
+        await loadPayHereScript();
+      } catch (loadError) {
+        console.log('First PayHere load attempt failed, retrying...');
+        // Wait 1 second and retry
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          await loadPayHereScript();
+        } catch (retryError) {
+          // Both attempts failed - notify admin and show error
+          await notifyPaymentFailure('PayHere SDK failed to load after retry');
+          toast.error("Payment system unavailable. Please refresh the page and try again.");
+          setIsLoading(false);
+          return;
+        }
+      }
 
       const orderId = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const nameParts = (userName || "Customer").split(" ");
@@ -134,7 +172,10 @@ const PaymentMethodDialog = ({
         }
       );
 
-      if (error) throw error;
+      if (error) {
+        await notifyPaymentFailure(`Hash generation failed: ${error.message}`);
+        throw error;
+      }
 
       const notifyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/payhere-checkout/notify`;
       const returnUrl = isNewUser 
@@ -163,12 +204,10 @@ const PaymentMethodDialog = ({
           
           // Don't show success message - payment status is unknown at this point
           toast.info("Processing payment... Please wait while we verify.");
-          onOpenChange(false);
           navigate('/paid-signup');
         } else {
           // For upgrades, redirect and let the page verify
           toast.info("Processing payment... Please wait while we verify.");
-          onOpenChange(false);
           window.location.href = `${returnUrl}&orderId=${completedOrderId}`;
         }
       };
@@ -179,8 +218,9 @@ const PaymentMethodDialog = ({
         setIsLoading(false);
       };
 
-      window.payhere.onError = (error: string) => {
+      window.payhere.onError = async (error: string) => {
         console.error("PayHere SDK error:", error);
+        await notifyPaymentFailure(`PayHere SDK error: ${error}`);
         toast.error("Payment failed. Please try again.");
         setIsLoading(false);
       };

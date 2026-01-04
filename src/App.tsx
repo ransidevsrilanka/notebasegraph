@@ -27,6 +27,7 @@ import AwaitingPayment from "./pages/AwaitingPayment";
 import BankSignup from "./pages/BankSignup";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
 import CMODashboard from "./pages/cmo/CMODashboard";
+import HeadOpsDashboard from "./pages/headops/HeadOpsDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AccessCodes from "./pages/admin/AccessCodes";
 import Enrollments from "./pages/admin/Enrollments";
@@ -102,6 +103,13 @@ const App = () => (
             <Route path="/cmo/dashboard" element={
               <ProtectedRoute requireCMO>
                 <CMODashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Head of Ops Route */}
+            <Route path="/headops/dashboard" element={
+              <ProtectedRoute requireCMO>
+                <HeadOpsDashboard />
               </ProtectedRoute>
             } />
             

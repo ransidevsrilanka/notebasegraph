@@ -14,8 +14,11 @@ GlobalWorkerOptions.workerSrc = pdfjsWorker;
 interface PDFViewerProps {
   url: string;
   watermark?: {
+    fullName?: string;
     email: string;
-    orderId: string;
+    oderId: string;
+    timestamp?: string;
+    userId?: string;
   } | null;
   noteTitle?: string | null;
   currentPage: number;
@@ -304,8 +307,11 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
               {/* Watermark overlay */}
               {watermark && (
                 <PDFWatermark
+                  fullName={watermark.fullName}
                   email={watermark.email}
-                  orderId={watermark.orderId}
+                  oderId={watermark.oderId}
+                  timestamp={watermark.timestamp}
+                  userId={watermark.userId}
                 />
               )}
               
