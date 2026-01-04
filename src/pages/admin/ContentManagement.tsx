@@ -331,7 +331,7 @@ const ContentManagement = () => {
   // Subject List View
   const renderSubjectList = () => (
     <>
-      {/* Add Subject Form */}
+      {/* Add Subject Form - SIMPLIFIED: Only Level (O/L or A/L), no Grade dropdown */}
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus className="w-4 h-4 text-brand" />
@@ -359,13 +359,15 @@ const ContentManagement = () => {
             />
           </div>
 
+          {/* Level Only - Grade is set internally based on level */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Level</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Level (O/L or A/L)</label>
             <select
               value={selectedGradeGroup}
               onChange={(e) => {
                 const group = e.target.value as GradeGroup;
                 setSelectedGradeGroup(group);
+                // Set default grade internally - students in same level share subjects
                 setGrade(GRADE_GROUPS[group].grades[0]);
               }}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
@@ -374,19 +376,9 @@ const ContentManagement = () => {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Grade</label>
-            <select
-              value={grade}
-              onChange={(e) => setGrade(e.target.value as GradeLevel)}
-              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
-            >
-              {GRADE_GROUPS[selectedGradeGroup].grades.map((gradeValue) => (
-                <option key={gradeValue} value={gradeValue}>{GRADE_LABELS[gradeValue]}</option>
-              ))}
-            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Subjects are shared across grades within the same level
+            </p>
           </div>
 
           <div className="md:col-span-2">
