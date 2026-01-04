@@ -331,14 +331,14 @@ const ContentManagement = () => {
   // Subject List View
   const renderSubjectList = () => (
     <>
-      {/* Add Subject Form - SIMPLIFIED: Only Level (O/L or A/L), no Grade dropdown */}
+      {/* Add Subject Form - With Grade dropdown */}
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus className="w-4 h-4 text-brand" />
           Add New Subject
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Subject Name *</label>
             <Input
@@ -359,15 +359,15 @@ const ContentManagement = () => {
             />
           </div>
 
-          {/* Level Only - Grade is set internally based on level */}
+          {/* Level Selection */}
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Level (O/L or A/L)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Level</label>
             <select
               value={selectedGradeGroup}
               onChange={(e) => {
                 const group = e.target.value as GradeGroup;
                 setSelectedGradeGroup(group);
-                // Set default grade internally - students in same level share subjects
+                // Set default grade for the selected level
                 setGrade(GRADE_GROUPS[group].grades[0]);
               }}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
@@ -376,8 +376,22 @@ const ContentManagement = () => {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+          </div>
+
+          {/* Grade Selection - Shows specific grades based on level */}
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Grade</label>
+            <select
+              value={grade}
+              onChange={(e) => setGrade(e.target.value as GradeLevel)}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              {GRADE_GROUPS[selectedGradeGroup].grades.map((gradeValue) => (
+                <option key={gradeValue} value={gradeValue}>{GRADE_LABELS[gradeValue]}</option>
+              ))}
+            </select>
             <p className="text-xs text-muted-foreground mt-1">
-              Subjects are shared across grades within the same level
+              Content will be organized by this grade
             </p>
           </div>
 

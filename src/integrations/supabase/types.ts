@@ -156,6 +156,13 @@ export type Database = {
             foreignKeyName: "cmo_payouts_cmo_id_fkey"
             columns: ["cmo_id"]
             isOneToOne: false
+            referencedRelation: "cmo_performance"
+            referencedColumns: ["cmo_id"]
+          },
+          {
+            foreignKeyName: "cmo_payouts_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
             referencedRelation: "cmo_profiles"
             referencedColumns: ["id"]
           },
@@ -305,6 +312,13 @@ export type Database = {
             foreignKeyName: "creator_payouts_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_content_stats"
+            referencedColumns: ["creator_id"]
+          },
+          {
+            foreignKeyName: "creator_payouts_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -357,6 +371,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "cmo_analytics"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_performance"
+            referencedColumns: ["cmo_id"]
           },
           {
             foreignKeyName: "creator_profiles_cmo_id_fkey"
@@ -731,6 +752,13 @@ export type Database = {
             foreignKeyName: "payment_attributions_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_content_stats"
+            referencedColumns: ["creator_id"]
+          },
+          {
+            foreignKeyName: "payment_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1051,6 +1079,13 @@ export type Database = {
             foreignKeyName: "topics_subject_id_fkey"
             columns: ["subject_id"]
             isOneToOne: false
+            referencedRelation: "content_overview"
+            referencedColumns: ["subject_id"]
+          },
+          {
+            foreignKeyName: "topics_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
             referencedRelation: "subjects"
             referencedColumns: ["id"]
           },
@@ -1150,6 +1185,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "creator_analytics"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_attributions_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "creator_content_stats"
+            referencedColumns: ["creator_id"]
           },
           {
             foreignKeyName: "user_attributions_creator_id_fkey"
@@ -1329,6 +1371,13 @@ export type Database = {
             foreignKeyName: "withdrawal_methods_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_content_stats"
+            referencedColumns: ["creator_id"]
+          },
+          {
+            foreignKeyName: "withdrawal_methods_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1401,6 +1450,13 @@ export type Database = {
             foreignKeyName: "withdrawal_requests_creator_id_fkey"
             columns: ["creator_id"]
             isOneToOne: false
+            referencedRelation: "creator_content_stats"
+            referencedColumns: ["creator_id"]
+          },
+          {
+            foreignKeyName: "withdrawal_requests_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
             referencedRelation: "creator_profiles"
             referencedColumns: ["id"]
           },
@@ -1460,6 +1516,34 @@ export type Database = {
         }
         Relationships: []
       }
+      cmo_performance: {
+        Row: {
+          cmo_id: string | null
+          creators_count: number | null
+          display_name: string | null
+          is_active: boolean | null
+          is_head_ops: boolean | null
+          monthly_paid_users: number | null
+          referral_code: string | null
+          total_paid_users: number | null
+          total_revenue_generated: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
+      content_overview: {
+        Row: {
+          grade: string | null
+          is_active: boolean | null
+          medium: string | null
+          note_count: number | null
+          stream: string | null
+          subject_id: string | null
+          subject_name: string | null
+          topic_count: number | null
+        }
+        Relationships: []
+      }
       creator_analytics: {
         Row: {
           available_balance: number | null
@@ -1491,10 +1575,65 @@ export type Database = {
             foreignKeyName: "creator_profiles_cmo_id_fkey"
             columns: ["cmo_id"]
             isOneToOne: false
+            referencedRelation: "cmo_performance"
+            referencedColumns: ["cmo_id"]
+          },
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
             referencedRelation: "cmo_profiles"
             referencedColumns: ["id"]
           },
         ]
+      }
+      creator_content_stats: {
+        Row: {
+          available_balance: number | null
+          cmo_id: string | null
+          creator_id: string | null
+          display_name: string | null
+          is_active: boolean | null
+          lifetime_users: number | null
+          monthly_users: number | null
+          notes_uploaded: number | null
+          referral_code: string | null
+          total_referrals: number | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_analytics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_performance"
+            referencedColumns: ["cmo_id"]
+          },
+          {
+            foreignKeyName: "creator_profiles_cmo_id_fkey"
+            columns: ["cmo_id"]
+            isOneToOne: false
+            referencedRelation: "cmo_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_financial_summary: {
+        Row: {
+          non_referral_revenue: number | null
+          referral_revenue: number | null
+          this_month_revenue: number | null
+          total_paid_users: number | null
+          total_revenue: number | null
+        }
+        Relationships: []
       }
       platform_stats: {
         Row: {
