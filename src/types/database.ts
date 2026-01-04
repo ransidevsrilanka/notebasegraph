@@ -143,11 +143,11 @@ export const GRADE_LABELS: Record<GradeLevel, string> = {
 };
 
 export const STREAM_LABELS: Record<StreamType, string> = {
-  maths: 'Mathematics',
-  biology: 'Biology',
-  commerce: 'Commerce',
-  arts: 'Arts',
-  technology: 'Technology',
+  maths: 'Physical Science Stream',
+  biology: 'Biological Science Stream',
+  commerce: 'Commerce Stream',
+  arts: 'Arts Stream',
+  technology: 'Technology Stream',
 };
 
 export const MEDIUM_LABELS: Record<MediumType, string> = {

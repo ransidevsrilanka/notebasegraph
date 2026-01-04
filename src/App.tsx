@@ -41,6 +41,7 @@ import Payments from "./pages/admin/Payments";
 import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
 import PaymentReconciliation from "./pages/admin/PaymentReconciliation";
 import PaymentSettings from "./pages/admin/PaymentSettings";
+import HeadOpsRequests from "./pages/admin/HeadOpsRequests";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -99,16 +100,16 @@ const App = () => (
               </ProtectedRoute>
             } />
             
-            {/* CMO Routes */}
+            {/* CMO Routes - Block Head of Ops from accessing regular CMO dashboard */}
             <Route path="/cmo/dashboard" element={
-              <ProtectedRoute requireCMO>
+              <ProtectedRoute requireCMO blockHeadOps>
                 <CMODashboard />
               </ProtectedRoute>
             } />
             
-            {/* Head of Ops Route */}
+            {/* Head of Ops Route - Exclusive access */}
             <Route path="/headops/dashboard" element={
-              <ProtectedRoute requireCMO>
+              <ProtectedRoute requireHeadOps>
                 <HeadOpsDashboard />
               </ProtectedRoute>
             } />
@@ -184,6 +185,11 @@ const App = () => (
             <Route path="/admin/payment-settings" element={
               <ProtectedRoute requireAdmin>
                 <PaymentSettings />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/headops-requests" element={
+              <ProtectedRoute requireAdmin>
+                <HeadOpsRequests />
               </ProtectedRoute>
             } />
             

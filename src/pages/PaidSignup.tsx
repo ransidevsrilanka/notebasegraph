@@ -874,7 +874,7 @@ const PaidSignup = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Validation feedback */}
+                    {/* Validation errors */}
                     {subjectValidation.errors.length > 0 && (
                       <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-3 text-sm text-destructive">
                         {subjectValidation.errors.map((err, i) => (
@@ -883,8 +883,17 @@ const PaidSignup = () => {
                       </div>
                     )}
 
+                    {/* Validation warnings */}
+                    {subjectValidation.warnings.length > 0 && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3 text-sm text-yellow-600 dark:text-yellow-400">
+                        {subjectValidation.warnings.map((warn, i) => (
+                          <p key={i}>⚠️ {warn}</p>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Subject lists by basket */}
-                    {['mandatory', 'core', 'optional', 'religion', 'language', 'aesthetic'].map((basketKey) => {
+                    {['mandatory', 'core', 'optional', 'restricted', 'religion', 'language', 'aesthetic'].map((basketKey) => {
                       const subjects = subjectsByBasket[basketKey];
                       if (!subjects || subjects.length === 0) return null;
 
@@ -892,12 +901,16 @@ const PaidSignup = () => {
                         <div key={basketKey}>
                           <Label className="text-xs uppercase tracking-wider text-muted-foreground mb-2 block">
                             {BASKET_LABELS[basketKey] || basketKey}
+                            {basketKey === 'restricted' && (
+                              <span className="text-yellow-500 ml-2 text-[10px]">(Limited recognition)</span>
+                            )}
                           </Label>
                           <div className="space-y-2">
                             {subjects.map((subject) => {
                               const isSelected = selectedSubjects.includes(subject.subject_name);
                               const isMandatory = subject.is_mandatory;
                               const isDisabled = selectedSubjects.length >= 3 && !isSelected;
+                              const isRestricted = subject.basket === 'restricted';
 
                               return (
                                 <label
@@ -905,7 +918,7 @@ const PaidSignup = () => {
                                   className={`
                                     flex items-center gap-3 p-3 rounded-lg border transition-all
                                     ${isSelected 
-                                      ? 'bg-brand/10 border-brand/40' 
+                                      ? isRestricted ? 'bg-yellow-500/10 border-yellow-500/40' : 'bg-brand/10 border-brand/40'
                                       : 'bg-secondary/50 border-border'}
                                     ${isMandatory ? 'cursor-default' : isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-muted-foreground/30'}
                                   `}
@@ -927,6 +940,11 @@ const PaidSignup = () => {
                                   {isMandatory && (
                                     <span className="text-xs bg-brand/20 text-brand px-2 py-0.5 rounded-full">
                                       Required
+                                    </span>
+                                  )}
+                                  {isRestricted && !isMandatory && (
+                                    <span className="text-xs bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-2 py-0.5 rounded-full">
+                                      Restricted
                                     </span>
                                   )}
                                 </label>
