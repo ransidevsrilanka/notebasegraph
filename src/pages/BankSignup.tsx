@@ -27,7 +27,9 @@ import {
   STREAM_LABELS,
   MEDIUM_LABELS,
   TIER_LABELS,
+  GRADE_GROUPS,
   StreamType,
+  GradeLevel,
 } from "@/types/database";
 import { useBranding } from "@/hooks/useBranding";
 import { useAuth } from "@/contexts/AuthContext";
@@ -224,7 +226,7 @@ const BankSignup = () => {
     }
     
     // For O/L, skip stream and subjects
-    if (selectedGrade === 'ol') {
+    if (selectedGrade.startsWith('ol_')) {
       handleFinalSubmit();
       return;
     }
@@ -514,10 +516,15 @@ const BankSignup = () => {
                   <div className="space-y-3">
                     <Label>Grade Level</Label>
                     <RadioGroup value={selectedGrade} onValueChange={setSelectedGrade}>
-                      {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                        <div key={value} className="flex items-center space-x-2">
-                          <RadioGroupItem value={value} id={value} />
-                          <Label htmlFor={value} className="cursor-pointer">{label}</Label>
+                      {Object.entries(GRADE_GROUPS).map(([groupKey, { label: groupLabel, grades }]) => (
+                        <div key={groupKey} className="space-y-2">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{groupLabel}</p>
+                          {grades.map((gradeValue) => (
+                            <div key={gradeValue} className="flex items-center space-x-2 ml-2">
+                              <RadioGroupItem value={gradeValue} id={gradeValue} />
+                              <Label htmlFor={gradeValue} className="cursor-pointer">{GRADE_LABELS[gradeValue]}</Label>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </RadioGroup>

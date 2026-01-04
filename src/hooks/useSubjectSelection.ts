@@ -39,7 +39,7 @@ export function useSubjectSelection() {
 
   const stream = enrollment?.stream as StreamType | undefined;
   const grade = enrollment?.grade;
-  const isOL = grade === 'ol';
+  const isOL = grade === 'ol_grade10' || grade === 'ol_grade11';
 
   // Fetch stream subjects and user's existing selection
   useEffect(() => {

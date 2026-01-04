@@ -18,6 +18,7 @@ export default {
         body: ["Plus Jakarta Sans", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
         accent: ["Inter", "sans-serif"],
+        sinhala: ["Noto Sans Sinhala", "Iskoola Pota", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
