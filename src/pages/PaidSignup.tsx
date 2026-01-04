@@ -30,7 +30,9 @@ import {
   STREAM_LABELS,
   MEDIUM_LABELS,
   TIER_LABELS,
+  GRADE_GROUPS,
   StreamType,
+  GradeLevel,
 } from "@/types/database";
 import { useBranding } from "@/hooks/useBranding";
 import { useAuth } from "@/contexts/AuthContext";
@@ -293,7 +295,7 @@ const PaidSignup = () => {
     }
     
     // For O/L, skip stream and subjects
-    if (selectedGrade === 'ol') {
+    if (selectedGrade.startsWith('ol_')) {
       handleFinalSubmit();
       return;
     }
@@ -754,18 +756,23 @@ const PaidSignup = () => {
                       Grade Level
                     </Label>
                     <RadioGroup value={selectedGrade} onValueChange={setSelectedGrade}>
-                      {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                        <label
-                          key={value}
-                          className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
-                            selectedGrade === value 
-                              ? 'bg-brand/10 border-brand/40' 
-                              : 'bg-secondary/50 border-border hover:border-muted-foreground/30'
-                          }`}
-                        >
-                          <RadioGroupItem value={value} />
-                          <span className="font-medium">{label}</span>
-                        </label>
+                      {Object.entries(GRADE_GROUPS).map(([groupKey, { label: groupLabel, grades }]) => (
+                        <div key={groupKey} className="space-y-2 mb-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{groupLabel}</p>
+                          {grades.map((gradeValue) => (
+                            <label
+                              key={gradeValue}
+                              className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                                selectedGrade === gradeValue 
+                                  ? 'bg-brand/10 border-brand/40' 
+                                  : 'bg-secondary/50 border-border hover:border-muted-foreground/30'
+                              }`}
+                            >
+                              <RadioGroupItem value={gradeValue} />
+                              <span className="font-medium">{GRADE_LABELS[gradeValue]}</span>
+                            </label>
+                          ))}
+                        </div>
                       ))}
                     </RadioGroup>
                   </div>

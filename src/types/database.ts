@@ -1,6 +1,20 @@
-export type GradeLevel = 'ol' | 'al_grade12' | 'al_grade13';
+export type GradeLevel = 'ol_grade10' | 'ol_grade11' | 'al_grade12' | 'al_grade13';
 export type StreamType = 'maths' | 'biology' | 'commerce' | 'arts' | 'technology';
 export type MediumType = 'english' | 'sinhala';
+
+// Grade groupings for admin panel
+export type GradeGroup = 'ol' | 'al';
+
+export const GRADE_GROUPS: Record<GradeGroup, { label: string; grades: GradeLevel[] }> = {
+  ol: {
+    label: 'O/L (Ordinary Level)',
+    grades: ['ol_grade10', 'ol_grade11'],
+  },
+  al: {
+    label: 'A/L (Advanced Level)',
+    grades: ['al_grade12', 'al_grade13'],
+  },
+};
 export type TierType = 'starter' | 'standard' | 'lifetime';
 export type AppRole = 'super_admin' | 'content_admin' | 'support_admin' | 'student' | 'cmo' | 'creator';
 export type CodeStatus = 'active' | 'used' | 'expired' | 'revoked';
@@ -122,9 +136,10 @@ export interface BrandingSettings {
 }
 
 export const GRADE_LABELS: Record<GradeLevel, string> = {
-  ol: 'O/L (Grade 11)',
-  al_grade12: 'A/L Grade 12',
-  al_grade13: 'A/L Grade 13',
+  ol_grade10: 'Grade 10',
+  ol_grade11: 'Grade 11',
+  al_grade12: 'Grade 12',
+  al_grade13: 'Grade 13',
 };
 
 export const STREAM_LABELS: Record<StreamType, string> = {

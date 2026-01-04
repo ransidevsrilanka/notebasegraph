@@ -16,8 +16,8 @@ import {
   X
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType } from '@/types/database';
-import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
+import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType, GradeGroup } from '@/types/database';
+import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS, GRADE_GROUPS } from '@/types/database';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 
@@ -35,7 +35,8 @@ const ContentManagement = () => {
   // Subject form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [grade, setGrade] = useState<GradeLevel>('al_grade13');
+  const [grade, setGrade] = useState<GradeLevel>('al_grade12');
+  const [selectedGradeGroup, setSelectedGradeGroup] = useState<GradeGroup>('al');
   const [selectedStreams, setSelectedStreams] = useState<StreamType[]>(['maths']);
   const [medium, setMedium] = useState<MediumType>('english');
 
@@ -359,14 +360,31 @@ const ContentManagement = () => {
           </div>
 
           <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Level</label>
+            <select
+              value={selectedGradeGroup}
+              onChange={(e) => {
+                const group = e.target.value as GradeGroup;
+                setSelectedGradeGroup(group);
+                setGrade(GRADE_GROUPS[group].grades[0]);
+              }}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              {Object.entries(GRADE_GROUPS).map(([value, { label }]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
             <label className="text-xs text-muted-foreground mb-1 block">Grade</label>
             <select
               value={grade}
               onChange={(e) => setGrade(e.target.value as GradeLevel)}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
             >
-              {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
+              {GRADE_GROUPS[selectedGradeGroup].grades.map((gradeValue) => (
+                <option key={gradeValue} value={gradeValue}>{GRADE_LABELS[gradeValue]}</option>
               ))}
             </select>
           </div>
@@ -440,56 +458,73 @@ const ContentManagement = () => {
         ) : subjects.length === 0 ? (
           <div className="p-8 text-center text-muted-foreground text-sm">No subjects added yet</div>
         ) : (
-          <div className="divide-y divide-border">
-            {subjects.map((subject) => (
-              <div key={subject.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                <button
-                  onClick={() => setSelectedSubject(subject)}
-                  className="flex-1 text-left"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
-                      <BookOpen className="w-5 h-5 text-brand" />
-                    </div>
-                    <div>
-                      <p className="text-foreground font-medium text-sm">{subject.name}</p>
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <span className="text-muted-foreground text-xs">
-                          {GRADE_LABELS[subject.grade]} • {MEDIUM_LABELS[subject.medium]}
-                        </span>
-                        <span className="text-muted-foreground text-xs">•</span>
-                        {(subject.streams || [subject.stream]).map((s) => (
-                          <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">
-                            {STREAM_LABELS[s]}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
+          <div>
+            {/* Group by O/L and A/L */}
+            {Object.entries(GRADE_GROUPS).map(([groupKey, { label, grades }]) => {
+              const groupSubjects = subjects.filter(s => grades.includes(s.grade as GradeLevel));
+              if (groupSubjects.length === 0) return null;
+              
+              return (
+                <div key={groupKey}>
+                  <div className="px-4 py-2 bg-muted/50 border-b border-border">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</h3>
                   </div>
-                </button>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleSubjectActive(subject.id, subject.is_active)}
-                    className={`px-2 py-1 rounded text-xs font-medium ${
-                      subject.is_active ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'
-                    }`}
-                  >
-                    {subject.is_active ? 'Active' : 'Inactive'}
-                  </button>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedSubject(subject)}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteSubject(subject.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="divide-y divide-border">
+                    {groupSubjects.map((subject) => (
+                      <div key={subject.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
+                        <button
+                          onClick={() => setSelectedSubject(subject)}
+                          className="flex-1 text-left"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                              <BookOpen className="w-5 h-5 text-brand" />
+                            </div>
+                            <div>
+                              <p className={`text-foreground font-medium text-sm ${subject.medium === 'sinhala' ? 'font-sinhala' : ''}`}>
+                                {subject.name}
+                              </p>
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="text-muted-foreground text-xs">
+                                  {GRADE_LABELS[subject.grade]} • {MEDIUM_LABELS[subject.medium]}
+                                </span>
+                                <span className="text-muted-foreground text-xs">•</span>
+                                {(subject.streams || [subject.stream]).map((s) => (
+                                  <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                    {STREAM_LABELS[s]}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleSubjectActive(subject.id, subject.is_active)}
+                            className={`px-2 py-1 rounded text-xs font-medium ${
+                              subject.is_active ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'
+                            }`}
+                          >
+                            {subject.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedSubject(subject)}>
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteSubject(subject.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
