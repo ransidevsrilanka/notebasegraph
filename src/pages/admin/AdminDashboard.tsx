@@ -38,7 +38,10 @@ import {
   Target,
   FileCheck,
   Search,
+  HardDrive,
+  Database,
 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
@@ -75,6 +78,104 @@ interface TopCreator {
   lifetime_paid_users: number;
   revenue: number;
 }
+
+// Storage Usage Component
+const StorageUsageCard = () => {
+  const [storageUsed, setStorageUsed] = useState(0);
+  const [fileCount, setFileCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStorageStats = async () => {
+      try {
+        // List files in the notes bucket to calculate usage
+        const { data: notesFiles, error: notesError } = await supabase.storage
+          .from('notes')
+          .list('', { limit: 1000 });
+
+        // List files in the content bucket
+        const { data: contentFiles, error: contentError } = await supabase.storage
+          .from('content')
+          .list('', { limit: 1000 });
+
+        let totalSize = 0;
+        let totalFiles = 0;
+
+        if (notesFiles && !notesError) {
+          totalFiles += notesFiles.length;
+          // Note: Supabase doesn't return file sizes in list, we estimate based on typical PDF sizes
+          totalSize += notesFiles.length * 5; // Assume ~5MB per file
+        }
+
+        if (contentFiles && !contentError) {
+          totalFiles += contentFiles.length;
+          totalSize += contentFiles.length * 5;
+        }
+
+        setStorageUsed(totalSize);
+        setFileCount(totalFiles);
+      } catch (error) {
+        console.error('Error fetching storage stats:', error);
+      }
+      setIsLoading(false);
+    };
+
+    fetchStorageStats();
+  }, []);
+
+  // Supabase free tier is 1GB, paid plans vary
+  const estimatedQuota = 1024; // 1GB in MB as default estimate
+  const usagePercent = Math.min((storageUsed / estimatedQuota) * 100, 100);
+
+  return (
+    <div className="glass-card p-6">
+      <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+        <HardDrive className="w-5 h-5 text-purple-400" />
+        Storage Usage (Estimated)
+      </h3>
+      
+      {isLoading ? (
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-muted rounded"></div>
+          <div className="h-8 bg-muted rounded"></div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-3xl font-bold text-foreground">{storageUsed} MB</p>
+              <p className="text-xs text-muted-foreground">of ~{estimatedQuota} MB estimated</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-medium text-foreground">{fileCount}</p>
+              <p className="text-xs text-muted-foreground">files stored</p>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+            <Progress value={usagePercent} className="h-3" />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{usagePercent.toFixed(1)}% used</span>
+              <span>{estimatedQuota - storageUsed} MB remaining</span>
+            </div>
+          </div>
+
+          {usagePercent > 80 && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mt-3">
+              <p className="text-xs text-amber-400">
+                ⚠️ Storage is running low. Consider upgrading or using external storage like Cloudflare R2.
+              </p>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-2">
+            💡 For large files (50MB+), consider <strong>Cloudflare R2</strong> for cost-effective storage.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
@@ -649,7 +750,38 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Quick Actions */}
+        {/* Storage Usage */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <StorageUsageCard />
+          
+          {/* Quick Stats Summary */}
+          <div className="glass-card p-6">
+            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Database className="w-5 h-5 text-blue-400" />
+              Platform Summary
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-secondary/50 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground">Total Subjects</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalSubjects}</p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground">Access Codes</p>
+                <p className="text-2xl font-bold text-foreground">{stats.activeCodes}/{stats.totalCodes}</p>
+                <p className="text-xs text-muted-foreground">active/total</p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground">Total Creators</p>
+                <p className="text-2xl font-bold text-foreground">{stats.totalCreators}</p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-4">
+                <p className="text-xs text-muted-foreground">Active Enrollments</p>
+                <p className="text-2xl font-bold text-foreground">{stats.activeEnrollments}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <h2 className="font-display text-lg font-semibold text-foreground mb-4">
           Quick Actions
         </h2>

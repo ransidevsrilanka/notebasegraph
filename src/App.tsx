@@ -45,6 +45,7 @@ import PaymentSettings from "./pages/admin/PaymentSettings";
 import HeadOpsRequests from "./pages/admin/HeadOpsRequests";
 import Messages from "./pages/admin/Messages";
 import CommissionSettings from "./pages/admin/CommissionSettings";
+import Security from "./pages/admin/Security";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -208,6 +209,11 @@ const App = () => (
             <Route path="/admin/commission-settings" element={
               <ProtectedRoute requireAdmin>
                 <CommissionSettings />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/security" element={
+              <ProtectedRoute requireAdmin>
+                <Security />
               </ProtectedRoute>
             } />
             
