@@ -13,7 +13,8 @@ import {
   FileText,
   Upload,
   FolderOpen,
-  X
+  X,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType, GradeGroup } from '@/types/database';
@@ -51,6 +52,7 @@ const ContentManagement = () => {
   const [noteFile, setNoteFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [noteUploadRequested, setNoteUploadRequested] = useState(false);
+  const [subjectSearch, setSubjectSearch] = useState('');
 
   const fetchSubjects = async () => {
     setIsLoading(true);
@@ -449,14 +451,33 @@ const ContentManagement = () => {
 
       {/* Subjects List */}
       <div className="glass-card overflow-hidden">
-        <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="p-4 border-b border-border flex items-center justify-between gap-4 flex-wrap">
           <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-brand" />
-            Subjects ({subjects.length})
+            Subjects ({subjects.filter(s => {
+              if (!subjectSearch) return true;
+              const search = subjectSearch.toLowerCase();
+              return (
+                s.name.toLowerCase().includes(search) ||
+                (GRADE_LABELS[s.grade]?.toLowerCase().includes(search) || false) ||
+                (STREAM_LABELS[s.stream]?.toLowerCase().includes(search) || false)
+              );
+            }).length})
           </h2>
-          <Button variant="ghost" size="sm" onClick={fetchSubjects}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search subjects..."
+                value={subjectSearch}
+                onChange={(e) => setSubjectSearch(e.target.value)}
+                className="pl-10 w-48 bg-secondary border-border h-9"
+              />
+            </div>
+            <Button variant="ghost" size="sm" onClick={fetchSubjects}>
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -467,7 +488,17 @@ const ContentManagement = () => {
           <div>
             {/* Group by O/L and A/L */}
             {Object.entries(GRADE_GROUPS).map(([groupKey, { label, grades }]) => {
-              const groupSubjects = subjects.filter(s => grades.includes(s.grade as GradeLevel));
+              const allGroupSubjects = subjects.filter(s => grades.includes(s.grade as GradeLevel));
+              // Apply search filter
+              const groupSubjects = allGroupSubjects.filter(s => {
+                if (!subjectSearch) return true;
+                const search = subjectSearch.toLowerCase();
+                return (
+                  s.name.toLowerCase().includes(search) ||
+                  (GRADE_LABELS[s.grade]?.toLowerCase().includes(search) || false) ||
+                  (STREAM_LABELS[s.stream]?.toLowerCase().includes(search) || false)
+                );
+              });
               if (groupSubjects.length === 0) return null;
               
               return (
