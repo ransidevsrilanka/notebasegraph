@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,8 @@ import {
   Unlock,
   Eye,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
@@ -49,6 +51,7 @@ const Enrollments = () => {
   const [enrollments, setEnrollments] = useState<EnrollmentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [unlockDialog, setUnlockDialog] = useState<{ open: boolean; enrollment: EnrollmentWithProfile | null }>({
     open: false,
     enrollment: null,
@@ -155,6 +158,25 @@ const Enrollments = () => {
     setExpandedRow(expandedRow === id ? null : id);
   };
 
+  // Filter enrollments based on search query
+  const filteredEnrollments = enrollments.filter(enrollment => {
+    if (!searchQuery) return true;
+    const search = searchQuery.toLowerCase();
+    const name = enrollment.profiles?.full_name?.toLowerCase() || '';
+    const email = enrollment.profiles?.email?.toLowerCase() || '';
+    const subject1 = enrollment.user_subjects?.subject_1?.toLowerCase() || '';
+    const subject2 = enrollment.user_subjects?.subject_2?.toLowerCase() || '';
+    const subject3 = enrollment.user_subjects?.subject_3?.toLowerCase() || '';
+    
+    return (
+      name.includes(search) ||
+      email.includes(search) ||
+      subject1.includes(search) ||
+      subject2.includes(search) ||
+      subject3.includes(search)
+    );
+  });
+
   return (
     <main className="min-h-screen bg-background dashboard-theme">
       <header className="bg-vault-surface border-b border-border">
@@ -173,20 +195,33 @@ const Enrollments = () => {
 
       <div className="container mx-auto px-4 py-8">
         <div className="glass-card overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="p-4 border-b border-border flex items-center justify-between gap-4 flex-wrap">
             <h2 className="font-semibold text-foreground flex items-center gap-2">
               <Users className="w-5 h-5 text-gold" />
-              All Enrollments ({enrollments.length})
+              All Enrollments ({filteredEnrollments.length})
             </h2>
-            <Button variant="ghost" size="sm" onClick={fetchEnrollments}>
-              <RefreshCw className="w-4 h-4" />
-            </Button>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, email, subject..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-64 bg-secondary border-border"
+                />
+              </div>
+              <Button variant="ghost" size="sm" onClick={fetchEnrollments}>
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading...</div>
-          ) : enrollments.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">No enrollments yet</div>
+          ) : filteredEnrollments.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              {searchQuery ? 'No enrollments match your search' : 'No enrollments yet'}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -204,7 +239,7 @@ const Enrollments = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {enrollments.map((enrollment) => {
+                  {filteredEnrollments.map((enrollment) => {
                     const expiresAt = enrollment.expires_at ? new Date(enrollment.expires_at) : null;
                     const isExpired = expiresAt && expiresAt < new Date();
                     const hasSubjects = !!enrollment.user_subjects;

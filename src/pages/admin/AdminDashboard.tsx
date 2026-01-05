@@ -35,6 +35,9 @@ import {
   CreditCard,
   Building2,
   Settings,
+  Target,
+  FileCheck,
+  Search,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
@@ -52,6 +55,7 @@ interface Stats {
   pendingUpgrades: number;
   pendingJoinRequests: number;
   pendingWithdrawals: number;
+  pendingHeadOpsRequests: number;
   totalRevenue: number;
   thisMonthRevenue: number;
   lastMonthRevenue: number;
@@ -60,6 +64,8 @@ interface Stats {
   lifetimeCount: number;
   cardPayments: number;
   bankPayments: number;
+  currentPhase: number;
+  phaseName: string;
 }
 
 interface TopCreator {
@@ -82,6 +88,7 @@ const AdminDashboard = () => {
     pendingUpgrades: 0,
     pendingJoinRequests: 0,
     pendingWithdrawals: 0,
+    pendingHeadOpsRequests: 0,
     totalRevenue: 0,
     thisMonthRevenue: 0,
     lastMonthRevenue: 0,
@@ -90,6 +97,8 @@ const AdminDashboard = () => {
     lifetimeCount: 0,
     cardPayments: 0,
     bankPayments: 0,
+    currentPhase: 1,
+    phaseName: 'Phase 1',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -117,8 +126,10 @@ const AdminDashboard = () => {
         { count: pendingUpgrades },
         { count: pendingJoinRequests },
         { count: pendingWithdrawals },
+        { count: pendingHeadOpsRequests },
         { count: totalCreators },
         { data: enrollmentTiers },
+        { data: businessPhase },
       ] = await Promise.all([
         supabase.from('enrollments').select('user_id').eq('is_active', true),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -128,8 +139,10 @@ const AdminDashboard = () => {
         supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('head_ops_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('tier').eq('is_active', true),
+        supabase.from('business_phases').select('*').limit(1).maybeSingle(),
       ]);
 
       // Count students = active enrollments excluding non-student roles
@@ -251,6 +264,7 @@ const AdminDashboard = () => {
         pendingUpgrades: pendingUpgrades || 0,
         pendingJoinRequests: pendingJoinRequests || 0,
         pendingWithdrawals: pendingWithdrawals || 0,
+        pendingHeadOpsRequests: pendingHeadOpsRequests || 0,
         totalRevenue,
         thisMonthRevenue,
         lastMonthRevenue,
@@ -259,6 +273,8 @@ const AdminDashboard = () => {
         lifetimeCount,
         cardPayments,
         bankPayments,
+        currentPhase: businessPhase?.current_phase || 1,
+        phaseName: businessPhase?.phase_name || 'Phase 1',
       });
 
     } catch (error) {
@@ -371,6 +387,7 @@ const AdminDashboard = () => {
 
   const menuItems = [
     { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: stats.pendingJoinRequests },
+    { label: 'Head of Ops Requests', href: '/admin/headops-requests', icon: FileCheck, description: 'Review operational requests from Head of Ops', badge: stats.pendingHeadOpsRequests },
     { label: 'View Payments', href: '/admin/payments', icon: DollarSign, description: 'All card & bank payments', badge: 0 },
     { label: 'Payment Settings', href: '/admin/payment-settings', icon: Settings, description: 'Test/Live mode & PayHere config', badge: 0 },
     { label: 'Payment Reconciliation', href: '/admin/reconciliation', icon: GitCompare, description: 'Fix missing payment attributions', badge: 0 },
@@ -385,7 +402,7 @@ const AdminDashboard = () => {
     { label: 'Security & Abuse', href: '/admin/security', icon: Shield, description: 'Monitor suspicious activity', badge: 0 },
   ];
 
-  const pendingTotal = stats.pendingJoinRequests + stats.pendingUpgrades + stats.pendingWithdrawals;
+  const pendingTotal = stats.pendingJoinRequests + stats.pendingUpgrades + stats.pendingWithdrawals + stats.pendingHeadOpsRequests;
 
   return (
     <main className="min-h-screen bg-background dashboard-theme">
@@ -441,10 +458,12 @@ const AdminDashboard = () => {
                   <p className="font-medium text-foreground">{pendingTotal} Pending Actions</p>
                   <p className="text-xs text-muted-foreground">
                     {stats.pendingJoinRequests > 0 && `${stats.pendingJoinRequests} join requests`}
-                    {stats.pendingJoinRequests > 0 && stats.pendingUpgrades > 0 && ', '}
+                    {stats.pendingJoinRequests > 0 && (stats.pendingUpgrades > 0 || stats.pendingWithdrawals > 0 || stats.pendingHeadOpsRequests > 0) && ', '}
                     {stats.pendingUpgrades > 0 && `${stats.pendingUpgrades} upgrades`}
-                    {(stats.pendingJoinRequests > 0 || stats.pendingUpgrades > 0) && stats.pendingWithdrawals > 0 && ', '}
+                    {stats.pendingUpgrades > 0 && (stats.pendingWithdrawals > 0 || stats.pendingHeadOpsRequests > 0) && ', '}
                     {stats.pendingWithdrawals > 0 && `${stats.pendingWithdrawals} withdrawals`}
+                    {stats.pendingWithdrawals > 0 && stats.pendingHeadOpsRequests > 0 && ', '}
+                    {stats.pendingHeadOpsRequests > 0 && `${stats.pendingHeadOpsRequests} ops requests`}
                   </p>
                 </div>
               </div>
@@ -453,6 +472,13 @@ const AdminDashboard = () => {
                   <Link to="/admin/join-requests">
                     <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
                       Join Requests
+                    </Button>
+                  </Link>
+                )}
+                {stats.pendingHeadOpsRequests > 0 && (
+                  <Link to="/admin/headops-requests">
+                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
+                      Ops Requests
                     </Button>
                   </Link>
                 )}
@@ -467,6 +493,27 @@ const AdminDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* Business Phase Panel */}
+        <div className="glass-card p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
+                <Target className="w-6 h-6 text-brand" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground text-lg">Business Phase</h3>
+                <p className="text-muted-foreground text-sm">Current: {stats.phaseName}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-brand">Phase {stats.currentPhase}</p>
+                <p className="text-xs text-muted-foreground">{stats.totalCreators} creators active</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

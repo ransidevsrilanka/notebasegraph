@@ -328,6 +328,7 @@ export type Database = {
         Row: {
           available_balance: number | null
           cmo_id: string | null
+          commission_rate: number | null
           created_at: string
           display_name: string | null
           id: string
@@ -341,6 +342,7 @@ export type Database = {
         Insert: {
           available_balance?: number | null
           cmo_id?: string | null
+          commission_rate?: number | null
           created_at?: string
           display_name?: string | null
           id?: string
@@ -354,6 +356,7 @@ export type Database = {
         Update: {
           available_balance?: number | null
           cmo_id?: string | null
+          commission_rate?: number | null
           created_at?: string
           display_name?: string | null
           id?: string
