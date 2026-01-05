@@ -6,13 +6,53 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Commission rates
-const CREATOR_BASE_RATE = 0.08; // 8% for creators under 500 users
-const CREATOR_BONUS_RATE = 0.12; // 12% after 500 users
-const CREATOR_BONUS_THRESHOLD = 500;
+// Default fallback rates (used when DB tiers not available)
+const CREATOR_BASE_RATE = 0.08; // 8% default
+const CREATOR_BONUS_RATE = 0.12; // 12% for high performers
+const CREATOR_BONUS_THRESHOLD = 100; // 100 monthly users for bonus (fallback)
+
+// CMO Commission rates
 const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
 const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
 const CMO_ANNUAL_USER_GOAL = 280; // 280 users annually for bonus
+
+// Helper function to get commission rate from database based on MONTHLY users
+async function getCreatorCommissionRate(supabase: any, creatorId: string): Promise<number> {
+  // Get creator's monthly paid users count
+  const currentMonth = new Date();
+  currentMonth.setDate(1);
+  currentMonth.setHours(0, 0, 0, 0);
+
+  const { count: monthlyCount } = await supabase
+    .from("payment_attributions")
+    .select("*", { count: "exact", head: true })
+    .eq("creator_id", creatorId)
+    .gte("created_at", currentMonth.toISOString());
+
+  const monthlyPaidUsers = monthlyCount || 0;
+
+  // Fetch commission tiers from database
+  const { data: tiers } = await supabase
+    .from("commission_tiers")
+    .select("commission_rate, monthly_user_threshold")
+    .order("tier_level", { ascending: true });
+
+  if (!tiers || tiers.length === 0) {
+    // Fallback to default 8%
+    return 0.08;
+  }
+
+  // Find applicable tier based on monthly users
+  let commissionRate = tiers[0].commission_rate / 100; // Convert percentage to decimal
+  for (const tier of tiers) {
+    if (monthlyPaidUsers >= tier.monthly_user_threshold) {
+      commissionRate = tier.commission_rate / 100;
+    }
+  }
+
+  console.log(`Creator ${creatorId}: ${monthlyPaidUsers} monthly users, commission rate: ${commissionRate * 100}%`);
+  return commissionRate;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

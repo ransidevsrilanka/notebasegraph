@@ -26,6 +26,7 @@ import CreatorSignup from "./pages/CreatorSignup";
 import AwaitingPayment from "./pages/AwaitingPayment";
 import BankSignup from "./pages/BankSignup";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
+import CreatorOnboarding from "./pages/creator/CreatorOnboarding";
 import CMODashboard from "./pages/cmo/CMODashboard";
 import HeadOpsDashboard from "./pages/headops/HeadOpsDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -42,6 +43,8 @@ import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
 import PaymentReconciliation from "./pages/admin/PaymentReconciliation";
 import PaymentSettings from "./pages/admin/PaymentSettings";
 import HeadOpsRequests from "./pages/admin/HeadOpsRequests";
+import Messages from "./pages/admin/Messages";
+import CommissionSettings from "./pages/admin/CommissionSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -115,6 +118,11 @@ const App = () => (
             } />
             
             {/* Creator Routes */}
+            <Route path="/creator/onboarding" element={
+              <ProtectedRoute requireCreator>
+                <CreatorOnboarding />
+              </ProtectedRoute>
+            } />
             <Route path="/creator/dashboard" element={
               <ProtectedRoute requireCreator>
                 <CreatorDashboard />
@@ -190,6 +198,16 @@ const App = () => (
             <Route path="/admin/headops-requests" element={
               <ProtectedRoute requireAdmin>
                 <HeadOpsRequests />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/messages" element={
+              <ProtectedRoute requireAdmin>
+                <Messages />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/commission-settings" element={
+              <ProtectedRoute requireAdmin>
+                <CommissionSettings />
               </ProtectedRoute>
             } />
             

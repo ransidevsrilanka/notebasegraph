@@ -153,11 +153,11 @@ const CreatorSignup = () => {
       }
 
       setSuccess(true);
-      toast.success("Account created! Redirecting to your dashboard...");
+      toast.success("Account created! Starting your onboarding...");
       
-      // Force reload to ensure auth state is fully refreshed
+      // Redirect to onboarding instead of dashboard
       setTimeout(() => {
-        window.location.href = '/creator/dashboard';
+        window.location.href = '/creator/onboarding';
       }, 1500);
 
     } catch (error) {
