@@ -27,28 +27,51 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchSubjects = async () => {
-      if (!enrollment || !userSubjects) return;
+      if (!enrollment) return;
 
-      // Get the user's selected subject names
-      const selectedSubjectNames = [
-        userSubjects.subject_1,
-        userSubjects.subject_2,
-        userSubjects.subject_3,
-      ];
+      const isALevel = enrollment.grade?.startsWith('al_');
+      
+      // For A/L students, filter by selected subjects
+      // For O/L students, show all subjects for their grade/stream/medium
+      if (isALevel && userSubjects) {
+        // Get the user's selected subject names (filter out nulls)
+        const selectedSubjectNames = [
+          userSubjects.subject_1,
+          userSubjects.subject_2,
+          userSubjects.subject_3,
+        ].filter(Boolean);
 
-      // Fetch only the subjects that match the user's selection
-      // Use contains() to check if enrollment.stream is in the subjects.streams array
-      const { data, error } = await supabase
-        .from('subjects')
-        .select('*')
-        .eq('grade', enrollment.grade)
-        .contains('streams', [enrollment.stream])
-        .eq('medium', enrollment.medium)
-        .eq('is_active', true)
-        .in('name', selectedSubjectNames)
-        .order('sort_order');
+        if (selectedSubjectNames.length === 0) {
+          setSubjects([]);
+          setIsLoading(false);
+          return;
+        }
 
-      if (!error && data) setSubjects(data as Subject[]);
+        const { data, error } = await supabase
+          .from('subjects')
+          .select('*')
+          .eq('grade', enrollment.grade)
+          .contains('streams', [enrollment.stream])
+          .eq('medium', enrollment.medium)
+          .eq('is_active', true)
+          .in('name', selectedSubjectNames)
+          .order('sort_order');
+
+        if (!error && data) setSubjects(data as Subject[]);
+      } else {
+        // O/L students - show all subjects for their grade/stream/medium
+        const { data, error } = await supabase
+          .from('subjects')
+          .select('*')
+          .eq('grade', enrollment.grade)
+          .contains('streams', [enrollment.stream])
+          .eq('medium', enrollment.medium)
+          .eq('is_active', true)
+          .order('sort_order');
+
+        if (!error && data) setSubjects(data as Subject[]);
+      }
+      
       setIsLoading(false);
     };
 
