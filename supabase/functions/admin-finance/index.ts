@@ -8,49 +8,76 @@ const corsHeaders = {
 
 // Default fallback rates (used when DB tiers not available)
 const CREATOR_BASE_RATE = 0.08; // 8% default
-const CREATOR_BONUS_RATE = 0.12; // 12% for high performers
-const CREATOR_BONUS_THRESHOLD = 100; // 100 monthly users for bonus (fallback)
+const CREATOR_DEFAULT_RATE = 0.12; // 12% for new creators (30-day protection)
 
 // CMO Commission rates
 const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
 const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
 const CMO_ANNUAL_USER_GOAL = 280; // 280 users annually for bonus
 
-// Helper function to get commission rate from database based on MONTHLY users
+// Helper function to get commission rate from database based on MONTHLY users (rolling 30 days)
+// Includes 30-day tier protection for new creators
 async function getCreatorCommissionRate(supabase: any, creatorId: string): Promise<number> {
-  // Get creator's monthly paid users count
-  const currentMonth = new Date();
-  currentMonth.setDate(1);
-  currentMonth.setHours(0, 0, 0, 0);
+  // First, check if creator has tier protection
+  const { data: creatorProfile } = await supabase
+    .from("creator_profiles")
+    .select("tier_protection_until, current_tier_level, created_at")
+    .eq("id", creatorId)
+    .single();
+
+  const now = new Date();
+  
+  // Check if still in protection period
+  if (creatorProfile?.tier_protection_until) {
+    const protectionEnd = new Date(creatorProfile.tier_protection_until);
+    if (now < protectionEnd) {
+      console.log(`Creator ${creatorId}: Still in 30-day protection period, using Tier 2 (12%)`);
+      return 0.12; // Default tier 2 rate
+    }
+  }
+
+  // Get rolling 30-day paid users count
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const { count: monthlyCount } = await supabase
     .from("payment_attributions")
     .select("*", { count: "exact", head: true })
     .eq("creator_id", creatorId)
-    .gte("created_at", currentMonth.toISOString());
+    .gte("created_at", thirtyDaysAgo.toISOString());
 
   const monthlyPaidUsers = monthlyCount || 0;
 
   // Fetch commission tiers from database
   const { data: tiers } = await supabase
     .from("commission_tiers")
-    .select("commission_rate, monthly_user_threshold")
+    .select("tier_level, commission_rate, monthly_user_threshold")
     .order("tier_level", { ascending: true });
 
   if (!tiers || tiers.length === 0) {
-    // Fallback to default 8%
-    return 0.08;
+    // Fallback to default based on monthly users
+    console.log(`Creator ${creatorId}: No tiers found, using fallback. ${monthlyPaidUsers} monthly users`);
+    return monthlyPaidUsers >= 100 ? 0.12 : 0.08;
   }
 
-  // Find applicable tier based on monthly users
-  let commissionRate = tiers[0].commission_rate / 100; // Convert percentage to decimal
+  // Find applicable tier based on monthly users (descending to find highest matching tier)
+  let commissionRate = tiers[0].commission_rate / 100; // Start with base tier
+  let currentTierLevel = 1;
+  
   for (const tier of tiers) {
     if (monthlyPaidUsers >= tier.monthly_user_threshold) {
       commissionRate = tier.commission_rate / 100;
+      currentTierLevel = tier.tier_level;
     }
   }
 
-  console.log(`Creator ${creatorId}: ${monthlyPaidUsers} monthly users, commission rate: ${commissionRate * 100}%`);
+  // Update creator's current tier level for tracking
+  await supabase
+    .from("creator_profiles")
+    .update({ current_tier_level: currentTierLevel })
+    .eq("id", creatorId);
+
+  console.log(`Creator ${creatorId}: ${monthlyPaidUsers} monthly users (30-day rolling), Tier ${currentTierLevel}, rate: ${commissionRate * 100}%`);
   return commissionRate;
 }
 
@@ -151,6 +178,7 @@ serve(async (req) => {
       let creatorId: string | null = null;
       let discountCodeId: string | null = null;
       let creatorCommissionAmount = 0;
+      let creatorCommissionRate = 0;
       let creatorData: any = null;
 
       // Find creator by referral code
@@ -164,11 +192,10 @@ serve(async (req) => {
         if (foundCreator) {
           creatorId = foundCreator.id;
           creatorData = foundCreator;
-          const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-            ? CREATOR_BONUS_RATE 
-            : CREATOR_BASE_RATE;
-          creatorCommissionAmount = final_amount * commissionRate;
-          console.log("Creator found by ref:", creatorId, "Commission:", creatorCommissionAmount);
+          // Use dynamic commission rate from DB tiers
+          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+          creatorCommissionAmount = final_amount * creatorCommissionRate;
+          console.log("Creator found by ref:", creatorId, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
         }
       }
 
@@ -193,11 +220,10 @@ serve(async (req) => {
 
           if (foundCreator) {
             creatorData = foundCreator;
-            const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-              ? CREATOR_BONUS_RATE 
-              : CREATOR_BASE_RATE;
-            creatorCommissionAmount = final_amount * commissionRate;
-            console.log("Creator found by discount code:", creatorId, "Commission:", creatorCommissionAmount);
+            // Use dynamic commission rate from DB tiers
+            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            creatorCommissionAmount = final_amount * creatorCommissionRate;
+            console.log("Creator found by discount code:", foundCreator.id, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
           }
         }
       }
@@ -205,7 +231,8 @@ serve(async (req) => {
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
       if (!creatorId) {
         console.log("NO REFERRAL - 100% revenue to platform. User:", user_id, "Amount:", final_amount);
-        creatorCommissionAmount = 0; // Explicit enforcement
+        creatorCommissionAmount = 0;
+        creatorCommissionRate = 0;
       }
 
       // STEP 3: Create payment attribution FIRST (this is the source of truth)
@@ -218,7 +245,7 @@ serve(async (req) => {
         original_amount,
         discount_applied: original_amount - final_amount,
         final_amount,
-        creator_commission_rate: creatorId ? (creatorCommissionAmount / final_amount) : 0,
+        creator_commission_rate: creatorCommissionRate,
         creator_commission_amount: creatorCommissionAmount,
         payment_month: paymentMonth,
         tier,
@@ -327,6 +354,7 @@ serve(async (req) => {
       let creatorId: string | null = null;
       let discountCodeId: string | null = null;
       let creatorCommissionAmount = 0;
+      let creatorCommissionRate = 0;
       let creatorData: any = null;
 
       // Find creator by referral code
@@ -340,11 +368,10 @@ serve(async (req) => {
         if (foundCreator) {
           creatorId = foundCreator.id;
           creatorData = foundCreator;
-          const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-            ? CREATOR_BONUS_RATE 
-            : CREATOR_BASE_RATE;
-          creatorCommissionAmount = final_amount * commissionRate;
-          console.log("Creator found by ref:", creatorId, "Commission:", creatorCommissionAmount);
+          // Use dynamic commission rate from DB tiers
+          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+          creatorCommissionAmount = final_amount * creatorCommissionRate;
+          console.log("Creator found by ref:", creatorId, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
         }
       }
 
@@ -369,11 +396,10 @@ serve(async (req) => {
 
           if (foundCreator) {
             creatorData = foundCreator;
-            const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-              ? CREATOR_BONUS_RATE 
-              : CREATOR_BASE_RATE;
-            creatorCommissionAmount = final_amount * commissionRate;
-            console.log("Creator found by discount code:", creatorId, "Commission:", creatorCommissionAmount);
+            // Use dynamic commission rate from DB tiers
+            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            creatorCommissionAmount = final_amount * creatorCommissionRate;
+            console.log("Creator found by discount code:", foundCreator.id, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
           }
         }
       }
@@ -381,7 +407,8 @@ serve(async (req) => {
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
       if (!creatorId) {
         console.log("NO REFERRAL - 100% revenue to platform. User:", user_id, "Amount:", final_amount);
-        creatorCommissionAmount = 0; // Explicit enforcement
+        creatorCommissionAmount = 0;
+        creatorCommissionRate = 0;
       }
 
       // STEP 3: Create payment attribution FIRST (this is the source of truth)
@@ -394,7 +421,7 @@ serve(async (req) => {
         original_amount,
         discount_applied: original_amount - final_amount,
         final_amount,
-        creator_commission_rate: creatorId ? (creatorCommissionAmount / final_amount) : 0,
+        creator_commission_rate: creatorCommissionRate,
         creator_commission_amount: creatorCommissionAmount,
         payment_month: paymentMonth,
         tier,
@@ -567,6 +594,7 @@ serve(async (req) => {
 
       let creatorId: string | null = null;
       let creatorCommissionAmount = 0;
+      let creatorCommissionRate = 0;
       let creatorData: any = null;
       let discountCodeId: string | null = null;
 
@@ -581,10 +609,9 @@ serve(async (req) => {
         if (foundCreator) {
           creatorId = foundCreator.id;
           creatorData = foundCreator;
-          const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-            ? CREATOR_BONUS_RATE 
-            : CREATOR_BASE_RATE;
-          creatorCommissionAmount = request.amount * commissionRate;
+          // Use dynamic commission rate from DB tiers
+          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+          creatorCommissionAmount = request.amount * creatorCommissionRate;
         }
       }
 
@@ -609,10 +636,9 @@ serve(async (req) => {
 
           if (foundCreator) {
             creatorData = foundCreator;
-            const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-              ? CREATOR_BONUS_RATE 
-              : CREATOR_BASE_RATE;
-            creatorCommissionAmount = request.amount * commissionRate;
+            // Use dynamic commission rate from DB tiers
+            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            creatorCommissionAmount = request.amount * creatorCommissionRate;
           }
         }
       }
@@ -620,7 +646,8 @@ serve(async (req) => {
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
       if (!creatorId) {
         console.log("NO REFERRAL (join request) - 100% revenue to platform. User:", request.user_id, "Amount:", request.amount);
-        creatorCommissionAmount = 0; // Explicit enforcement
+        creatorCommissionAmount = 0;
+        creatorCommissionRate = 0;
       }
 
       // STEP 3: Create payment attribution FIRST (source of truth)
@@ -632,7 +659,7 @@ serve(async (req) => {
         amount: request.amount,
         original_amount: request.amount,
         final_amount: request.amount,
-        creator_commission_rate: creatorId ? (creatorCommissionAmount / request.amount) : 0,
+        creator_commission_rate: creatorCommissionRate,
         creator_commission_amount: creatorCommissionAmount,
         payment_month: paymentMonthStr,
         tier: request.tier,
@@ -715,9 +742,9 @@ serve(async (req) => {
         });
       }
 
-      const orderId = `UPG-BANK-${request.reference_number}`;
+      const orderId = `UPGRADE-${request.reference_number}`;
 
-      // STEP 1: Check if attribution already exists
+      // Check for existing attribution
       const { data: existingAttribution } = await supabase
         .from("payment_attributions")
         .select("id")
@@ -726,7 +753,6 @@ serve(async (req) => {
 
       if (existingAttribution) {
         console.log("Attribution already exists for upgrade:", orderId);
-        // Still update status
         await supabase
           .from("upgrade_requests")
           .update({
@@ -743,38 +769,55 @@ serve(async (req) => {
         );
       }
 
-      // Update enrollment tier
-      await supabase
+      // Get the enrollment to update
+      const { data: enrollment, error: enrollmentError } = await supabase
         .from("enrollments")
-        .update({ tier: request.requested_tier })
-        .eq("id", request.enrollment_id);
-
-      // Get enrollment for user_id
-      const { data: enrollment } = await supabase
-        .from("enrollments")
-        .select("user_id")
+        .select("*")
         .eq("id", request.enrollment_id)
         .single();
 
+      if (enrollmentError || !enrollment) {
+        return new Response(JSON.stringify({ error: "Enrollment not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Calculate new expiry
+      const isLifetimeUpgrade = request.requested_tier === "lifetime";
+      const newExpiresAt = isLifetimeUpgrade 
+        ? null 
+        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+      // Update the enrollment
+      await supabase
+        .from("enrollments")
+        .update({
+          tier: request.requested_tier,
+          expires_at: newExpiresAt,
+        })
+        .eq("id", request.enrollment_id);
+
+      // Handle attribution if there's an amount
       const paymentMonth = new Date();
       paymentMonth.setDate(1);
       const paymentMonthStr = paymentMonth.toISOString().split("T")[0];
 
-      // STEP 2: Find creator (but DON'T update stats yet)
-      let creatorId: string | null = null;
-      let creatorCommissionAmount = 0;
-      let creatorData: any = null;
-
-      if (enrollment) {
+      if (request.amount && request.amount > 0) {
+        // Find original referrer
         const { data: userAttribution } = await supabase
           .from("user_attributions")
           .select("creator_id")
-          .eq("user_id", enrollment.user_id)
+          .eq("user_id", request.user_id)
           .maybeSingle();
+
+        let creatorId: string | null = null;
+        let creatorCommissionAmount = 0;
+        let creatorCommissionRate = 0;
+        let creatorData: any = null;
 
         if (userAttribution?.creator_id) {
           creatorId = userAttribution.creator_id;
-
           const { data: foundCreator } = await supabase
             .from("creator_profiles")
             .select("id, lifetime_paid_users, available_balance, cmo_id")
@@ -783,32 +826,30 @@ serve(async (req) => {
 
           if (foundCreator) {
             creatorData = foundCreator;
-            const commissionRate = (foundCreator.lifetime_paid_users || 0) >= CREATOR_BONUS_THRESHOLD 
-              ? CREATOR_BONUS_RATE 
-              : CREATOR_BASE_RATE;
-            creatorCommissionAmount = (request.amount || 0) * commissionRate;
+            // Use dynamic commission rate from DB tiers
+            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            creatorCommissionAmount = request.amount * creatorCommissionRate;
           }
         }
 
-        // STEP 3: Create payment attribution FIRST
+        // Create attribution
         const { error: paError } = await supabase.from("payment_attributions").insert({
           order_id: orderId,
-          user_id: enrollment.user_id,
+          user_id: request.user_id,
           creator_id: creatorId,
           enrollment_id: request.enrollment_id,
-          amount: request.amount || 0,
-          original_amount: request.amount || 0,
-          final_amount: request.amount || 0,
-          creator_commission_rate: creatorId && request.amount ? (creatorCommissionAmount / request.amount) : 0,
+          amount: request.amount,
+          original_amount: request.amount,
+          final_amount: request.amount,
+          creator_commission_rate: creatorCommissionRate,
           creator_commission_amount: creatorCommissionAmount,
           payment_month: paymentMonthStr,
           tier: request.requested_tier,
-          payment_type: "bank",
+          payment_type: "upgrade",
         });
 
-        // STEP 4: Only NOW update stats
-        if (creatorId && creatorData && !paError) {
-          // Update creator balance (not paid users count for upgrades)
+        if (!paError && creatorId && creatorData) {
+          // Update creator stats
           await supabase
             .from("creator_profiles")
             .update({
@@ -816,14 +857,14 @@ serve(async (req) => {
             })
             .eq("id", creatorId);
 
-          // CMO commission for upgrade
-          if (creatorData.cmo_id && request.amount) {
+          // CMO commission
+          if (creatorData.cmo_id) {
             await updateCMOPayout(supabase, creatorData.cmo_id, request.amount, paymentMonthStr);
           }
         }
       }
 
-      // Update upgrade request
+      // Update request status
       await supabase
         .from("upgrade_requests")
         .update({
@@ -842,190 +883,130 @@ serve(async (req) => {
       );
     }
 
-    // Recalculate all stats from payment_attributions (source of truth)
+    // Recalculate all stats from payment_attributions
     if (path === "recalculate-stats" && req.method === "POST") {
       console.log("Recalculating all stats from payment_attributions...");
 
-      const results: any = {
-        creators_updated: 0,
-        cmo_payouts_regenerated: 0,
-        errors: [],
-      };
+      // Reset all creator stats
+      await supabase
+        .from("creator_profiles")
+        .update({
+          lifetime_paid_users: 0,
+          monthly_paid_users: 0,
+          available_balance: 0,
+        });
 
-      try {
-        // 1. Recalculate all creator_profiles stats
-        const { data: creators } = await supabase
-          .from("creator_profiles")
-          .select("id");
+      // Get all payment attributions
+      const { data: allAttributions } = await supabase
+        .from("payment_attributions")
+        .select("*");
 
-        for (const creator of creators || []) {
-          // Count payment attributions
-          const { count: paidUsers } = await supabase
-            .from("payment_attributions")
-            .select("*", { count: "exact", head: true })
-            .eq("creator_id", creator.id);
-
-          // Sum commissions
-          const { data: commissions } = await supabase
-            .from("payment_attributions")
-            .select("creator_commission_amount")
-            .eq("creator_id", creator.id);
-
-          const totalCommission = (commissions || []).reduce(
-            (sum, c) => sum + Number(c.creator_commission_amount || 0), 0
-          );
-
-          // Count this month's payments
-          const currentMonth = new Date();
-          currentMonth.setDate(1);
-          const currentMonthStr = currentMonth.toISOString().split("T")[0];
-
-          const { count: monthlyUsers } = await supabase
-            .from("payment_attributions")
-            .select("*", { count: "exact", head: true })
-            .eq("creator_id", creator.id)
-            .gte("payment_month", currentMonthStr);
-
-          // Get total withdrawn
-          const { data: creatorData } = await supabase
-            .from("creator_profiles")
-            .select("total_withdrawn")
-            .eq("id", creator.id)
-            .single();
-
-          const totalWithdrawn = creatorData?.total_withdrawn || 0;
-          const availableBalance = totalCommission - totalWithdrawn;
-
-          // Update creator profile
-          await supabase
-            .from("creator_profiles")
-            .update({
-              lifetime_paid_users: paidUsers || 0,
-              monthly_paid_users: monthlyUsers || 0,
-              available_balance: availableBalance,
-            })
-            .eq("id", creator.id);
-
-          results.creators_updated++;
-        }
-
-        // 2. Regenerate CMO payouts
-        // First, delete all existing
-        await supabase.from("cmo_payouts").delete().gte("id", "00000000-0000-0000-0000-000000000000");
-
-        // Get all CMOs
-        const { data: cmos } = await supabase.from("cmo_profiles").select("id");
-
-        for (const cmo of cmos || []) {
-          // Get all creators under this CMO
-          const { data: cmoCreators } = await supabase
-            .from("creator_profiles")
-            .select("id")
-            .eq("cmo_id", cmo.id);
-
-          const creatorIds = (cmoCreators || []).map(c => c.id);
-
-          if (creatorIds.length === 0) continue;
-
-          // Get all payment attributions for these creators, grouped by month
-          const { data: attributions } = await supabase
-            .from("payment_attributions")
-            .select("payment_month, final_amount")
-            .in("creator_id", creatorIds);
-
-          // Group by month
-          const monthlyData: Record<string, { count: number; revenue: number }> = {};
-          for (const attr of attributions || []) {
-            if (!attr.payment_month) continue;
-            if (!monthlyData[attr.payment_month]) {
-              monthlyData[attr.payment_month] = { count: 0, revenue: 0 };
-            }
-            monthlyData[attr.payment_month].count++;
-            monthlyData[attr.payment_month].revenue += Number(attr.final_amount || 0);
-          }
-
-          // Create payout records for each month
-          for (const [month, data] of Object.entries(monthlyData)) {
-            const baseCommission = data.revenue * CMO_COMMISSION_RATE;
-            
-            await supabase.from("cmo_payouts").insert({
-              cmo_id: cmo.id,
-              payout_month: month,
-              total_paid_users: data.count,
-              base_commission_amount: baseCommission,
-              bonus_amount: 0,
-              total_commission: baseCommission,
-              status: "pending",
-            });
-
-            results.cmo_payouts_regenerated++;
-          }
-        }
-
-        console.log("Stats recalculation complete:", results);
-
+      if (!allAttributions) {
         return new Response(
-          JSON.stringify({ success: true, ...results }),
+          JSON.stringify({ success: true, message: "No attributions found" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
-      } catch (error: any) {
-        console.error("Error recalculating stats:", error);
-        return new Response(
-          JSON.stringify({ success: false, error: error.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
       }
+
+      // Current month for monthly calculations
+      const currentMonth = new Date();
+      currentMonth.setDate(1);
+      currentMonth.setHours(0, 0, 0, 0);
+      const currentMonthStr = currentMonth.toISOString().split("T")[0];
+
+      // Aggregate stats by creator
+      const creatorStats: Record<string, { lifetime: number; monthly: number; balance: number }> = {};
+
+      for (const attr of allAttributions) {
+        if (!attr.creator_id) continue;
+
+        if (!creatorStats[attr.creator_id]) {
+          creatorStats[attr.creator_id] = { lifetime: 0, monthly: 0, balance: 0 };
+        }
+
+        creatorStats[attr.creator_id].lifetime += 1;
+        creatorStats[attr.creator_id].balance += Number(attr.creator_commission_amount || 0);
+
+        // Check if this month
+        if (attr.payment_month && attr.payment_month >= currentMonthStr) {
+          creatorStats[attr.creator_id].monthly += 1;
+        }
+      }
+
+      // Update each creator
+      for (const [creatorId, stats] of Object.entries(creatorStats)) {
+        // Get current withdrawn amount (don't reset this)
+        const { data: creator } = await supabase
+          .from("creator_profiles")
+          .select("total_withdrawn")
+          .eq("id", creatorId)
+          .single();
+
+        const totalWithdrawn = creator?.total_withdrawn || 0;
+        const availableBalance = stats.balance - totalWithdrawn;
+
+        await supabase
+          .from("creator_profiles")
+          .update({
+            lifetime_paid_users: stats.lifetime,
+            monthly_paid_users: stats.monthly,
+            available_balance: Math.max(0, availableBalance),
+          })
+          .eq("id", creatorId);
+      }
+
+      console.log(`Recalculated stats for ${Object.keys(creatorStats).length} creators`);
+
+      return new Response(
+        JSON.stringify({ success: true, creators_updated: Object.keys(creatorStats).length }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // Get revenue stats for admin dashboard
+    // Revenue stats endpoint
     if (path === "revenue-stats" && req.method === "GET") {
-      const months = 6;
-      const revenueData = [];
-      
-      for (let i = months - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setMonth(date.getMonth() - i);
-        date.setDate(1);
-        const startOfMonth = date.toISOString().split("T")[0];
-        
-        const endDate = new Date(date);
-        endDate.setMonth(endDate.getMonth() + 1);
-        endDate.setDate(0);
-        const endOfMonth = endDate.toISOString().split("T")[0];
-
-        const { data: payments } = await supabase
-          .from("payment_attributions")
-          .select("final_amount")
-          .gte("payment_month", startOfMonth)
-          .lte("payment_month", endOfMonth);
-
-        const monthTotal = (payments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
-        
-        const monthName = date.toLocaleDateString("en-US", { month: "short" });
-        revenueData.push({ name: monthName, value: monthTotal });
-      }
-
-      // Total revenue
+      // Get all payment attributions
       const { data: allPayments } = await supabase
         .from("payment_attributions")
-        .select("final_amount");
+        .select("final_amount, payment_month");
 
-      const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      const totalRevenue = (allPayments || []).reduce(
+        (sum, p) => sum + Number(p.final_amount || 0), 0
+      );
 
-      // This month's revenue
+      // Current month
       const currentMonth = new Date();
       currentMonth.setDate(1);
       const currentMonthStr = currentMonth.toISOString().split("T")[0];
 
-      const { data: thisMonthPayments } = await supabase
-        .from("payment_attributions")
-        .select("final_amount")
-        .gte("payment_month", currentMonthStr);
+      const thisMonthRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= currentMonthStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-      const thisMonthRevenue = (thisMonthPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      // Last 6 months breakdown
+      const monthlyData: Record<string, number> = {};
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const monthKey = date.toISOString().slice(0, 7);
+        monthlyData[monthKey] = 0;
+      }
+
+      (allPayments || []).forEach(p => {
+        if (p.payment_month) {
+          const monthKey = p.payment_month.slice(0, 7);
+          if (monthlyData.hasOwnProperty(monthKey)) {
+            monthlyData[monthKey] += Number(p.final_amount || 0);
+          }
+        }
+      });
 
       return new Response(
-        JSON.stringify({ revenueData, totalRevenue, thisMonthRevenue }),
+        JSON.stringify({
+          total_revenue: totalRevenue,
+          this_month_revenue: thisMonthRevenue,
+          monthly_breakdown: monthlyData,
+        }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -1034,53 +1015,19 @@ serve(async (req) => {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: unknown) {
-    console.error("Error in admin-finance:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: errorMessage }), {
+
+  } catch (error: any) {
+    console.error("Error:", error);
+    return new Response(JSON.stringify({ error: error.message || "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
 
-// Helper function to update CMO payout
-async function updateCMOPayout(
-  supabase: any,
-  cmoId: string,
-  grossAmount: number,
-  paymentMonth: string
-) {
-  // Get CMO's annual paid users to determine if bonus applies (280 users annually)
-  const yearStart = new Date();
-  yearStart.setMonth(0, 1);
-  yearStart.setHours(0, 0, 0, 0);
-  const yearStartStr = yearStart.toISOString().split("T")[0];
-
-  // Get all creator IDs under this CMO
-  const { data: cmoCreators } = await supabase
-    .from("creator_profiles")
-    .select("id")
-    .eq("cmo_id", cmoId);
-
-  const creatorIds = (cmoCreators || []).map((c: any) => c.id);
-  
-  let annualPaidUsers = 0;
-  if (creatorIds.length > 0) {
-    const { count } = await supabase
-      .from("payment_attributions")
-      .select("*", { count: "exact", head: true })
-      .in("creator_id", creatorIds)
-      .gte("payment_month", yearStartStr);
-    annualPaidUsers = count || 0;
-  }
-
-  // CMO commission: 8% of revenue from their creators, +5% if 280 annual users goal met
-  const baseCommission = grossAmount * CMO_COMMISSION_RATE;
-  const bonusCommission = annualPaidUsers >= CMO_ANNUAL_USER_GOAL ? grossAmount * CMO_BONUS_RATE : 0;
-  const totalCommission = baseCommission + bonusCommission;
-
-  // Check if payout record exists for this month
+// Helper to update CMO payout
+async function updateCMOPayout(supabase: any, cmoId: string, paymentAmount: number, paymentMonth: string) {
+  // Get or create CMO payout record for this month
   const { data: existingPayout } = await supabase
     .from("cmo_payouts")
     .select("*")
@@ -1088,14 +1035,15 @@ async function updateCMOPayout(
     .eq("payout_month", paymentMonth)
     .maybeSingle();
 
+  const cmoCommission = paymentAmount * CMO_COMMISSION_RATE;
+
   if (existingPayout) {
     await supabase
       .from("cmo_payouts")
       .update({
         total_paid_users: (existingPayout.total_paid_users || 0) + 1,
-        base_commission_amount: (existingPayout.base_commission_amount || 0) + baseCommission,
-        bonus_amount: (existingPayout.bonus_amount || 0) + bonusCommission,
-        total_commission: (existingPayout.total_commission || 0) + totalCommission,
+        total_commission: (existingPayout.total_commission || 0) + cmoCommission,
+        base_commission_amount: (existingPayout.base_commission_amount || 0) + cmoCommission,
       })
       .eq("id", existingPayout.id);
   } else {
@@ -1103,12 +1051,10 @@ async function updateCMOPayout(
       cmo_id: cmoId,
       payout_month: paymentMonth,
       total_paid_users: 1,
-      base_commission_amount: baseCommission,
-      bonus_amount: bonusCommission,
-      total_commission: totalCommission,
+      total_commission: cmoCommission,
+      base_commission_amount: cmoCommission,
+      bonus_amount: 0,
       status: "pending",
     });
   }
-
-  console.log("CMO payout updated:", cmoId, "Base:", baseCommission, "Bonus:", bonusCommission, "Annual users:", annualPaidUsers);
 }

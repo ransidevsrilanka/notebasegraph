@@ -384,12 +384,14 @@ export type Database = {
           cmo_id: string | null
           commission_rate: number | null
           created_at: string
+          current_tier_level: number | null
           display_name: string | null
           id: string
           is_active: boolean | null
           lifetime_paid_users: number | null
           monthly_paid_users: number | null
           referral_code: string
+          tier_protection_until: string | null
           total_withdrawn: number | null
           user_id: string
         }
@@ -398,12 +400,14 @@ export type Database = {
           cmo_id?: string | null
           commission_rate?: number | null
           created_at?: string
+          current_tier_level?: number | null
           display_name?: string | null
           id?: string
           is_active?: boolean | null
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code: string
+          tier_protection_until?: string | null
           total_withdrawn?: number | null
           user_id: string
         }
@@ -412,12 +416,14 @@ export type Database = {
           cmo_id?: string | null
           commission_rate?: number | null
           created_at?: string
+          current_tier_level?: number | null
           display_name?: string | null
           id?: string
           is_active?: boolean | null
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code?: string
+          tier_protection_until?: string | null
           total_withdrawn?: number | null
           user_id?: string
         }
