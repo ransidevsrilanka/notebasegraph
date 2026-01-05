@@ -38,12 +38,14 @@ import {
   ArrowUpRight,
   Target,
   Award,
+  AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
+import InboxButton from '@/components/inbox/InboxButton';
 
 interface CreatorAnalytics {
   id: string;
@@ -102,6 +104,14 @@ interface MonthlyData {
   conversions: number;
 }
 
+interface CommissionTier {
+  id: string;
+  tier_level: number;
+  tier_name: string;
+  commission_rate: number;
+  monthly_user_threshold: number;
+}
+
 const CRYPTO_TYPES = ['USDT', 'BTC', 'ETH', 'BNB'];
 const CRYPTO_NETWORKS = ['TRC20', 'ERC20', 'BEP20'];
 
@@ -113,6 +123,8 @@ const CreatorDashboard = () => {
   const [withdrawalMethods, setWithdrawalMethods] = useState<WithdrawalMethod[]>([]);
   const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [commissionTiers, setCommissionTiers] = useState<CommissionTier[]>([]);
+  const [minimumPayout, setMinimumPayout] = useState(10000);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -142,8 +154,47 @@ const CreatorDashboard = () => {
       navigate('/');
       return;
     }
-    fetchData();
+    checkOnboardingAndFetchData();
   }, [isCreator, navigate, user]);
+
+  const checkOnboardingAndFetchData = async () => {
+    if (!user) return;
+
+    // Check if onboarding is completed
+    const { data: onboardingData } = await supabase
+      .from('creator_onboarding')
+      .select('completed_at')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!onboardingData?.completed_at) {
+      // Not completed, redirect to onboarding
+      navigate('/creator/onboarding');
+      return;
+    }
+
+    // Fetch commission tiers and platform settings
+    const [tiersResult, settingsResult] = await Promise.all([
+      supabase.from('commission_tiers').select('*').order('tier_level', { ascending: true }),
+      supabase.from('platform_settings').select('setting_key, setting_value'),
+    ]);
+
+    if (tiersResult.data) {
+      setCommissionTiers(tiersResult.data);
+    }
+
+    if (settingsResult.data) {
+      const minPayoutSetting = settingsResult.data.find(s => s.setting_key === 'minimum_payout_lkr');
+      if (minPayoutSetting?.setting_value) {
+        const value = typeof minPayoutSetting.setting_value === 'number'
+          ? minPayoutSetting.setting_value
+          : Number(minPayoutSetting.setting_value);
+        setMinimumPayout(value);
+      }
+    }
+
+    fetchData();
+  };
 
   const fetchData = async () => {
     if (!user) return;
@@ -203,6 +254,15 @@ const CreatorDashboard = () => {
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', creatorProfile.id);
 
+        // Calculate commission rate based on MONTHLY users using commission_tiers
+        const monthlyCount = monthlyPaidUsers || 0;
+        let currentCommissionRate = 8; // Default base rate
+        for (const tier of commissionTiers) {
+          if (monthlyCount >= tier.monthly_user_threshold) {
+            currentCommissionRate = tier.commission_rate;
+          }
+        }
+
         // Build analytics object
         const analyticsData: CreatorAnalytics = {
           id: creatorProfile.id,
@@ -216,8 +276,8 @@ const CreatorDashboard = () => {
           available_balance: creatorProfile.available_balance,
           cmo_name: cmoName,
           lifetime_paid_users: creatorProfile.lifetime_paid_users || 0,
-          commission_rate: (creatorProfile.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08,
-          monthly_paid_users: monthlyPaidUsers || 0,
+          commission_rate: currentCommissionRate / 100, // Store as decimal for backwards compatibility
+          monthly_paid_users: monthlyCount,
           total_commission_earned: totalCommission,
           discount_code_count: discountCodeCount || 0,
           total_referred_users: totalReferred || 0,
@@ -329,14 +389,20 @@ const CreatorDashboard = () => {
     }
 
     const amount = parseFloat(withdrawAmount);
-    const availableBalance = creatorData.available_balance || 0;
+    const currentBalance = creatorData.available_balance || 0;
     
     if (isNaN(amount) || amount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
 
-    if (amount > availableBalance) {
+    // Validate minimum payout
+    if (amount < minimumPayout) {
+      toast.error(`Minimum withdrawal is LKR ${minimumPayout.toLocaleString()}`);
+      return;
+    }
+
+    if (amount > currentBalance) {
       toast.error('Insufficient balance');
       return;
     }
@@ -401,9 +467,32 @@ const CreatorDashboard = () => {
   const feePreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) * 0.03 : 0;
   const netPreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) - feePreview : 0;
 
-  // Commission tier progress (500 users for 12%)
-  const tierProgress = Math.min((lifetimePaidUsers / 500) * 100, 100);
-  const isHighTier = lifetimePaidUsers >= 500;
+  // Commission tier progress - based on MONTHLY users now
+  const getCurrentTier = () => {
+    let current = commissionTiers[0];
+    for (const tier of commissionTiers) {
+      if (monthlyPaidUsers >= tier.monthly_user_threshold) {
+        current = tier;
+      }
+    }
+    return current;
+  };
+
+  const getNextTier = () => {
+    for (const tier of commissionTiers) {
+      if (monthlyPaidUsers < tier.monthly_user_threshold) {
+        return tier;
+      }
+    }
+    return null;
+  };
+
+  const currentTier = getCurrentTier();
+  const nextTier = getNextTier();
+  const tierProgress = nextTier 
+    ? Math.min((monthlyPaidUsers / nextTier.monthly_user_threshold) * 100, 100)
+    : 100;
+  const isTopTier = !nextTier;
 
   // Funnel data
   const funnelData = [
@@ -449,6 +538,7 @@ const CreatorDashboard = () => {
             </div>
             <div className="flex items-center gap-4">
               <span className="text-muted-foreground text-sm hidden sm:block">{profile?.full_name || user?.email}</span>
+              <InboxButton />
               <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="w-4 h-4" />
               </Button>
@@ -581,24 +671,47 @@ const CreatorDashboard = () => {
             <div>
               <h3 className="font-semibold text-foreground">Commission Tier</h3>
               <p className="text-sm text-muted-foreground">
-                {isHighTier ? 'You\'ve unlocked the 12% commission rate!' : `Get ${500 - lifetimePaidUsers} more paid users for 12% rate`}
+                {isTopTier 
+                  ? `You've reached the top tier: ${currentTier?.tier_name}!` 
+                  : `Get ${(nextTier?.monthly_user_threshold || 0) - monthlyPaidUsers} more users this month for ${nextTier?.commission_rate}%`}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-foreground">{Math.round(commissionRate * 100)}%</p>
+              <p className="text-2xl font-bold text-foreground">{currentTier?.commission_rate || 8}%</p>
               <p className="text-xs text-muted-foreground">Current Rate</p>
             </div>
           </div>
           <div className="w-full bg-muted rounded-full h-3">
             <div 
-              className={`h-3 rounded-full transition-all ${isHighTier ? 'bg-green-500' : 'bg-brand'}`}
+              className={`h-3 rounded-full transition-all ${isTopTier ? 'bg-green-500' : 'bg-brand'}`}
               style={{ width: `${tierProgress}%` }}
             />
           </div>
           <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-            <span>0</span>
-            <span>500 users (12% rate)</span>
+            <span>{monthlyPaidUsers} users this month</span>
+            <span>{nextTier ? `${nextTier.monthly_user_threshold} users (${nextTier.commission_rate}%)` : 'Top tier reached!'}</span>
           </div>
+          
+          {/* All Tiers Display */}
+          {commissionTiers.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-2">All Commission Tiers (based on monthly users)</p>
+              <div className="flex flex-wrap gap-2">
+                {commissionTiers.map((tier) => (
+                  <div 
+                    key={tier.id}
+                    className={`px-3 py-1.5 rounded-full text-xs ${
+                      currentTier?.id === tier.id 
+                        ? 'bg-brand text-primary-foreground font-medium' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {tier.tier_name}: {tier.commission_rate}% ({tier.monthly_user_threshold}+ users)
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Referral Link */}

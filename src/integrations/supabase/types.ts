@@ -222,6 +222,36 @@ export type Database = {
         }
         Relationships: []
       }
+      commission_tiers: {
+        Row: {
+          commission_rate: number
+          created_at: string | null
+          id: string
+          monthly_user_threshold: number
+          tier_level: number
+          tier_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          commission_rate: number
+          created_at?: string | null
+          id?: string
+          monthly_user_threshold: number
+          tier_level: number
+          tier_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          commission_rate?: number
+          created_at?: string | null
+          id?: string
+          monthly_user_threshold?: number
+          tier_level?: number
+          tier_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       content: {
         Row: {
           created_at: string
@@ -268,6 +298,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      creator_onboarding: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_step: number | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_step?: number | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       creator_payouts: {
         Row: {
@@ -635,6 +689,42 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          body: string
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          read_at: string | null
+          recipient_id: string
+          recipient_type: string
+          sender_id: string | null
+          subject: string
+        }
+        Insert: {
+          body: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          read_at?: string | null
+          recipient_id: string
+          recipient_type: string
+          sender_id?: string | null
+          subject: string
+        }
+        Update: {
+          body?: string
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          read_at?: string | null
+          recipient_id?: string
+          recipient_type?: string
+          sender_id?: string | null
+          subject?: string
+        }
+        Relationships: []
+      }
       notes: {
         Row: {
           created_at: string
@@ -850,6 +940,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      platform_settings: {
+        Row: {
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

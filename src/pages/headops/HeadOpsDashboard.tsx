@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
+import InboxButton from '@/components/inbox/InboxButton';
 
 interface CMOProfile {
   id: string;
@@ -536,6 +537,7 @@ const HeadOpsDashboard = () => {
               <span className="text-muted-foreground text-sm hidden sm:block">
                 {profile?.full_name || user?.email}
               </span>
+              <InboxButton />
               <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
                 <LogOut className="w-4 h-4" />
               </Button>
