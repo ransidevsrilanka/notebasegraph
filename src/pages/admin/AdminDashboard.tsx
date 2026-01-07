@@ -17,27 +17,12 @@ import {
 import { toast } from 'sonner';
 import { 
   Users, 
-  Key, 
-  BookOpen, 
-  Shield,
   TrendingUp,
-  AlertTriangle,
-  ChevronRight,
   LogOut,
   Crown,
   DollarSign,
-  Palette,
   Trash2,
-  BarChart3,
-  Wallet,
   RefreshCw,
-  GitCompare,
-  CreditCard,
-  Building2,
-  Settings,
-  Target,
-  FileCheck,
-  Search,
   HardDrive,
   Database,
 } from 'lucide-react';
@@ -47,6 +32,9 @@ import { MiniChart } from '@/components/dashboard/MiniChart';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { format } from 'date-fns';
+import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
+import AdminSidebar from '@/components/admin/AdminSidebar';
+import AdminCommandPalette from '@/components/admin/AdminCommandPalette';
 
 interface Stats {
   totalStudents: number;
@@ -88,12 +76,10 @@ const StorageUsageCard = () => {
   useEffect(() => {
     const fetchStorageStats = async () => {
       try {
-        // List files in the notes bucket to calculate usage
         const { data: notesFiles, error: notesError } = await supabase.storage
           .from('notes')
           .list('', { limit: 1000 });
 
-        // List files in the content bucket
         const { data: contentFiles, error: contentError } = await supabase.storage
           .from('content')
           .list('', { limit: 1000 });
@@ -103,8 +89,7 @@ const StorageUsageCard = () => {
 
         if (notesFiles && !notesError) {
           totalFiles += notesFiles.length;
-          // Note: Supabase doesn't return file sizes in list, we estimate based on typical PDF sizes
-          totalSize += notesFiles.length * 5; // Assume ~5MB per file
+          totalSize += notesFiles.length * 5;
         }
 
         if (contentFiles && !contentError) {
@@ -123,8 +108,7 @@ const StorageUsageCard = () => {
     fetchStorageStats();
   }, []);
 
-  // Supabase free tier is 1GB, paid plans vary
-  const estimatedQuota = 1024; // 1GB in MB as default estimate
+  const estimatedQuota = 1024;
   const usagePercent = Math.min((storageUsed / estimatedQuota) * 100, 100);
 
   return (
@@ -210,7 +194,6 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
-      // Get non-student user IDs (creators, admins, CMOs)
       const { data: nonStudentRoles } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -246,24 +229,20 @@ const AdminDashboard = () => {
         supabase.from('business_phases').select('*').limit(1).maybeSingle(),
       ]);
 
-      // Count students = active enrollments excluding non-student roles
       const totalStudents = (allEnrollments || []).filter(
         e => !nonStudentUserIds.has(e.user_id)
       ).length;
 
-      // Count tiers
       const starterCount = (enrollmentTiers || []).filter(e => e.tier === 'starter').length;
       const standardCount = (enrollmentTiers || []).filter(e => e.tier === 'standard').length;
       const lifetimeCount = (enrollmentTiers || []).filter(e => e.tier === 'lifetime').length;
 
-      // Fetch revenue data from payment_attributions
       const { data: allPayments } = await supabase
         .from('payment_attributions')
         .select('final_amount, payment_month, payment_type');
 
       const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-      // Payment method breakdown
       const cardPayments = (allPayments || [])
         .filter(p => p.payment_type === 'card')
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
@@ -271,7 +250,6 @@ const AdminDashboard = () => {
         .filter(p => p.payment_type === 'bank')
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-      // This month's revenue
       const currentMonth = new Date();
       currentMonth.setDate(1);
       const currentMonthStr = currentMonth.toISOString().split('T')[0];
@@ -279,18 +257,14 @@ const AdminDashboard = () => {
         .filter(p => p.payment_month && p.payment_month >= currentMonthStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-      // Last month's revenue
       const lastMonth = new Date();
       lastMonth.setMonth(lastMonth.getMonth() - 1);
       lastMonth.setDate(1);
       const lastMonthStr = lastMonth.toISOString().split('T')[0];
-      const lastMonthEnd = new Date(currentMonth);
-      lastMonthEnd.setDate(0);
       const lastMonthRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= lastMonthStr && p.payment_month < currentMonthStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
-      // Generate revenue chart data (last 6 months)
       const monthlyRevenue: { [key: string]: number } = {};
       const monthlyEnrollments: { [key: string]: number } = {};
       for (let i = 5; i >= 0; i--) {
@@ -330,7 +304,6 @@ const AdminDashboard = () => {
       setRevenueData(chartData);
       setEnrollmentData(enrollmentChartData);
 
-      // Fetch top creators
       const { data: creatorsData } = await supabase
         .from('creator_profiles')
         .select('id, display_name, referral_code, lifetime_paid_users')
@@ -486,390 +459,174 @@ const AdminDashboard = () => {
     },
   ];
 
-  const menuItems = [
-    { label: 'Join Requests', href: '/admin/join-requests', icon: Users, description: 'Review bank transfer signups', badge: stats.pendingJoinRequests },
-    { label: 'Head of Ops Requests', href: '/admin/headops-requests', icon: FileCheck, description: 'Review operational requests from Head of Ops', badge: stats.pendingHeadOpsRequests },
-    { label: 'View Payments', href: '/admin/payments', icon: DollarSign, description: 'All card & bank payments', badge: 0 },
-    { label: 'Payment Settings', href: '/admin/payment-settings', icon: Settings, description: 'Test/Live mode & PayHere config', badge: 0 },
-    { label: 'Payment Reconciliation', href: '/admin/reconciliation', icon: GitCompare, description: 'Fix missing payment attributions', badge: 0 },
-    { label: 'Withdrawal Requests', href: '/admin/withdrawals', icon: Wallet, description: 'Manage creator payouts', badge: stats.pendingWithdrawals },
-    { label: 'Commission & Payouts', href: '/admin/commission-settings', icon: Target, description: 'Commission tiers & minimum payout', badge: 0 },
-    { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, description: 'CMOs, creators, payouts & commissions', badge: 0 },
-    { label: 'Messages', href: '/admin/messages', icon: Users, description: 'Send messages to creators & CMOs', badge: 0 },
-    { label: 'Generate Access Codes', href: '/admin/codes', icon: Key, description: 'Create and manage access codes', badge: 0 },
-    { label: 'Manage Enrollments', href: '/admin/enrollments', icon: Users, description: 'View and manage student enrollments', badge: 0 },
-    { label: 'Content Management', href: '/admin/content', icon: BookOpen, description: 'Upload and organize learning materials', badge: 0 },
-    { label: 'Upgrade Requests', href: '/admin/upgrades', icon: Crown, description: 'Review tier upgrade requests', badge: stats.pendingUpgrades },
-    { label: 'Pricing Settings', href: '/admin/pricing', icon: DollarSign, description: 'Manage package pricing on homepage', badge: 0 },
-    { label: 'Branding Settings', href: '/admin/branding', icon: Palette, description: 'Site name, logo, heading & pricing buttons', badge: 0 },
-    { label: 'Security & Abuse', href: '/admin/security', icon: Shield, description: 'Monitor suspicious activity', badge: 0 },
-  ];
-
-  const pendingTotal = stats.pendingJoinRequests + stats.pendingUpgrades + stats.pendingWithdrawals + stats.pendingHeadOpsRequests;
-
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
-      {/* Header */}
-      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link to="/" className="font-display text-xl font-bold text-foreground">
-                Admin Panel
-              </Link>
-              <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-medium">
-                Admin
-              </span>
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full bg-background">
+        <AdminSidebar stats={stats} />
+        <AdminCommandPalette />
+        
+        <SidebarInset className="flex-1">
+          {/* Header */}
+          <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
+            <SidebarTrigger className="-ml-2" />
+            <div className="flex-1">
+              <h1 className="font-display text-xl font-bold text-foreground">Admin Dashboard</h1>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-muted-foreground text-sm hidden sm:block">{user?.email}</span>
-              <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-foreground">
+            <div className="flex items-center gap-3">
+              {lastUpdated && (
+                <span className="text-xs text-muted-foreground">
+                  Updated {format(lastUpdated, 'h:mm a')}
+                </span>
+              )}
+              <Button variant="ghost" size="sm" onClick={fetchStats} disabled={isLoading}>
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={signOut}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
-          </div>
-        </div>
-      </header>
+          </header>
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Last Updated Timestamp */}
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-xs text-muted-foreground">
-            {lastUpdated ? `Last updated: ${format(lastUpdated, 'PPp')}` : 'Loading...'}
-          </p>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => fetchStats()} 
-            disabled={isLoading}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <RefreshCw className={`w-4 h-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
+          {/* Main Content */}
+          <main className="p-6 space-y-6">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {statCards.map((card) => (
+                <StatCard key={card.label} {...card} />
+              ))}
+            </div>
 
-        {/* Pending Actions Alert */}
-        {pendingTotal > 0 && (
-          <div className="glass-card p-4 mb-6 border-amber-500/30 bg-amber-500/5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center animate-pulse">
-                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Revenue Chart */}
+              <div className="glass-card p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <DollarSign className="w-5 h-5 text-amber-400" />
+                  Revenue (Last 6 Months)
+                </h3>
+                <MiniChart data={revenueData} colors={['#f59e0b']} height={180} />
+              </div>
+
+              {/* Enrollments Chart */}
+              <div className="glass-card p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-blue-400" />
+                  New Enrollments (Last 6 Months)
+                </h3>
+                <MiniChart data={enrollmentData} colors={['#3b82f6']} height={180} />
+              </div>
+            </div>
+
+            {/* Tier & Payment Breakdown */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Tier Distribution */}
+              <div className="glass-card p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-gold" />
+                  Tier Distribution
+                </h3>
+                <div className="flex items-center justify-center mb-4">
+                  <ProgressRing
+                    progress={stats.activeEnrollments > 0 ? (stats.lifetimeCount / stats.activeEnrollments) * 100 : 0}
+                    size={120}
+                    strokeWidth={12}
+                    color="hsl(var(--gold))"
+                    label="Lifetime"
+                  />
                 </div>
-                <div>
-                  <p className="font-medium text-foreground">{pendingTotal} Pending Actions</p>
-                  <p className="text-xs text-muted-foreground">
-                    {stats.pendingJoinRequests > 0 && `${stats.pendingJoinRequests} join requests`}
-                    {stats.pendingJoinRequests > 0 && (stats.pendingUpgrades > 0 || stats.pendingWithdrawals > 0 || stats.pendingHeadOpsRequests > 0) && ', '}
-                    {stats.pendingUpgrades > 0 && `${stats.pendingUpgrades} upgrades`}
-                    {stats.pendingUpgrades > 0 && (stats.pendingWithdrawals > 0 || stats.pendingHeadOpsRequests > 0) && ', '}
-                    {stats.pendingWithdrawals > 0 && `${stats.pendingWithdrawals} withdrawals`}
-                    {stats.pendingWithdrawals > 0 && stats.pendingHeadOpsRequests > 0 && ', '}
-                    {stats.pendingHeadOpsRequests > 0 && `${stats.pendingHeadOpsRequests} ops requests`}
-                  </p>
+                <ChartLegend
+                  items={[
+                    { name: 'Starter', value: stats.starterCount, color: 'bg-muted-foreground' },
+                    { name: 'Standard', value: stats.standardCount, color: 'bg-brand' },
+                    { name: 'Lifetime', value: stats.lifetimeCount, color: 'bg-gold' },
+                  ]}
+                />
+              </div>
+
+              {/* Payment Methods */}
+              <div className="glass-card p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-green-400" />
+                  Payment Methods
+                </h3>
+                <div className="space-y-3 mt-6">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Card Payments</span>
+                    <span className="font-medium text-foreground">Rs. {stats.cardPayments.toLocaleString()}</span>
+                  </div>
+                  <Progress value={stats.totalRevenue > 0 ? (stats.cardPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="text-sm text-muted-foreground">Bank Transfers</span>
+                    <span className="font-medium text-foreground">Rs. {stats.bankPayments.toLocaleString()}</span>
+                  </div>
+                  <Progress value={stats.totalRevenue > 0 ? (stats.bankPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
                 </div>
               </div>
-              <div className="flex gap-2">
-                {stats.pendingJoinRequests > 0 && (
-                  <Link to="/admin/join-requests">
-                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
-                      Join Requests
-                    </Button>
-                  </Link>
-                )}
-                {stats.pendingHeadOpsRequests > 0 && (
-                  <Link to="/admin/headops-requests">
-                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
-                      Ops Requests
-                    </Button>
-                  </Link>
-                )}
-                {stats.pendingUpgrades > 0 && (
-                  <Link to="/admin/upgrades">
-                    <Button size="sm" variant="outline" className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10">
-                      Upgrades
-                    </Button>
-                  </Link>
-                )}
-              </div>
+
+              {/* Storage Usage */}
+              <StorageUsageCard />
             </div>
-          </div>
-        )}
 
-        {/* Business Phase Panel */}
-        <div className="glass-card p-6 mb-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
-                <Target className="w-6 h-6 text-brand" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-foreground text-lg">Business Phase</h3>
-                <p className="text-muted-foreground text-sm">Current: {stats.phaseName}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="text-2xl font-bold text-brand">Phase {stats.currentPhase}</p>
-                <p className="text-xs text-muted-foreground">{stats.totalCreators} creators active</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {statCards.map((stat) => (
-            <StatCard
-              key={stat.label}
-              label={stat.label}
-              value={isLoading ? '...' : stat.value}
-              icon={stat.icon}
-              iconColor={stat.iconColor}
-              trend={stat.trend}
-              subtitle={stat.subtitle}
-            />
-          ))}
-        </div>
-
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Revenue Chart */}
-          <div className="glass-card p-6 lg:col-span-2">
-            <h3 className="font-semibold text-foreground mb-4">Revenue (Last 6 Months)</h3>
-            <MiniChart 
-              data={revenueData} 
-              type="area" 
-              height={180} 
-              showAxis 
-              showGrid 
-            />
-          </div>
-
-          {/* Tier Distribution */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4">User Tiers</h3>
-            <div className="flex items-center justify-center">
-              <MiniChart 
-                data={tierDistributionData} 
-                type="donut" 
-                height={140}
-                colors={['hsl(var(--brand))', 'hsl(199, 89%, 48%)', 'hsl(142, 76%, 36%)']}
-              />
-            </div>
-            <ChartLegend 
-              items={[
-                { name: 'Starter', color: 'hsl(var(--brand))', value: stats.starterCount },
-                { name: 'Standard', color: 'hsl(199, 89%, 48%)', value: stats.standardCount },
-                { name: 'Lifetime', color: 'hsl(142, 76%, 36%)', value: stats.lifetimeCount },
-              ]}
-              className="mt-4 justify-center"
-            />
-          </div>
-        </div>
-
-        {/* Second Row Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Payment Methods */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4">Payment Methods</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <CreditCard className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Card Payments</p>
-                    <p className="text-xs text-muted-foreground">Online gateway</p>
-                  </div>
-                </div>
-                <p className="font-semibold text-foreground">Rs. {stats.cardPayments.toLocaleString()}</p>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                    <Building2 className="w-4 h-4 text-green-500" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Bank Transfers</p>
-                    <p className="text-xs text-muted-foreground">Manual verification</p>
-                  </div>
-                </div>
-                <p className="font-semibold text-foreground">Rs. {stats.bankPayments.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Enrollments Trend */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4">New Enrollments</h3>
-            <MiniChart 
-              data={enrollmentData} 
-              type="bar" 
-              height={140}
-              showAxis
-            />
-          </div>
-
-          {/* Top Creators */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4">Top Creators</h3>
-            {topCreators.length > 0 ? (
-              <div className="space-y-3">
-                {topCreators.slice(0, 5).map((creator, index) => (
-                  <div key={creator.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold ${
-                        index === 0 ? 'bg-amber-500/20 text-amber-500' :
-                        index === 1 ? 'bg-gray-300/20 text-gray-400' :
-                        index === 2 ? 'bg-orange-500/20 text-orange-500' :
-                        'bg-muted text-muted-foreground'
-                      }`}>
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="text-sm font-medium text-foreground truncate max-w-[120px]">
-                          {creator.display_name || creator.referral_code}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {creator.lifetime_paid_users} users
-                        </p>
+            {/* Top Creators */}
+            {topCreators.length > 0 && (
+              <div className="glass-card p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-purple-400" />
+                  Top Creators
+                </h3>
+                <div className="space-y-3">
+                  {topCreators.map((creator, index) => (
+                    <div key={creator.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm text-muted-foreground w-6">#{index + 1}</span>
+                        <div>
+                          <p className="font-medium text-foreground">{creator.display_name || creator.referral_code}</p>
+                          <p className="text-xs text-muted-foreground">{creator.lifetime_paid_users} paid users</p>
+                        </div>
                       </div>
+                      <span className="text-sm font-medium text-foreground">Rs. {creator.revenue.toLocaleString()}</span>
                     </div>
-                    <p className="text-sm font-medium text-foreground">
-                      Rs. {creator.revenue.toLocaleString()}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No creators yet</p>
-            )}
-          </div>
-        </div>
-
-        {/* Storage Usage */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <StorageUsageCard />
-          
-          {/* Quick Stats Summary */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-              <Database className="w-5 h-5 text-blue-400" />
-              Platform Summary
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground">Total Subjects</p>
-                <p className="text-2xl font-bold text-foreground">{stats.totalSubjects}</p>
-              </div>
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground">Access Codes</p>
-                <p className="text-2xl font-bold text-foreground">{stats.activeCodes}/{stats.totalCodes}</p>
-                <p className="text-xs text-muted-foreground">active/total</p>
-              </div>
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground">Total Creators</p>
-                <p className="text-2xl font-bold text-foreground">{stats.totalCreators}</p>
-              </div>
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <p className="text-xs text-muted-foreground">Active Enrollments</p>
-                <p className="text-2xl font-bold text-foreground">{stats.activeEnrollments}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <h2 className="font-display text-lg font-semibold text-foreground mb-4">
-          Quick Actions
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          {menuItems.map((item) => (
-            <Link
-              key={item.href}
-              to={item.href}
-              className="glass-card p-5 hover:border-muted-foreground/30 transition-all group"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="relative w-10 h-10 rounded-lg bg-muted/50 flex items-center justify-center">
-                    <item.icon className="w-5 h-5 text-foreground/80" />
-                    {item.badge > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-amber-500 rounded-full text-background text-xs flex items-center justify-center font-bold px-1">
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-medium text-foreground group-hover:text-amber-400 transition-colors">
-                      {item.label}
-                    </h3>
-                    <p className="text-muted-foreground text-sm">{item.description}</p>
-                  </div>
+                  ))}
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
               </div>
-            </Link>
-          ))}
-        </div>
+            )}
 
-        {/* Danger Zone */}
-        <div className="glass-card p-6 border border-destructive/30 bg-destructive/5">
-          <div className="flex items-center gap-2 mb-4">
-            <Trash2 className="w-5 h-5 text-destructive" />
-            <h3 className="font-semibold text-foreground">Danger Zone</h3>
-          </div>
-          <p className="text-muted-foreground text-sm mb-2">
-            Permanently delete all user accounts, enrollments, payments, referral data, creator accounts, and activity logs.
-          </p>
-          <p className="text-destructive text-xs font-medium mb-4">
-            Warning: This resets the entire platform. Only admin and CMO accounts will be preserved.
-          </p>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" disabled={isClearing}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                {isClearing ? 'Clearing...' : 'Purge All User Data'}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent className="border-destructive/30">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="text-destructive">Confirm Complete Data Purge</AlertDialogTitle>
-                <AlertDialogDescription asChild>
-                  <div className="space-y-3">
-                    <p className="text-sm">This action is irreversible. The following will be permanently deleted:</p>
-                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                      <li>All student profiles & accounts</li>
-                      <li>All creator accounts & their stats</li>
-                      <li>All access codes</li>
-                      <li>All enrollments</li>
-                      <li>All payments (card & bank)</li>
-                      <li>All join requests</li>
-                      <li>All referral attributions & commissions</li>
-                      <li>All withdrawal requests & methods</li>
-                      <li>All discount codes</li>
-                      <li>All upgrade requests</li>
-                      <li>All user sessions & download logs</li>
-                    </ul>
-                    <p className="text-xs text-foreground/70 font-medium border-t pt-3 mt-3">
-                      Admin and CMO accounts will be preserved.
-                    </p>
-                  </div>
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleClearAllData} className="bg-destructive hover:bg-destructive/90">
-                  Purge All Data
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
+            {/* Danger Zone */}
+            <div className="glass-card p-6 border-destructive/30">
+              <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Danger Zone
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Clear all user data, payment records, and creator accounts. Admin and CMO accounts will be preserved.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={isClearing}>
+                    {isClearing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                    Clear All Data
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all user accounts, enrollments, payments, and creator data. Only admin and CMO accounts will be preserved.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearAllData} className="bg-destructive text-destructive-foreground">
+                      Yes, delete everything
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </main>
+        </SidebarInset>
       </div>
-    </main>
+    </SidebarProvider>
   );
 };
 

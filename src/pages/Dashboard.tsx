@@ -16,6 +16,7 @@ import {
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Subject } from '@/types/database';
 import { useBranding } from '@/hooks/useBranding';
+import ReferralProgress from '@/components/dashboard/ReferralProgress';
 
 const Dashboard = () => {
   const { user, enrollment, profile, userSubjects, signOut } = useAuth();
@@ -185,6 +186,9 @@ const Dashboard = () => {
               <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Medium</p>
             </div>
           </section>
+
+          {/* Referral Progress */}
+          <ReferralProgress />
 
           {/* Section Header */}
           <section aria-label="Subjects" className="mb-6">
