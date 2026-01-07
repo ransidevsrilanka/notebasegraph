@@ -578,6 +578,129 @@ export type Database = {
           },
         ]
       }
+      flashcard_progress: {
+        Row: {
+          ease_factor: number | null
+          flashcard_id: string
+          id: string
+          interval_days: number | null
+          last_reviewed_at: string | null
+          next_review_at: string | null
+          repetitions: number | null
+          user_id: string
+        }
+        Insert: {
+          ease_factor?: number | null
+          flashcard_id: string
+          id?: string
+          interval_days?: number | null
+          last_reviewed_at?: string | null
+          next_review_at?: string | null
+          repetitions?: number | null
+          user_id: string
+        }
+        Update: {
+          ease_factor?: number | null
+          flashcard_id?: string
+          id?: string
+          interval_days?: number | null
+          last_reviewed_at?: string | null
+          next_review_at?: string | null
+          repetitions?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcard_progress_flashcard_id_fkey"
+            columns: ["flashcard_id"]
+            isOneToOne: false
+            referencedRelation: "flashcards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flashcard_sets: {
+        Row: {
+          card_count: number | null
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          min_tier: string | null
+          title: string
+          topic_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          card_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          title: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          card_count?: number | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          title?: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcard_sets_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flashcards: {
+        Row: {
+          back_text: string
+          created_at: string | null
+          front_text: string
+          id: string
+          image_url: string | null
+          set_id: string
+          sort_order: number | null
+        }
+        Insert: {
+          back_text: string
+          created_at?: string | null
+          front_text: string
+          id?: string
+          image_url?: string | null
+          set_id: string
+          sort_order?: number | null
+        }
+        Update: {
+          back_text?: string
+          created_at?: string | null
+          front_text?: string
+          id?: string
+          image_url?: string | null
+          set_id?: string
+          sort_order?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flashcards_set_id_fkey"
+            columns: ["set_id"]
+            isOneToOne: false
+            referencedRelation: "flashcard_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       head_ops_requests: {
         Row: {
           admin_notes: string | null
@@ -1018,6 +1141,159 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      question_bank: {
+        Row: {
+          correct_answer: string
+          created_at: string | null
+          created_by: string | null
+          difficulty: string | null
+          explanation: string | null
+          id: string
+          is_active: boolean | null
+          min_tier: string | null
+          options: Json | null
+          question_text: string
+          question_type: string
+          topic_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          correct_answer: string
+          created_at?: string | null
+          created_by?: string | null
+          difficulty?: string | null
+          explanation?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          options?: Json | null
+          question_text: string
+          question_type: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          correct_answer?: string
+          created_at?: string | null
+          created_by?: string | null
+          difficulty?: string | null
+          explanation?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          options?: Json | null
+          question_text?: string
+          question_type?: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "question_bank_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_attempts: {
+        Row: {
+          answers: Json
+          completed_at: string | null
+          created_at: string | null
+          id: string
+          passed: boolean | null
+          quiz_id: string
+          score: number | null
+          time_taken_seconds: number | null
+          total_questions: number | null
+          user_id: string
+        }
+        Insert: {
+          answers: Json
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          passed?: boolean | null
+          quiz_id: string
+          score?: number | null
+          time_taken_seconds?: number | null
+          total_questions?: number | null
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          completed_at?: string | null
+          created_at?: string | null
+          id?: string
+          passed?: boolean | null
+          quiz_id?: string
+          score?: number | null
+          time_taken_seconds?: number | null
+          total_questions?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quizzes: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          min_tier: string | null
+          pass_percentage: number | null
+          question_ids: string[]
+          time_limit_minutes: number | null
+          title: string
+          topic_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          pass_percentage?: number | null
+          question_ids: string[]
+          time_limit_minutes?: number | null
+          title: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_tier?: string | null
+          pass_percentage?: number | null
+          question_ids?: string[]
+          time_limit_minutes?: number | null
+          title?: string
+          topic_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       referral_rewards: {
         Row: {
