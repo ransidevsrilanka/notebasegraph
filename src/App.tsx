@@ -8,9 +8,12 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import ScrollToTop from "@/components/ScrollToTop";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import ForgotPassword from "./pages/ForgotPassword";
 import Access from "./pages/Access";
 import Dashboard from "./pages/Dashboard";
 import Subject from "./pages/Subject";
+import Quiz from "./pages/Quiz";
+import Flashcards from "./pages/Flashcards";
 import Upgrade from "./pages/Upgrade";
 import Activate from "./pages/Activate";
 import Pricing from "./pages/Pricing";
@@ -68,6 +71,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/access" element={<Access />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/about" element={<About />} />
@@ -96,6 +100,16 @@ const App = () => (
             <Route path="/subject/:subjectId" element={
               <ProtectedRoute requireEnrollment requireSubjects>
                 <Subject />
+              </ProtectedRoute>
+            } />
+            <Route path="/quiz/:quizId" element={
+              <ProtectedRoute requireEnrollment>
+                <Quiz />
+              </ProtectedRoute>
+            } />
+            <Route path="/flashcards/:setId" element={
+              <ProtectedRoute requireEnrollment>
+                <Flashcards />
               </ProtectedRoute>
             } />
             <Route path="/upgrade" element={

@@ -145,7 +145,10 @@ const Auth = () => {
                 </Button>
               </form>
 
-              <div className="mt-5 pt-5 border-t border-border text-center">
+              <div className="mt-5 pt-5 border-t border-border text-center space-y-3">
+                <Link to="/forgot-password" className="text-brand hover:underline text-sm block">
+                  Forgot your password?
+                </Link>
                 <p className="text-muted-foreground text-sm">
                   Don't have an account?{' '}
                   <Link to="/access" className="text-brand hover:underline">
