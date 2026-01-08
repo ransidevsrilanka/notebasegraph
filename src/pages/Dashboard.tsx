@@ -60,16 +60,28 @@ const Dashboard = () => {
 
         if (!error && data) setSubjects(data as Subject[]);
       } else {
-        // O/L students - show all subjects for their grade/stream/medium
-        const { data, error } = await supabase
+        // O/L students - show all subjects for their grade/medium
+        // Don't filter by stream for O/L since they don't have streams
+        const isOLevel = enrollment.grade?.startsWith('ol_');
+        
+        let query = supabase
           .from('subjects')
           .select('*')
           .eq('grade', enrollment.grade)
-          .contains('streams', [enrollment.stream])
-          .eq('medium', enrollment.medium)
           .eq('is_active', true)
           .order('sort_order');
+        
+        // Only filter by stream for A/L students
+        if (!isOLevel && enrollment.stream) {
+          query = query.contains('streams', [enrollment.stream]);
+        }
+        
+        // Only filter by medium if it exists
+        if (enrollment.medium) {
+          query = query.eq('medium', enrollment.medium);
+        }
 
+        const { data, error } = await query;
         if (!error && data) setSubjects(data as Subject[]);
       }
       
@@ -160,8 +172,14 @@ const Dashboard = () => {
                   <Crown className="w-4 h-4 text-muted-foreground" />
                 </div>
               </div>
-              <p className="text-2xl font-display font-bold text-foreground">{STREAM_LABELS[enrollment.stream]}</p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Stream</p>
+              <p className="text-2xl font-display font-bold text-foreground">
+                {enrollment.grade?.startsWith('ol_') 
+                  ? GRADE_LABELS[enrollment.grade] 
+                  : STREAM_LABELS[enrollment.stream]}
+              </p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
+                {enrollment.grade?.startsWith('ol_') ? 'Grade' : 'Stream'}
+              </p>
             </div>
 
             <div className="glass-card p-5">
@@ -182,7 +200,7 @@ const Dashboard = () => {
                   <Shield className="w-4 h-4 text-muted-foreground" />
                 </div>
               </div>
-              <p className="text-2xl font-display font-bold text-foreground">{MEDIUM_LABELS[enrollment.medium]}</p>
+              <p className="text-2xl font-display font-bold text-foreground">{MEDIUM_LABELS[enrollment.medium] || 'English'}</p>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Medium</p>
             </div>
           </section>
@@ -195,7 +213,8 @@ const Dashboard = () => {
             <div>
               <h2 className="font-display text-xl font-bold text-foreground">Your Subjects</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                {GRADE_LABELS[enrollment.grade]} • {STREAM_LABELS[enrollment.stream]}
+                {GRADE_LABELS[enrollment.grade]}
+                {!enrollment.grade?.startsWith('ol_') && enrollment.stream && ` • ${STREAM_LABELS[enrollment.stream]}`}
               </p>
             </div>
           </section>
@@ -231,7 +250,7 @@ const Dashboard = () => {
               <Clock className="w-10 h-10 text-brand mx-auto mb-4" />
               <h3 className="font-display text-lg font-semibold text-foreground mb-2">Content Coming Soon</h3>
               <p className="text-muted-foreground text-sm">
-                Your {STREAM_LABELS[enrollment.stream]} subjects are being prepared.
+                Your {enrollment.grade?.startsWith('ol_') ? GRADE_LABELS[enrollment.grade] : STREAM_LABELS[enrollment.stream]} subjects are being prepared.
               </p>
             </div>
           )}

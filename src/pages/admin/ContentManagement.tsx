@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/storageClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { 
   ArrowLeft, 
   BookOpen,
@@ -14,15 +15,71 @@ import {
   Upload,
   FolderOpen,
   X,
-  Search
+  Search,
+  HelpCircle,
+  Brain,
+  Layers,
+  Edit,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType, GradeGroup } from '@/types/database';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS, GRADE_GROUPS } from '@/types/database';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+interface Question {
+  id: string;
+  question_text: string;
+  question_type: 'mcq' | 'true_false' | 'fill_blank';
+  options: string[] | null;
+  correct_answer: string;
+  explanation: string | null;
+  difficulty: 'easy' | 'medium' | 'hard';
+  topic_id: string | null;
+  min_tier: TierType;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface Quiz {
+  id: string;
+  title: string;
+  description: string | null;
+  topic_id: string | null;
+  question_ids: string[];
+  time_limit_minutes: number | null;
+  pass_percentage: number | null;
+  min_tier: TierType;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface FlashcardSet {
+  id: string;
+  title: string;
+  description: string | null;
+  topic_id: string | null;
+  card_count: number;
+  min_tier: TierType;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface Flashcard {
+  id: string;
+  set_id: string;
+  front_text: string;
+  back_text: string;
+  image_url: string | null;
+  sort_order: number;
+}
 
 const ContentManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'content';
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -54,6 +111,49 @@ const ContentManagement = () => {
   const [noteUploadRequested, setNoteUploadRequested] = useState(false);
   const [subjectSearch, setSubjectSearch] = useState('');
 
+  // Question Bank state
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [allTopics, setAllTopics] = useState<Topic[]>([]);
+  const [questionForm, setQuestionForm] = useState({
+    question_text: '',
+    question_type: 'mcq' as 'mcq' | 'true_false' | 'fill_blank',
+    options: ['', '', '', ''],
+    correct_answer: '',
+    explanation: '',
+    difficulty: 'medium' as 'easy' | 'medium' | 'hard',
+    topic_id: '',
+    min_tier: 'starter' as TierType,
+  });
+
+  // Quiz state
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizForm, setQuizForm] = useState({
+    title: '',
+    description: '',
+    topic_id: '',
+    question_ids: [] as string[],
+    time_limit_minutes: 30,
+    pass_percentage: 60,
+    min_tier: 'starter' as TierType,
+  });
+  const [topicQuestions, setTopicQuestions] = useState<Question[]>([]);
+
+  // Flashcard state
+  const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([]);
+  const [selectedFlashcardSet, setSelectedFlashcardSet] = useState<FlashcardSet | null>(null);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [flashcardSetForm, setFlashcardSetForm] = useState({
+    title: '',
+    description: '',
+    topic_id: '',
+    min_tier: 'starter' as TierType,
+  });
+  const [flashcardForm, setFlashcardForm] = useState({
+    front_text: '',
+    back_text: '',
+  });
+
+  // Fetch functions
   const fetchSubjects = async () => {
     setIsLoading(true);
     const { data, error } = await supabase
@@ -67,6 +167,17 @@ const ContentManagement = () => {
       setSubjects(data as Subject[]);
     }
     setIsLoading(false);
+  };
+
+  const fetchAllTopics = async () => {
+    const { data, error } = await supabase
+      .from('topics')
+      .select('*, subjects(name)')
+      .order('name', { ascending: true });
+
+    if (!error && data) {
+      setAllTopics(data as any);
+    }
   };
 
   const fetchTopics = async (subjectId: string) => {
@@ -93,9 +204,71 @@ const ContentManagement = () => {
     }
   };
 
+  const fetchQuestions = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('question_bank')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setQuestions(data as Question[]);
+    }
+    setIsLoading(false);
+  };
+
+  const fetchQuizzes = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('quizzes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setQuizzes(data as Quiz[]);
+    }
+    setIsLoading(false);
+  };
+
+  const fetchFlashcardSets = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('flashcard_sets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setFlashcardSets(data as FlashcardSet[]);
+    }
+    setIsLoading(false);
+  };
+
+  const fetchFlashcards = async (setId: string) => {
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('*')
+      .eq('set_id', setId)
+      .order('sort_order', { ascending: true });
+
+    if (!error && data) {
+      setFlashcards(data as Flashcard[]);
+    }
+  };
+
   useEffect(() => {
     fetchSubjects();
+    fetchAllTopics();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'questions') {
+      fetchQuestions();
+    } else if (activeTab === 'quizzes') {
+      fetchQuizzes();
+    } else if (activeTab === 'flashcards') {
+      fetchFlashcardSets();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (selectedSubject) {
@@ -111,6 +284,34 @@ const ContentManagement = () => {
     }
   }, [selectedTopic]);
 
+  useEffect(() => {
+    if (selectedFlashcardSet) {
+      fetchFlashcards(selectedFlashcardSet.id);
+    }
+  }, [selectedFlashcardSet]);
+
+  // Fetch questions when quiz topic changes
+  useEffect(() => {
+    const fetchTopicQuestions = async () => {
+      if (!quizForm.topic_id) {
+        setTopicQuestions([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from('question_bank')
+        .select('*')
+        .eq('topic_id', quizForm.topic_id)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setTopicQuestions(data as Question[]);
+      }
+    };
+    fetchTopicQuestions();
+  }, [quizForm.topic_id]);
+
+  // Subject/Topic/Note handlers (existing)
   const handleAddSubject = async () => {
     if (!name.trim()) {
       toast.error('Subject name is required');
@@ -129,7 +330,7 @@ const ContentManagement = () => {
         name,
         description,
         grade,
-        stream: selectedStreams[0], // Legacy field for backwards compatibility
+        stream: selectedStreams[0],
         streams: selectedStreams,
         medium,
         is_active: true,
@@ -170,6 +371,7 @@ const ContentManagement = () => {
       setTopicName('');
       setTopicDescription('');
       fetchTopics(selectedSubject.id);
+      fetchAllTopics();
     }
     setIsAdding(false);
   };
@@ -182,7 +384,6 @@ const ContentManagement = () => {
 
     setIsUploading(true);
     try {
-      // Upload file to storage
       const fileExt = noteFile.name.split('.').pop();
       const fileName = `${selectedTopic.id}/${Date.now()}.${fileExt}`;
       
@@ -192,14 +393,13 @@ const ContentManagement = () => {
 
       if (uploadError) throw uploadError;
 
-      // Store only the file path, not the public URL (security fix)
       const { error: insertError } = await supabase
         .from('notes')
         .insert({
           topic_id: selectedTopic.id,
           title: noteTitle,
           description: noteDescription,
-          file_url: fileName, // Store path only, not full URL
+          file_url: fileName,
           file_size: noteFile.size,
           min_tier: noteMinTier,
           is_active: true,
@@ -220,7 +420,6 @@ const ContentManagement = () => {
     setIsUploading(false);
   };
 
-  // Side-effect controlled note upload
   useEffect(() => {
     if (!noteUploadRequested) return;
     setNoteUploadRequested(false);
@@ -230,18 +429,13 @@ const ContentManagement = () => {
   const deleteSubject = async (id: string) => {
     if (!confirm('Are you sure you want to delete this subject?')) return;
 
-    const { error } = await supabase
-      .from('subjects')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('subjects').delete().eq('id', id);
 
     if (error) {
       toast.error('Failed to delete subject');
     } else {
       toast.success('Subject deleted');
-      if (selectedSubject?.id === id) {
-        setSelectedSubject(null);
-      }
+      if (selectedSubject?.id === id) setSelectedSubject(null);
       fetchSubjects();
     }
   };
@@ -249,26 +443,21 @@ const ContentManagement = () => {
   const deleteTopic = async (id: string) => {
     if (!confirm('Delete this topic and all its notes?')) return;
 
-    const { error } = await supabase
-      .from('topics')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('topics').delete().eq('id', id);
 
     if (error) {
       toast.error('Failed to delete topic');
     } else {
       toast.success('Topic deleted');
-      if (selectedTopic?.id === id) {
-        setSelectedTopic(null);
-      }
+      if (selectedTopic?.id === id) setSelectedTopic(null);
       if (selectedSubject) fetchTopics(selectedSubject.id);
+      fetchAllTopics();
     }
   };
 
   const deleteNote = async (id: string, fileUrl: string | null) => {
     if (!confirm('Delete this note?')) return;
 
-    // Delete from storage if file exists
     if (fileUrl) {
       const path = fileUrl.split('/notes/')[1];
       if (path) {
@@ -276,10 +465,7 @@ const ContentManagement = () => {
       }
     }
 
-    const { error } = await supabase
-      .from('notes')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('notes').delete().eq('id', id);
 
     if (error) {
       toast.error('Failed to delete note');
@@ -290,14 +476,209 @@ const ContentManagement = () => {
   };
 
   const toggleSubjectActive = async (id: string, isActive: boolean) => {
-    const { error } = await supabase
-      .from('subjects')
-      .update({ is_active: !isActive })
-      .eq('id', id);
+    const { error } = await supabase.from('subjects').update({ is_active: !isActive }).eq('id', id);
 
     if (!error) {
       toast.success(isActive ? 'Subject deactivated' : 'Subject activated');
       fetchSubjects();
+    }
+  };
+
+  // Question Bank handlers
+  const handleAddQuestion = async () => {
+    if (!questionForm.question_text.trim()) {
+      toast.error('Question text is required');
+      return;
+    }
+    if (!questionForm.correct_answer.trim()) {
+      toast.error('Correct answer is required');
+      return;
+    }
+
+    setIsAdding(true);
+    const { error } = await supabase.from('question_bank').insert({
+      question_text: questionForm.question_text,
+      question_type: questionForm.question_type,
+      options: questionForm.question_type === 'mcq' ? questionForm.options.filter(o => o.trim()) : null,
+      correct_answer: questionForm.correct_answer,
+      explanation: questionForm.explanation || null,
+      difficulty: questionForm.difficulty,
+      topic_id: questionForm.topic_id || null,
+      min_tier: questionForm.min_tier,
+      is_active: true,
+    });
+
+    if (error) {
+      toast.error('Failed to add question');
+    } else {
+      toast.success('Question added');
+      setQuestionForm({
+        question_text: '',
+        question_type: 'mcq',
+        options: ['', '', '', ''],
+        correct_answer: '',
+        explanation: '',
+        difficulty: 'medium',
+        topic_id: '',
+        min_tier: 'starter',
+      });
+      fetchQuestions();
+    }
+    setIsAdding(false);
+  };
+
+  const deleteQuestion = async (id: string) => {
+    if (!confirm('Delete this question?')) return;
+
+    const { error } = await supabase.from('question_bank').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete question');
+    } else {
+      toast.success('Question deleted');
+      fetchQuestions();
+    }
+  };
+
+  // Quiz handlers
+  const handleAddQuiz = async () => {
+    if (!quizForm.title.trim()) {
+      toast.error('Quiz title is required');
+      return;
+    }
+    if (quizForm.question_ids.length === 0) {
+      toast.error('Select at least one question');
+      return;
+    }
+
+    setIsAdding(true);
+    const { error } = await supabase.from('quizzes').insert({
+      title: quizForm.title,
+      description: quizForm.description || null,
+      topic_id: quizForm.topic_id || null,
+      question_ids: quizForm.question_ids,
+      time_limit_minutes: quizForm.time_limit_minutes,
+      pass_percentage: quizForm.pass_percentage,
+      min_tier: quizForm.min_tier,
+      is_active: true,
+    });
+
+    if (error) {
+      toast.error('Failed to create quiz');
+    } else {
+      toast.success('Quiz created');
+      setQuizForm({
+        title: '',
+        description: '',
+        topic_id: '',
+        question_ids: [],
+        time_limit_minutes: 30,
+        pass_percentage: 60,
+        min_tier: 'starter',
+      });
+      fetchQuizzes();
+    }
+    setIsAdding(false);
+  };
+
+  const deleteQuiz = async (id: string) => {
+    if (!confirm('Delete this quiz?')) return;
+
+    const { error } = await supabase.from('quizzes').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete quiz');
+    } else {
+      toast.success('Quiz deleted');
+      fetchQuizzes();
+    }
+  };
+
+  // Flashcard handlers
+  const handleAddFlashcardSet = async () => {
+    if (!flashcardSetForm.title.trim()) {
+      toast.error('Set title is required');
+      return;
+    }
+
+    setIsAdding(true);
+    const { error } = await supabase.from('flashcard_sets').insert({
+      title: flashcardSetForm.title,
+      description: flashcardSetForm.description || null,
+      topic_id: flashcardSetForm.topic_id || null,
+      min_tier: flashcardSetForm.min_tier,
+      is_active: true,
+    });
+
+    if (error) {
+      toast.error('Failed to create flashcard set');
+    } else {
+      toast.success('Flashcard set created');
+      setFlashcardSetForm({
+        title: '',
+        description: '',
+        topic_id: '',
+        min_tier: 'starter',
+      });
+      fetchFlashcardSets();
+    }
+    setIsAdding(false);
+  };
+
+  const deleteFlashcardSet = async (id: string) => {
+    if (!confirm('Delete this flashcard set and all its cards?')) return;
+
+    const { error } = await supabase.from('flashcard_sets').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete flashcard set');
+    } else {
+      toast.success('Flashcard set deleted');
+      if (selectedFlashcardSet?.id === id) setSelectedFlashcardSet(null);
+      fetchFlashcardSets();
+    }
+  };
+
+  const handleAddFlashcard = async () => {
+    if (!flashcardForm.front_text.trim() || !flashcardForm.back_text.trim()) {
+      toast.error('Front and back text are required');
+      return;
+    }
+    if (!selectedFlashcardSet) return;
+
+    setIsAdding(true);
+    const { error } = await supabase.from('flashcards').insert({
+      set_id: selectedFlashcardSet.id,
+      front_text: flashcardForm.front_text,
+      back_text: flashcardForm.back_text,
+      sort_order: flashcards.length,
+    });
+
+    if (error) {
+      toast.error('Failed to add flashcard');
+    } else {
+      toast.success('Flashcard added');
+      setFlashcardForm({ front_text: '', back_text: '' });
+      fetchFlashcards(selectedFlashcardSet.id);
+      // Update card count
+      await supabase.from('flashcard_sets').update({ card_count: flashcards.length + 1 }).eq('id', selectedFlashcardSet.id);
+    }
+    setIsAdding(false);
+  };
+
+  const deleteFlashcard = async (id: string) => {
+    if (!confirm('Delete this flashcard?')) return;
+
+    const { error } = await supabase.from('flashcards').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete flashcard');
+    } else {
+      toast.success('Flashcard deleted');
+      if (selectedFlashcardSet) {
+        fetchFlashcards(selectedFlashcardSet.id);
+        await supabase.from('flashcard_sets').update({ card_count: flashcards.length - 1 }).eq('id', selectedFlashcardSet.id);
+      }
     }
   };
 
@@ -333,7 +714,7 @@ const ContentManagement = () => {
   // Subject List View
   const renderSubjectList = () => (
     <>
-      {/* Add Subject Form - With Grade dropdown */}
+      {/* Add Subject Form */}
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus className="w-4 h-4 text-brand" />
@@ -361,7 +742,6 @@ const ContentManagement = () => {
             />
           </div>
 
-          {/* Level Selection */}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Level</label>
             <select
@@ -369,7 +749,6 @@ const ContentManagement = () => {
               onChange={(e) => {
                 const group = e.target.value as GradeGroup;
                 setSelectedGradeGroup(group);
-                // Set default grade for the selected level
                 setGrade(GRADE_GROUPS[group].grades[0]);
               }}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
@@ -380,7 +759,6 @@ const ContentManagement = () => {
             </select>
           </div>
 
-          {/* Grade Selection - Shows specific grades based on level */}
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">Grade</label>
             <select
@@ -392,9 +770,6 @@ const ContentManagement = () => {
                 <option key={gradeValue} value={gradeValue}>{GRADE_LABELS[gradeValue]}</option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Content will be organized by this grade
-            </p>
           </div>
 
           <div className="md:col-span-2">
@@ -486,10 +861,8 @@ const ContentManagement = () => {
           <div className="p-8 text-center text-muted-foreground text-sm">No subjects added yet</div>
         ) : (
           <div>
-            {/* Group by O/L and A/L */}
             {Object.entries(GRADE_GROUPS).map(([groupKey, { label, grades }]) => {
               const allGroupSubjects = subjects.filter(s => grades.includes(s.grade as GradeLevel));
-              // Apply search filter
               const groupSubjects = allGroupSubjects.filter(s => {
                 if (!subjectSearch) return true;
                 const search = subjectSearch.toLowerCase();
@@ -571,7 +944,6 @@ const ContentManagement = () => {
   // Topics View
   const renderTopicList = () => (
     <>
-      {/* Add Topic Form */}
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus className="w-4 h-4 text-brand" />
@@ -605,7 +977,6 @@ const ContentManagement = () => {
         </Button>
       </div>
 
-      {/* Topics List */}
       <div className="glass-card overflow-hidden">
         <div className="p-4 border-b border-border">
           <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
@@ -620,10 +991,7 @@ const ContentManagement = () => {
           <div className="divide-y divide-border">
             {topics.map((topic) => (
               <div key={topic.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                <button
-                  onClick={() => setSelectedTopic(topic)}
-                  className="flex-1 text-left"
-                >
+                <button onClick={() => setSelectedTopic(topic)} className="flex-1 text-left">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
                       <FolderOpen className="w-5 h-5 text-brand" />
@@ -638,12 +1006,7 @@ const ContentManagement = () => {
                   <Button variant="ghost" size="sm" onClick={() => setSelectedTopic(topic)}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteTopic(topic.id)}
-                    className="text-destructive hover:text-destructive"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => deleteTopic(topic.id)} className="text-destructive hover:text-destructive">
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -658,7 +1021,6 @@ const ContentManagement = () => {
   // Notes View
   const renderNotesList = () => (
     <>
-      {/* Upload Note Form */}
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Upload className="w-4 h-4 text-brand" />
@@ -722,23 +1084,12 @@ const ContentManagement = () => {
           </div>
         </div>
 
-        <Button
-          type="button"
-          variant="brand"
-          size="sm"
-          onClick={() => setNoteUploadRequested(true)}
-          disabled={isUploading || !noteFile}
-        >
-          {isUploading ? (
-            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-          ) : (
-            <Upload className="w-4 h-4 mr-2" />
-          )}
+        <Button type="button" variant="brand" size="sm" onClick={() => setNoteUploadRequested(true)} disabled={isUploading || !noteFile}>
+          {isUploading ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
           Upload Note
         </Button>
       </div>
 
-      {/* Notes List */}
       <div className="glass-card overflow-hidden">
         <div className="p-4 border-b border-border">
           <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
@@ -766,21 +1117,11 @@ const ContentManagement = () => {
                 </div>
                 <div className="flex items-center gap-2">
                   {note.file_url && (
-                    <a
-                      href={note.file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-brand hover:underline text-sm"
-                    >
+                    <a href={note.file_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline text-sm">
                       View
                     </a>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteNote(note.id, note.file_url)}
-                    className="text-destructive hover:text-destructive"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => deleteNote(note.id, note.file_url)} className="text-destructive hover:text-destructive">
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -789,6 +1130,525 @@ const ContentManagement = () => {
           </div>
         )}
       </div>
+    </>
+  );
+
+  // Question Bank View
+  const renderQuestionBank = () => (
+    <>
+      <div className="glass-card p-5 mb-6">
+        <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Plus className="w-4 h-4 text-brand" />
+          Add New Question
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Question Text *</label>
+            <Textarea
+              value={questionForm.question_text}
+              onChange={(e) => setQuestionForm({ ...questionForm, question_text: e.target.value })}
+              placeholder="Enter your question..."
+              className="bg-secondary border-border min-h-[80px]"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Question Type</label>
+            <select
+              value={questionForm.question_type}
+              onChange={(e) => setQuestionForm({ ...questionForm, question_type: e.target.value as any })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              <option value="mcq">Multiple Choice</option>
+              <option value="true_false">True/False</option>
+              <option value="fill_blank">Fill in the Blank</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+            <select
+              value={questionForm.topic_id}
+              onChange={(e) => setQuestionForm({ ...questionForm, topic_id: e.target.value })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              <option value="">Select topic...</option>
+              {allTopics.map((topic: any) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {questionForm.question_type === 'mcq' && (
+            <div className="md:col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Options</label>
+              <div className="grid grid-cols-2 gap-2">
+                {questionForm.options.map((opt, idx) => (
+                  <Input
+                    key={idx}
+                    value={opt}
+                    onChange={(e) => {
+                      const newOptions = [...questionForm.options];
+                      newOptions[idx] = e.target.value;
+                      setQuestionForm({ ...questionForm, options: newOptions });
+                    }}
+                    placeholder={`Option ${idx + 1}`}
+                    className="bg-secondary border-border h-9"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Correct Answer *</label>
+            {questionForm.question_type === 'true_false' ? (
+              <select
+                value={questionForm.correct_answer}
+                onChange={(e) => setQuestionForm({ ...questionForm, correct_answer: e.target.value })}
+                className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+              >
+                <option value="">Select...</option>
+                <option value="true">True</option>
+                <option value="false">False</option>
+              </select>
+            ) : (
+              <Input
+                value={questionForm.correct_answer}
+                onChange={(e) => setQuestionForm({ ...questionForm, correct_answer: e.target.value })}
+                placeholder="Enter correct answer"
+                className="bg-secondary border-border h-9"
+              />
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Difficulty</label>
+            <select
+              value={questionForm.difficulty}
+              onChange={(e) => setQuestionForm({ ...questionForm, difficulty: e.target.value as any })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Minimum Tier</label>
+            <select
+              value={questionForm.min_tier}
+              onChange={(e) => setQuestionForm({ ...questionForm, min_tier: e.target.value as TierType })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              {Object.entries(TIER_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Explanation (optional)</label>
+            <Textarea
+              value={questionForm.explanation}
+              onChange={(e) => setQuestionForm({ ...questionForm, explanation: e.target.value })}
+              placeholder="Explain the correct answer..."
+              className="bg-secondary border-border"
+            />
+          </div>
+        </div>
+
+        <Button variant="brand" size="sm" onClick={handleAddQuestion} disabled={isAdding}>
+          {isAdding ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          Add Question
+        </Button>
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
+            <HelpCircle className="w-4 h-4 text-brand" />
+            Questions ({questions.length})
+          </h2>
+          <Button variant="ghost" size="sm" onClick={fetchQuestions}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
+        ) : questions.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">No questions yet. Add one above.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {questions.map((q) => (
+              <div key={q.id} className="p-4 hover:bg-secondary/30">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <p className="text-foreground text-sm font-medium">{q.question_text}</p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <Badge variant="secondary" className="text-xs">{q.question_type}</Badge>
+                      <Badge variant="outline" className="text-xs">{q.difficulty}</Badge>
+                      <Badge variant="outline" className="text-xs">{TIER_LABELS[q.min_tier as TierType]}</Badge>
+                    </div>
+                    <p className="text-muted-foreground text-xs mt-2">
+                      Answer: <span className="text-brand">{q.correct_answer}</span>
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => deleteQuestion(q.id)} className="text-destructive hover:text-destructive">
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  // Quizzes View
+  const renderQuizzes = () => (
+    <>
+      <div className="glass-card p-5 mb-6">
+        <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Plus className="w-4 h-4 text-brand" />
+          Create New Quiz
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Quiz Title *</label>
+            <Input
+              value={quizForm.title}
+              onChange={(e) => setQuizForm({ ...quizForm, title: e.target.value })}
+              placeholder="e.g., Chapter 1 Quiz"
+              className="bg-secondary border-border h-9"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+            <select
+              value={quizForm.topic_id}
+              onChange={(e) => setQuizForm({ ...quizForm, topic_id: e.target.value, question_ids: [] })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              <option value="">Select topic...</option>
+              {allTopics.map((topic: any) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Time Limit (minutes)</label>
+            <Input
+              type="number"
+              value={quizForm.time_limit_minutes}
+              onChange={(e) => setQuizForm({ ...quizForm, time_limit_minutes: Number(e.target.value) })}
+              className="bg-secondary border-border h-9"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Pass Percentage</label>
+            <Input
+              type="number"
+              value={quizForm.pass_percentage}
+              onChange={(e) => setQuizForm({ ...quizForm, pass_percentage: Number(e.target.value) })}
+              className="bg-secondary border-border h-9"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Minimum Tier</label>
+            <select
+              value={quizForm.min_tier}
+              onChange={(e) => setQuizForm({ ...quizForm, min_tier: e.target.value as TierType })}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+            >
+              {Object.entries(TIER_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Description</label>
+            <Input
+              value={quizForm.description}
+              onChange={(e) => setQuizForm({ ...quizForm, description: e.target.value })}
+              placeholder="Brief description"
+              className="bg-secondary border-border h-9"
+            />
+          </div>
+
+          {quizForm.topic_id && (
+            <div className="md:col-span-2">
+              <label className="text-xs text-muted-foreground mb-2 block">
+                Select Questions ({quizForm.question_ids.length} selected)
+              </label>
+              {topicQuestions.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No questions for this topic. Add questions first.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-2">
+                  {topicQuestions.map((q) => (
+                    <label key={q.id} className="flex items-start gap-2 p-2 rounded hover:bg-secondary cursor-pointer">
+                      <Checkbox
+                        checked={quizForm.question_ids.includes(q.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setQuizForm({ ...quizForm, question_ids: [...quizForm.question_ids, q.id] });
+                          } else {
+                            setQuizForm({ ...quizForm, question_ids: quizForm.question_ids.filter(id => id !== q.id) });
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-foreground">{q.question_text}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <Button variant="brand" size="sm" onClick={handleAddQuiz} disabled={isAdding}>
+          {isAdding ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+          Create Quiz
+        </Button>
+      </div>
+
+      <div className="glass-card overflow-hidden">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
+            <Brain className="w-4 h-4 text-brand" />
+            Quizzes ({quizzes.length})
+          </h2>
+          <Button variant="ghost" size="sm" onClick={fetchQuizzes}>
+            <RefreshCw className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {isLoading ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
+        ) : quizzes.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground text-sm">No quizzes yet. Create one above.</div>
+        ) : (
+          <div className="divide-y divide-border">
+            {quizzes.map((quiz) => (
+              <div key={quiz.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
+                <div>
+                  <p className="text-foreground font-medium text-sm">{quiz.title}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-muted-foreground text-xs">{quiz.question_ids.length} questions</span>
+                    <span className="text-muted-foreground text-xs">•</span>
+                    <span className="text-muted-foreground text-xs">{quiz.time_limit_minutes} min</span>
+                    <span className="text-muted-foreground text-xs">•</span>
+                    <span className="text-muted-foreground text-xs">{quiz.pass_percentage}% to pass</span>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => deleteQuiz(quiz.id)} className="text-destructive hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  // Flashcards View
+  const renderFlashcards = () => (
+    <>
+      {!selectedFlashcardSet ? (
+        <>
+          <div className="glass-card p-5 mb-6">
+            <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-brand" />
+              Create Flashcard Set
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Set Title *</label>
+                <Input
+                  value={flashcardSetForm.title}
+                  onChange={(e) => setFlashcardSetForm({ ...flashcardSetForm, title: e.target.value })}
+                  placeholder="e.g., Chapter 1 Vocabulary"
+                  className="bg-secondary border-border h-9"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+                <select
+                  value={flashcardSetForm.topic_id}
+                  onChange={(e) => setFlashcardSetForm({ ...flashcardSetForm, topic_id: e.target.value })}
+                  className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                >
+                  <option value="">Select topic...</option>
+                  {allTopics.map((topic: any) => (
+                    <option key={topic.id} value={topic.id}>
+                      {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Minimum Tier</label>
+                <select
+                  value={flashcardSetForm.min_tier}
+                  onChange={(e) => setFlashcardSetForm({ ...flashcardSetForm, min_tier: e.target.value as TierType })}
+                  className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                >
+                  {Object.entries(TIER_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Description</label>
+                <Input
+                  value={flashcardSetForm.description}
+                  onChange={(e) => setFlashcardSetForm({ ...flashcardSetForm, description: e.target.value })}
+                  placeholder="Brief description"
+                  className="bg-secondary border-border h-9"
+                />
+              </div>
+            </div>
+
+            <Button variant="brand" size="sm" onClick={handleAddFlashcardSet} disabled={isAdding}>
+              {isAdding ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Create Set
+            </Button>
+          </div>
+
+          <div className="glass-card overflow-hidden">
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
+                <Layers className="w-4 h-4 text-brand" />
+                Flashcard Sets ({flashcardSets.length})
+              </h2>
+              <Button variant="ghost" size="sm" onClick={fetchFlashcardSets}>
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {isLoading ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">Loading...</div>
+            ) : flashcardSets.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">No flashcard sets yet. Create one above.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {flashcardSets.map((set) => (
+                  <div key={set.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
+                    <button onClick={() => setSelectedFlashcardSet(set)} className="flex-1 text-left">
+                      <p className="text-foreground font-medium text-sm">{set.title}</p>
+                      <p className="text-muted-foreground text-xs mt-1">
+                        {set.card_count || 0} cards • {TIER_LABELS[set.min_tier as TierType]}
+                      </p>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedFlashcardSet(set)}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteFlashcardSet(set.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 text-sm mb-4">
+            <button onClick={() => setSelectedFlashcardSet(null)} className="text-brand hover:underline">
+              Flashcard Sets
+            </button>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            <span className="text-foreground">{selectedFlashcardSet.title}</span>
+          </div>
+
+          <div className="glass-card p-5 mb-6">
+            <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-brand" />
+              Add Flashcard
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Front (Question/Term) *</label>
+                <Textarea
+                  value={flashcardForm.front_text}
+                  onChange={(e) => setFlashcardForm({ ...flashcardForm, front_text: e.target.value })}
+                  placeholder="Enter front text..."
+                  className="bg-secondary border-border min-h-[80px]"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Back (Answer/Definition) *</label>
+                <Textarea
+                  value={flashcardForm.back_text}
+                  onChange={(e) => setFlashcardForm({ ...flashcardForm, back_text: e.target.value })}
+                  placeholder="Enter back text..."
+                  className="bg-secondary border-border min-h-[80px]"
+                />
+              </div>
+            </div>
+
+            <Button variant="brand" size="sm" onClick={handleAddFlashcard} disabled={isAdding}>
+              {isAdding ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+              Add Card
+            </Button>
+          </div>
+
+          <div className="glass-card overflow-hidden">
+            <div className="p-4 border-b border-border">
+              <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
+                <Layers className="w-4 h-4 text-brand" />
+                Cards ({flashcards.length})
+              </h2>
+            </div>
+
+            {flashcards.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">No cards yet. Add one above.</div>
+            ) : (
+              <div className="divide-y divide-border">
+                {flashcards.map((card, idx) => (
+                  <div key={card.id} className="p-4 hover:bg-secondary/30">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-muted-foreground text-xs">#{idx + 1}</span>
+                        </div>
+                        <p className="text-foreground text-sm font-medium mb-1">Front: {card.front_text}</p>
+                        <p className="text-muted-foreground text-sm">Back: {card.back_text}</p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => deleteFlashcard(card.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </>
   );
 
@@ -802,18 +1662,52 @@ const ContentManagement = () => {
             </Link>
             <div>
               <h1 className="font-display text-lg font-semibold text-foreground">Content Management</h1>
-              <p className="text-muted-foreground text-sm">Manage subjects, topics, and notes</p>
+              <p className="text-muted-foreground text-sm">Manage subjects, topics, notes, questions, quizzes, and flashcards</p>
             </div>
           </div>
         </div>
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {renderBreadcrumb()}
-        
-        {!selectedSubject && renderSubjectList()}
-        {selectedSubject && !selectedTopic && renderTopicList()}
-        {selectedSubject && selectedTopic && renderNotesList()}
+        <Tabs value={activeTab} onValueChange={(value) => setSearchParams({ tab: value })} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 mb-6">
+            <TabsTrigger value="content" className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Content</span>
+            </TabsTrigger>
+            <TabsTrigger value="questions" className="flex items-center gap-2">
+              <HelpCircle className="w-4 h-4" />
+              <span className="hidden sm:inline">Questions</span>
+            </TabsTrigger>
+            <TabsTrigger value="quizzes" className="flex items-center gap-2">
+              <Brain className="w-4 h-4" />
+              <span className="hidden sm:inline">Quizzes</span>
+            </TabsTrigger>
+            <TabsTrigger value="flashcards" className="flex items-center gap-2">
+              <Layers className="w-4 h-4" />
+              <span className="hidden sm:inline">Flashcards</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="content">
+            {renderBreadcrumb()}
+            {!selectedSubject && renderSubjectList()}
+            {selectedSubject && !selectedTopic && renderTopicList()}
+            {selectedSubject && selectedTopic && renderNotesList()}
+          </TabsContent>
+
+          <TabsContent value="questions">
+            {renderQuestionBank()}
+          </TabsContent>
+
+          <TabsContent value="quizzes">
+            {renderQuizzes()}
+          </TabsContent>
+
+          <TabsContent value="flashcards">
+            {renderFlashcards()}
+          </TabsContent>
+        </Tabs>
       </div>
     </main>
   );

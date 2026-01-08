@@ -42,7 +42,10 @@ const AccessCodes = () => {
 
   // Form state
   const [grade, setGrade] = useState<GradeLevel>('al_grade13');
-  const [stream, setStream] = useState<StreamType>('maths');
+  const [stream, setStream] = useState<StreamType | null>('maths');
+  
+  // Helper to check if current grade is O/L
+  const isOLevelGrade = grade?.startsWith('ol_');
   const [medium, setMedium] = useState<MediumType>('english');
   const [tier, setTier] = useState<TierType>('standard');
   const [durationDays, setDurationDays] = useState(365);
@@ -108,7 +111,7 @@ const AccessCodes = () => {
       newCodes.push({
         code: generateCode(),
         grade,
-        stream,
+        stream: isOLevelGrade ? null : stream, // O/L students don't have streams
         medium,
         tier,
         duration_days: tier === 'lifetime' ? 0 : durationDays,
@@ -277,18 +280,28 @@ const AccessCodes = () => {
               </select>
             </div>
 
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Stream</label>
-              <select
-                value={stream}
-                onChange={(e) => setStream(e.target.value as StreamType)}
-                className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
-              >
-                {Object.entries(STREAM_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </div>
+            {!isOLevelGrade && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Stream</label>
+                <select
+                  value={stream || 'maths'}
+                  onChange={(e) => setStream(e.target.value as StreamType)}
+                  className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                >
+                  {Object.entries(STREAM_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {isOLevelGrade && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Stream</label>
+                <div className="w-full h-9 px-3 rounded-md bg-muted border border-border text-muted-foreground text-sm flex items-center">
+                  Not applicable for O/L
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Medium</label>
@@ -384,7 +397,7 @@ const AccessCodes = () => {
                         <code className="font-mono text-brand text-sm">{code.code}</code>
                       </td>
                       <td className="p-3 text-foreground text-sm">{GRADE_LABELS[code.grade]}</td>
-                      <td className="p-3 text-foreground text-sm">{STREAM_LABELS[code.stream]}</td>
+                      <td className="p-3 text-foreground text-sm">{code.stream ? STREAM_LABELS[code.stream] : '—'}</td>
                       <td className="p-3 text-foreground text-sm">{TIER_LABELS[code.tier]}</td>
                       <td className="p-3">
                         <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[code.status]}`}>
