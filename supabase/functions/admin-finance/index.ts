@@ -194,8 +194,10 @@ serve(async (req) => {
           creatorData = foundCreator;
           // Use dynamic commission rate from DB tiers
           creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+          // COMMISSION FORMULA: commission = final_sale_price × commission_rate
+          // This is the CORRECT calculation - always from final amount (sale price after discount)
           creatorCommissionAmount = final_amount * creatorCommissionRate;
-          console.log("Creator found by ref:", creatorId, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
+          console.log(`[COMMISSION] Creator ${creatorId} | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)} | Formula: ${final_amount} × ${creatorCommissionRate} = ${creatorCommissionAmount}`);
         }
       }
 
@@ -222,8 +224,9 @@ serve(async (req) => {
             creatorData = foundCreator;
             // Use dynamic commission rate from DB tiers
             creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            // COMMISSION FORMULA: commission = final_sale_price × commission_rate
             creatorCommissionAmount = final_amount * creatorCommissionRate;
-            console.log("Creator found by discount code:", foundCreator.id, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
+            console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
           }
         }
       }
@@ -370,8 +373,9 @@ serve(async (req) => {
           creatorData = foundCreator;
           // Use dynamic commission rate from DB tiers
           creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+          // COMMISSION FORMULA: commission = final_sale_price × commission_rate
           creatorCommissionAmount = final_amount * creatorCommissionRate;
-          console.log("Creator found by ref:", creatorId, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
+          console.log(`[COMMISSION] Creator ${creatorId} | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)} | Formula: ${final_amount} × ${creatorCommissionRate} = ${creatorCommissionAmount}`);
         }
       }
 
@@ -398,8 +402,9 @@ serve(async (req) => {
             creatorData = foundCreator;
             // Use dynamic commission rate from DB tiers
             creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+            // COMMISSION FORMULA: commission = final_sale_price × commission_rate
             creatorCommissionAmount = final_amount * creatorCommissionRate;
-            console.log("Creator found by discount code:", foundCreator.id, "Commission rate:", creatorCommissionRate * 100, "%", "Amount:", creatorCommissionAmount);
+            console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
           }
         }
       }

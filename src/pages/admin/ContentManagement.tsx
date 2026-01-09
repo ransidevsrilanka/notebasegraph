@@ -114,6 +114,8 @@ const ContentManagement = () => {
   // Question Bank state
   const [questions, setQuestions] = useState<Question[]>([]);
   const [allTopics, setAllTopics] = useState<Topic[]>([]);
+  const [questionSubjectId, setQuestionSubjectId] = useState('');
+  const [questionSubjectSearch, setQuestionSubjectSearch] = useState('');
   const [questionForm, setQuestionForm] = useState({
     question_text: '',
     question_type: 'mcq' as 'mcq' | 'true_false' | 'fill_blank',
@@ -127,6 +129,8 @@ const ContentManagement = () => {
 
   // Quiz state
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizSubjectId, setQuizSubjectId] = useState('');
+  const [quizSubjectSearch, setQuizSubjectSearch] = useState('');
   const [quizForm, setQuizForm] = useState({
     title: '',
     description: '',
@@ -142,6 +146,8 @@ const ContentManagement = () => {
   const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([]);
   const [selectedFlashcardSet, setSelectedFlashcardSet] = useState<FlashcardSet | null>(null);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [flashcardSubjectId, setFlashcardSubjectId] = useState('');
+  const [flashcardSubjectSearch, setFlashcardSubjectSearch] = useState('');
   const [flashcardSetForm, setFlashcardSetForm] = useState({
     title: '',
     description: '',
@@ -152,6 +158,27 @@ const ContentManagement = () => {
     front_text: '',
     back_text: '',
   });
+
+  // Filtered topics based on subject selection
+  const getFilteredTopics = useCallback((subjectId: string) => {
+    if (!subjectId) return [];
+    return allTopics.filter((t: any) => t.subject_id === subjectId);
+  }, [allTopics]);
+
+  const questionFilteredTopics = getFilteredTopics(questionSubjectId);
+  const quizFilteredTopics = getFilteredTopics(quizSubjectId);
+  const flashcardFilteredTopics = getFilteredTopics(flashcardSubjectId);
+
+  // Filter subjects by search
+  const filterSubjects = useCallback((search: string) => {
+    if (!search.trim()) return subjects;
+    const q = search.toLowerCase();
+    return subjects.filter(s => 
+      s.name.toLowerCase().includes(q) ||
+      GRADE_LABELS[s.grade]?.toLowerCase().includes(q) ||
+      STREAM_LABELS[s.stream]?.toLowerCase().includes(q)
+    );
+  }, [subjects]);
 
   // Fetch functions
   const fetchSubjects = async () => {
@@ -1167,19 +1194,49 @@ const ContentManagement = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Subject *</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={questionSubjectSearch}
+                onChange={(e) => setQuestionSubjectSearch(e.target.value)}
+                placeholder="Search subjects..."
+                className="bg-secondary border-border h-9 pl-10"
+              />
+            </div>
+            <select
+              value={questionSubjectId}
+              onChange={(e) => {
+                setQuestionSubjectId(e.target.value);
+                setQuestionForm({ ...questionForm, topic_id: '' });
+              }}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm mt-2"
+            >
+              <option value="">Select subject first...</option>
+              {filterSubjects(questionSubjectSearch).map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name} - {GRADE_LABELS[subject.grade]} {STREAM_LABELS[subject.stream]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Topic *</label>
             <select
               value={questionForm.topic_id}
               onChange={(e) => setQuestionForm({ ...questionForm, topic_id: e.target.value })}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+              disabled={!questionSubjectId}
             >
-              <option value="">Select topic...</option>
-              {allTopics.map((topic: any) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
-                </option>
+              <option value="">{questionSubjectId ? 'Select topic...' : 'Select subject first'}</option>
+              {questionFilteredTopics.map((topic: any) => (
+                <option key={topic.id} value={topic.id}>{topic.name}</option>
               ))}
             </select>
+            {questionSubjectId && questionFilteredTopics.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
+            )}
           </div>
 
           {questionForm.question_type === 'mcq' && (
@@ -1332,19 +1389,49 @@ const ContentManagement = () => {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Subject *</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={quizSubjectSearch}
+                onChange={(e) => setQuizSubjectSearch(e.target.value)}
+                placeholder="Search subjects..."
+                className="bg-secondary border-border h-9 pl-10"
+              />
+            </div>
+            <select
+              value={quizSubjectId}
+              onChange={(e) => {
+                setQuizSubjectId(e.target.value);
+                setQuizForm({ ...quizForm, topic_id: '', question_ids: [] });
+              }}
+              className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm mt-2"
+            >
+              <option value="">Select subject first...</option>
+              {filterSubjects(quizSubjectSearch).map((subject) => (
+                <option key={subject.id} value={subject.id}>
+                  {subject.name} - {GRADE_LABELS[subject.grade]} {STREAM_LABELS[subject.stream]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Topic *</label>
             <select
               value={quizForm.topic_id}
               onChange={(e) => setQuizForm({ ...quizForm, topic_id: e.target.value, question_ids: [] })}
               className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+              disabled={!quizSubjectId}
             >
-              <option value="">Select topic...</option>
-              {allTopics.map((topic: any) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
-                </option>
+              <option value="">{quizSubjectId ? 'Select topic...' : 'Select subject first'}</option>
+              {quizFilteredTopics.map((topic: any) => (
+                <option key={topic.id} value={topic.id}>{topic.name}</option>
               ))}
             </select>
+            {quizSubjectId && quizFilteredTopics.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
+            )}
           </div>
 
           <div>
@@ -1489,19 +1576,49 @@ const ContentManagement = () => {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
+                <label className="text-xs text-muted-foreground mb-1 block">Subject *</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={flashcardSubjectSearch}
+                    onChange={(e) => setFlashcardSubjectSearch(e.target.value)}
+                    placeholder="Search subjects..."
+                    className="bg-secondary border-border h-9 pl-10"
+                  />
+                </div>
+                <select
+                  value={flashcardSubjectId}
+                  onChange={(e) => {
+                    setFlashcardSubjectId(e.target.value);
+                    setFlashcardSetForm({ ...flashcardSetForm, topic_id: '' });
+                  }}
+                  className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm mt-2"
+                >
+                  <option value="">Select subject first...</option>
+                  {filterSubjects(flashcardSubjectSearch).map((subject) => (
+                    <option key={subject.id} value={subject.id}>
+                      {subject.name} - {GRADE_LABELS[subject.grade]} {STREAM_LABELS[subject.stream]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Topic *</label>
                 <select
                   value={flashcardSetForm.topic_id}
                   onChange={(e) => setFlashcardSetForm({ ...flashcardSetForm, topic_id: e.target.value })}
                   className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                  disabled={!flashcardSubjectId}
                 >
-                  <option value="">Select topic...</option>
-                  {allTopics.map((topic: any) => (
-                    <option key={topic.id} value={topic.id}>
-                      {topic.subjects?.name ? `${topic.subjects.name} - ${topic.name}` : topic.name}
-                    </option>
+                  <option value="">{flashcardSubjectId ? 'Select topic...' : 'Select subject first'}</option>
+                  {flashcardFilteredTopics.map((topic: any) => (
+                    <option key={topic.id} value={topic.id}>{topic.name}</option>
                   ))}
                 </select>
+                {flashcardSubjectId && flashcardFilteredTopics.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
+                )}
               </div>
 
               <div>
