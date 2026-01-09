@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/storageClient';
-import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
 import {
   BookOpen,
@@ -118,19 +117,23 @@ const Dashboard = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      <Navbar />
-
-      <section className="pt-20 pb-8">
-        <div className="container mx-auto px-4">
-          {/* Header */}
-          <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 py-8 border-b border-border mb-8">
-            <div>
-              <span className="text-brand text-sm font-medium uppercase tracking-wider">Dashboard</span>
-              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-1 tracking-tight">
-                Welcome back, {profile?.full_name || user?.email?.split('@')[0]}
-              </h1>
-            </div>
-
+      {/* Minimal Header with Logo + Logout */}
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link to="/dashboard" className="flex items-center gap-3">
+              {branding.logoImage ? (
+                <img src={branding.logoImage} alt={branding.siteName} className="h-8 w-auto" />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-brand" />
+                </div>
+              )}
+              <span className="font-display font-bold text-foreground text-lg">
+                {branding.siteName || 'Dashboard'}
+              </span>
+            </Link>
+            
             <div className="flex items-center gap-4">
               {/* Tier Badge */}
               <div
@@ -141,7 +144,7 @@ const Dashboard = () => {
                   {TIER_LABELS[enrollment.tier]}
                 </span>
               </div>
-
+              
               <Button
                 type="button"
                 variant="ghost"
@@ -151,6 +154,20 @@ const Dashboard = () => {
               >
                 <LogOut className="w-5 h-5" />
               </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section className="pt-8 pb-8">
+        <div className="container mx-auto px-4">
+          {/* Welcome Header */}
+          <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 py-6 mb-8">
+            <div>
+              <span className="text-brand text-sm font-medium uppercase tracking-wider">Dashboard</span>
+              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-1 tracking-tight">
+                Welcome back, {profile?.full_name || user?.email?.split('@')[0]}
+              </h1>
             </div>
           </header>
 

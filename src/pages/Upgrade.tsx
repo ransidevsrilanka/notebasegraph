@@ -211,7 +211,7 @@ const UpgradePage = () => {
       const fileExt = file.name.split('.').pop();
       const filePath = `${user.id}/${request.id}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage.from('receipts').upload(filePath, file, {
+      const { error: uploadError } = await supabase.storage.from('upgrade-receipts').upload(filePath, file, {
         upsert: true,
         contentType: file.type || undefined,
         cacheControl: '3600',
