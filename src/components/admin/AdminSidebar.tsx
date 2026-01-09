@@ -109,7 +109,7 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
             <Shield className="w-4 h-4 text-primary-foreground" />
           </div>
           <span className="font-display font-bold text-foreground group-data-[collapsible=icon]:hidden">
-            Admin Panel
+            CEO Panel
           </span>
         </Link>
       </SidebarHeader>
