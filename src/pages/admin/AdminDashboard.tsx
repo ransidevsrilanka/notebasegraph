@@ -470,7 +470,7 @@ const AdminDashboard = () => {
           <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
             <SidebarTrigger className="-ml-2" />
             <div className="flex-1">
-              <h1 className="font-display text-xl font-bold text-foreground">Admin Dashboard</h1>
+              <h1 className="font-display text-xl font-bold text-foreground">CEO Dashboard</h1>
             </div>
             <div className="flex items-center gap-3">
               {lastUpdated && (
