@@ -35,7 +35,7 @@ interface AuthContextType {
   isCMO: boolean;
   isCreator: boolean;
   isHeadOps: boolean;
-  signUp: (email: string, password: string, accessCode: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, accessCode: string, name?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshEnrollment: () => Promise<void>;
@@ -263,7 +263,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (
     email: string,
     password: string,
-    accessCode: string
+    accessCode: string,
+    name?: string
   ): Promise<{ error: Error | null }> => {
     try {
       // Use secure RPC function for code validation
@@ -291,12 +292,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: new Error(codeData.message || 'Invalid or expired access code') };
       }
 
-      // Sign up the user
+      // Sign up the user with full_name in metadata
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: name ? { full_name: name } : undefined,
         },
       });
 
@@ -308,7 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: new Error('Failed to create user') };
       }
 
-      // Ensure a profile row exists (we keep profiles.id == auth user id across the app)
+      // Ensure a profile row exists with full_name (profiles.id == auth user id across the app)
       const { error: profileError } = await supabase
         .from('profiles')
         .upsert(
@@ -316,6 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: authData.user.id,
             user_id: authData.user.id,
             email,
+            full_name: name || null,
           },
           { onConflict: 'id' }
         );
@@ -345,15 +348,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? new Date(Date.now() + codeData.duration_days * 24 * 60 * 60 * 1000).toISOString()
         : null;
 
-      // Create enrollment
+      // Create enrollment with proper medium and stream handling
+      const isOLevel = codeData.grade?.startsWith('ol_');
       const { error: enrollmentError } = await supabase
         .from('enrollments')
         .insert({
           user_id: authData.user.id,
           access_code_id: codeData.code_id!,
           grade: codeData.grade as any,
-          stream: codeData.stream as any,
-          medium: codeData.medium as any,
+          stream: isOLevel ? null : (codeData.stream as any),
+          medium: (codeData.medium || 'english') as any,
           tier: codeData.tier as any,
           expires_at: expiresAt,
           is_active: true,

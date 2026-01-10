@@ -5,7 +5,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Key, CheckCircle, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Key, CheckCircle, Mail, Lock, Eye, EyeOff, ArrowRight, User } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from "@/types/database";
@@ -15,6 +15,7 @@ const codeSchema = z.string().min(6, "Access code must be at least 6 characters"
 const signUpSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(8, "Password must be at least 8 characters"),
+  name: z.string().min(2, "Name must be at least 2 characters"),
 });
 
 interface ValidatedCode {
@@ -31,6 +32,7 @@ const Access = () => {
   const [step, setStep] = useState<'code' | 'signup' | 'success'>('code');
   const [accessCode, setAccessCode] = useState("");
   const [validatedCode, setValidatedCode] = useState<ValidatedCode | null>(null);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -150,7 +152,7 @@ const Access = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const result = signUpSchema.safeParse({ email, password });
+    const result = signUpSchema.safeParse({ email, password, name });
     if (!result.success) {
       toast.error(result.error.errors[0].message);
       return;
@@ -164,18 +166,23 @@ const Access = () => {
 
     setIsLoading(true);
 
-    // Sign up the user
+    // Sign up the user with full_name in metadata
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: `${window.location.origin}/dashboard`,
+        data: { full_name: name },
       },
     });
 
     if (authError) {
       setIsLoading(false);
-      toast.error(authError.message);
+      if (authError.message.includes('already registered')) {
+        toast.error("This email is already registered. Please sign in instead.");
+      } else {
+        toast.error(authError.message);
+      }
       return;
     }
 
@@ -183,6 +190,23 @@ const Access = () => {
       setIsLoading(false);
       toast.error("Failed to create account");
       return;
+    }
+
+    // Create/update profile with user's name (profiles.id == auth user id)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert(
+        {
+          id: authData.user.id,
+          user_id: authData.user.id,
+          email,
+          full_name: name,
+        },
+        { onConflict: 'id' }
+      );
+
+    if (profileError) {
+      console.error('Error creating profile:', profileError);
     }
 
     // Update access code
@@ -202,25 +226,27 @@ const Access = () => {
       ? new Date(Date.now() + validatedCode.duration_days * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
-    // Create enrollment
+    // Create enrollment with proper medium value
     await supabase
       .from('enrollments')
       .insert([{
         user_id: authData.user.id,
         access_code_id: validatedCode.id,
         grade: validatedCode.grade as any,
-        stream: validatedCode.stream as any,
-        medium: validatedCode.medium as any,
+        stream: validatedCode.grade?.startsWith('ol_') ? null : (validatedCode.stream as any),
+        medium: (validatedCode.medium || 'english') as any,
         tier: validatedCode.tier as any,
         expires_at: expiresAt,
+        is_active: true,
       }]);
 
     setIsLoading(false);
     setStep('success');
     toast.success("Account created successfully!");
     
+    // Force full page reload to ensure AuthContext fetches new enrollment data
     setTimeout(() => {
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     }, 2000);
   };
 
@@ -320,6 +346,23 @@ const Access = () => {
                 <form onSubmit={handleSignUp} className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-foreground mb-1.5 block">
+                      Full Name
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        placeholder="Your full name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="bg-secondary border-border text-foreground placeholder:text-muted-foreground h-11 pl-10"
+                        required
+                      />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">
                       Email
                     </label>
                     <div className="relative">
@@ -329,6 +372,7 @@ const Access = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="bg-secondary border-border text-foreground placeholder:text-muted-foreground h-11 pl-10"
+                        required
                       />
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     </div>
@@ -345,6 +389,7 @@ const Access = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="bg-secondary border-border text-foreground placeholder:text-muted-foreground h-11 pl-10 pr-10"
+                        required
                       />
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <button

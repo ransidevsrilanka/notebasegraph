@@ -384,7 +384,7 @@ const PaidSignup = () => {
         user_id: currentUser.id,
         access_code_id: null,
         grade: selectedGrade,
-        stream: selectedStream || 'maths',
+        stream: selectedGrade.startsWith('ol_') ? null : (selectedStream || null),
         medium: selectedMedium,
         tier: paymentData.tier,
         expires_at: expiresAt,
