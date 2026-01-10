@@ -131,6 +131,7 @@ const CreatorDashboard = () => {
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
   const [withdrawDialogOpen, setWithdrawDialogOpen] = useState(false);
+  const [addDiscountCodeDialogOpen, setAddDiscountCodeDialogOpen] = useState(false);
   const [methodType, setMethodType] = useState<'bank' | 'crypto'>('bank');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -148,6 +149,12 @@ const CreatorDashboard = () => {
   // Withdrawal form
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [selectedMethodId, setSelectedMethodId] = useState('');
+
+  // Discount code form
+  const [newDiscountCode, setNewDiscountCode] = useState('');
+  const [newDiscountPercent, setNewDiscountPercent] = useState('10');
+
+  const MAX_DISCOUNT_CODES = 5;
 
   useEffect(() => {
     if (!isCreator) {
@@ -438,6 +445,59 @@ const CreatorDashboard = () => {
     }
   };
 
+  const handleCreateDiscountCode = async () => {
+    if (!creatorData) return;
+    
+    if (discountCodes.length >= MAX_DISCOUNT_CODES) {
+      toast.error(`You can only create up to ${MAX_DISCOUNT_CODES} discount codes`);
+      return;
+    }
+
+    const code = newDiscountCode.trim().toUpperCase();
+    const percent = parseInt(newDiscountPercent);
+
+    if (!code || code.length < 4) {
+      toast.error('Code must be at least 4 characters');
+      return;
+    }
+
+    if (isNaN(percent) || percent < 5 || percent > 50) {
+      toast.error('Discount must be between 5% and 50%');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase.from('discount_codes').insert({
+        creator_id: creatorData.id,
+        code,
+        discount_percent: percent,
+        is_active: true,
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('This code already exists. Try a different one.');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Discount code created!');
+      setAddDiscountCodeDialogOpen(false);
+      setNewDiscountCode('');
+      setNewDiscountPercent('10');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error creating discount code:', error);
+      toast.error(error.message || 'Failed to create discount code');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const resetForms = () => {
     setBankName('');
     setAccountNumber('');
@@ -665,53 +725,107 @@ const CreatorDashboard = () => {
           </div>
         </div>
 
-        {/* Commission Tier Progress */}
+        {/* Commission Tier Progress - Enhanced Visual Display */}
         <div className="glass-card p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-semibold text-foreground">Commission Tier</h3>
+              <h3 className="font-semibold text-foreground text-lg">Your Commission Tier</h3>
               <p className="text-sm text-muted-foreground">
                 {isTopTier 
-                  ? `You've reached the top tier: ${currentTier?.tier_name}!` 
-                  : `Get ${(nextTier?.monthly_user_threshold || 0) - monthlyPaidUsers} more users this month for ${nextTier?.commission_rate}%`}
+                  ? `Congratulations! You've reached the highest tier!` 
+                  : `Get ${(nextTier?.monthly_user_threshold || 0) - monthlyPaidUsers} more users this month to unlock ${nextTier?.commission_rate}%`}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-foreground">{currentTier?.commission_rate || 8}%</p>
+              <p className="text-3xl font-bold text-brand">{currentTier?.commission_rate || 8}%</p>
               <p className="text-xs text-muted-foreground">Current Rate</p>
             </div>
           </div>
-          <div className="w-full bg-muted rounded-full h-3">
-            <div 
-              className={`h-3 rounded-full transition-all ${isTopTier ? 'bg-green-500' : 'bg-brand'}`}
-              style={{ width: `${tierProgress}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-muted-foreground">
-            <span>{monthlyPaidUsers} users this month</span>
-            <span>{nextTier ? `${nextTier.monthly_user_threshold} users (${nextTier.commission_rate}%)` : 'Top tier reached!'}</span>
-          </div>
           
-          {/* All Tiers Display */}
+          {/* Visual Tier Cards */}
           {commissionTiers.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-border">
-              <p className="text-xs text-muted-foreground mb-2">All Commission Tiers (based on monthly users)</p>
-              <div className="flex flex-wrap gap-2">
-                {commissionTiers.map((tier) => (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {commissionTiers.map((tier, index) => {
+                const isCurrentTier = currentTier?.id === tier.id;
+                const isPastTier = monthlyPaidUsers >= tier.monthly_user_threshold && !isCurrentTier;
+                const isFutureTier = monthlyPaidUsers < tier.monthly_user_threshold;
+                
+                return (
                   <div 
                     key={tier.id}
-                    className={`px-3 py-1.5 rounded-full text-xs ${
-                      currentTier?.id === tier.id 
-                        ? 'bg-brand text-primary-foreground font-medium' 
-                        : 'bg-muted text-muted-foreground'
+                    className={`relative p-4 rounded-xl border-2 transition-all ${
+                      isCurrentTier 
+                        ? 'border-brand bg-brand/10 shadow-lg shadow-brand/20' 
+                        : isPastTier
+                          ? 'border-green-500/50 bg-green-500/5'
+                          : 'border-border bg-muted/30'
                     }`}
                   >
-                    {tier.tier_name}: {tier.commission_rate}% ({tier.monthly_user_threshold}+ users)
+                    {/* You Are Here Indicator */}
+                    {isCurrentTier && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                        <div className="bg-brand text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1">
+                          <Target className="w-3 h-3" />
+                          YOU ARE HERE
+                        </div>
+                        <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-brand" />
+                      </div>
+                    )}
+                    
+                    {/* Tier Content */}
+                    <div className={`text-center ${isCurrentTier ? 'pt-2' : ''}`}>
+                      <p className={`text-xs font-medium mb-1 ${
+                        isCurrentTier ? 'text-brand' : isPastTier ? 'text-green-500' : 'text-muted-foreground'
+                      }`}>
+                        {tier.tier_name}
+                      </p>
+                      <p className={`text-2xl font-bold mb-1 ${
+                        isCurrentTier ? 'text-brand' : isPastTier ? 'text-green-500' : 'text-foreground'
+                      }`}>
+                        {tier.commission_rate}%
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {tier.monthly_user_threshold === 0 ? '0+ users' : `${tier.monthly_user_threshold}+ users`}
+                      </p>
+                      
+                      {/* Status indicator */}
+                      {isPastTier && (
+                        <div className="mt-2 flex items-center justify-center gap-1 text-green-500">
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span className="text-[10px]">Unlocked</span>
+                        </div>
+                      )}
+                      {isFutureTier && !isCurrentTier && (
+                        <div className="mt-2 flex items-center justify-center gap-1 text-muted-foreground">
+                          <Clock className="w-3 h-3" />
+                          <span className="text-[10px]">{tier.monthly_user_threshold - monthlyPaidUsers} to go</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
           )}
+          
+          {/* Progress Bar */}
+          <div className="space-y-2">
+            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+              <div 
+                className={`h-3 rounded-full transition-all duration-500 ${isTopTier ? 'bg-gradient-to-r from-green-500 to-emerald-400' : 'bg-gradient-to-r from-brand to-yellow-400'}`}
+                style={{ width: `${tierProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Users className="w-3 h-3" />
+                {monthlyPaidUsers} users this month
+              </span>
+              <span>
+                {nextTier ? `Next: ${nextTier.monthly_user_threshold} users for ${nextTier.commission_rate}%` : '🎉 Top tier achieved!'}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Referral Link */}
@@ -752,9 +866,21 @@ const CreatorDashboard = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">Discount Codes</h3>
-                <p className="text-sm text-muted-foreground">Share with your audience</p>
+                <p className="text-sm text-muted-foreground">
+                  Share with your audience ({discountCodes.length}/{MAX_DISCOUNT_CODES} codes)
+                </p>
               </div>
             </div>
+            {discountCodes.length < MAX_DISCOUNT_CODES && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setAddDiscountCodeDialogOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Create Code
+              </Button>
+            )}
           </div>
           {discountCodes.length > 0 ? (
             <div className="space-y-3">
@@ -778,7 +904,18 @@ const CreatorDashboard = () => {
               ))}
             </div>
           ) : (
-            <p className="text-muted-foreground text-sm">No discount codes yet. Contact your CMO to get one.</p>
+            <div className="text-center py-6">
+              <Tag className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
+              <p className="text-muted-foreground text-sm mb-3">No discount codes yet</p>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setAddDiscountCodeDialogOpen(true)}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Create Your First Code
+              </Button>
+            </div>
           )}
         </div>
 
@@ -1039,6 +1176,69 @@ const CreatorDashboard = () => {
             </Button>
             <Button onClick={handleWithdraw} disabled={isSubmitting}>
               {isSubmitting ? 'Processing...' : 'Withdraw'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Discount Code Dialog */}
+      <Dialog open={addDiscountCodeDialogOpen} onOpenChange={setAddDiscountCodeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Discount Code</DialogTitle>
+            <DialogDescription>
+              Create a custom discount code for your audience ({discountCodes.length}/{MAX_DISCOUNT_CODES} codes used)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Discount Code
+              </label>
+              <Input
+                placeholder="e.g., SUMMER2024"
+                value={newDiscountCode}
+                onChange={(e) => setNewDiscountCode(e.target.value.toUpperCase())}
+                maxLength={20}
+                className="font-mono uppercase"
+              />
+              <p className="text-xs text-muted-foreground mt-1">4-20 characters, letters and numbers only</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">
+                Discount Percentage
+              </label>
+              <Select value={newDiscountPercent} onValueChange={setNewDiscountPercent}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select discount %" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="5">5% off</SelectItem>
+                  <SelectItem value="10">10% off</SelectItem>
+                  <SelectItem value="15">15% off</SelectItem>
+                  <SelectItem value="20">20% off</SelectItem>
+                  <SelectItem value="25">25% off</SelectItem>
+                  <SelectItem value="30">30% off</SelectItem>
+                  <SelectItem value="40">40% off</SelectItem>
+                  <SelectItem value="50">50% off</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground">
+                💡 <strong>Tips:</strong> Use memorable codes related to your brand. Higher discounts may convert better but reduce your commission per sale.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDiscountCodeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateDiscountCode} 
+              disabled={isSubmitting || !newDiscountCode.trim()}
+            >
+              {isSubmitting ? 'Creating...' : 'Create Code'}
             </Button>
           </DialogFooter>
         </DialogContent>
