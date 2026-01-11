@@ -30,39 +30,61 @@ const Dashboard = () => {
       if (!enrollment) return;
 
       const isALevel = enrollment.grade?.startsWith('al_');
+      const isOLevel = enrollment.grade?.startsWith('ol_');
       
-      // For A/L students, filter by selected subjects
-      // For O/L students, show all subjects for their grade/stream/medium
+      // For A/L students, filter by selected subjects using subject_code
+      // For O/L students, show all subjects for their grade/medium
       if (isALevel && userSubjects) {
-        // Get the user's selected subject names (filter out nulls)
+        // Get the user's selected subject codes (filter out nulls)
+        // Try codes first, fallback to names for backwards compatibility
+        const userSubjectsAny = userSubjects as any;
+        const selectedSubjectCodes = [
+          userSubjectsAny.subject_1_code,
+          userSubjectsAny.subject_2_code,
+          userSubjectsAny.subject_3_code,
+        ].filter(Boolean);
+        
         const selectedSubjectNames = [
           userSubjects.subject_1,
           userSubjects.subject_2,
           userSubjects.subject_3,
         ].filter(Boolean);
 
-        if (selectedSubjectNames.length === 0) {
+        if (selectedSubjectCodes.length === 0 && selectedSubjectNames.length === 0) {
           setSubjects([]);
           setIsLoading(false);
           return;
         }
 
-        const { data, error } = await supabase
+        // Build query - prefer subject_code matching
+        let query = supabase
           .from('subjects')
           .select('*')
           .eq('grade', enrollment.grade)
-          .contains('streams', [enrollment.stream])
-          .eq('medium', enrollment.medium)
           .eq('is_active', true)
-          .in('name', selectedSubjectNames)
           .order('sort_order');
+        
+        // Filter by stream if available
+        if (enrollment.stream) {
+          query = query.contains('streams', [enrollment.stream]);
+        }
+        
+        // Filter by medium if available
+        if (enrollment.medium) {
+          query = query.eq('medium', enrollment.medium);
+        }
 
+        // Use subject_code if available, otherwise fall back to name
+        if (selectedSubjectCodes.length > 0) {
+          query = query.in('subject_code', selectedSubjectCodes);
+        } else {
+          query = query.in('name', selectedSubjectNames);
+        }
+
+        const { data, error } = await query;
         if (!error && data) setSubjects(data as Subject[]);
       } else {
         // O/L students - show all subjects for their grade/medium
-        // Don't filter by stream for O/L since they don't have streams
-        const isOLevel = enrollment.grade?.startsWith('ol_');
-        
         let query = supabase
           .from('subjects')
           .select('*')

@@ -1671,8 +1671,11 @@ export type Database = {
           is_locked: boolean | null
           locked_at: string | null
           subject_1: string | null
+          subject_1_code: string | null
           subject_2: string | null
+          subject_2_code: string | null
           subject_3: string | null
+          subject_3_code: string | null
           updated_at: string
           user_id: string
         }
@@ -1684,8 +1687,11 @@ export type Database = {
           is_locked?: boolean | null
           locked_at?: string | null
           subject_1?: string | null
+          subject_1_code?: string | null
           subject_2?: string | null
+          subject_2_code?: string | null
           subject_3?: string | null
+          subject_3_code?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1697,8 +1703,11 @@ export type Database = {
           is_locked?: boolean | null
           locked_at?: string | null
           subject_1?: string | null
+          subject_1_code?: string | null
           subject_2?: string | null
+          subject_2_code?: string | null
           subject_3?: string | null
+          subject_3_code?: string | null
           updated_at?: string
           user_id?: string
         }

@@ -163,7 +163,7 @@ export function useSubjectSelection() {
     }
   }, [stream, streamSubjects, selectedSubjects, isOL]);
 
-  // Save and lock subject selection
+  // Save and lock subject selection - now stores subject_code as well
   const saveSelection = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     if (!user || !enrollment || selectedSubjects.length !== 3) {
       return { success: false, error: 'Invalid selection' };
@@ -176,12 +176,21 @@ export function useSubjectSelection() {
     setIsSaving(true);
 
     try {
+      // Get subject codes for each selected subject
+      const getSubjectCode = (subjectName: string) => {
+        const subject = streamSubjects.find(s => s.subject_name === subjectName);
+        return subject?.subject_code || null;
+      };
+
       const payload = {
         user_id: user.id,
         enrollment_id: enrollment.id,
         subject_1: selectedSubjects[0],
         subject_2: selectedSubjects[1],
         subject_3: selectedSubjects[2],
+        subject_1_code: getSubjectCode(selectedSubjects[0]),
+        subject_2_code: getSubjectCode(selectedSubjects[1]),
+        subject_3_code: getSubjectCode(selectedSubjects[2]),
         is_locked: true,
         locked_at: new Date().toISOString(),
       };
@@ -210,7 +219,7 @@ export function useSubjectSelection() {
     } finally {
       setIsSaving(false);
     }
-  }, [user, enrollment, selectedSubjects, validation, userSubjects]);
+  }, [user, enrollment, selectedSubjects, validation, userSubjects, streamSubjects]);
 
   // Group subjects by basket for display
   const subjectsByBasket = groupSubjectsByBasket(streamSubjects);
