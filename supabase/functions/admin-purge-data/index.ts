@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifySecurityAlert, notifyEdgeFunctionError } from "../_shared/notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +51,13 @@ serve(async (req) => {
   }
 
   console.log("Admin purge initiated by:", user.id);
+
+  // Send security alert for data purge
+  await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
+    alertType: "Data Purge Initiated",
+    details: `Admin ${user.id} initiated a full data purge operation`,
+    userId: user.id,
+  });
 
   try {
     // Get admin and CMO user IDs to preserve
@@ -150,6 +158,13 @@ serve(async (req) => {
 
     console.log("Purge completed successfully");
 
+    // Send completion notification
+    await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
+      alertType: "Data Purge Completed",
+      details: `Admin ${user.id} successfully completed data purge. Admin & CMO accounts preserved.`,
+      userId: user.id,
+    });
+
     return new Response(
       JSON.stringify({ success: true, message: "All user data cleared. Admin & CMO accounts preserved." }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -158,6 +173,14 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("Purge error:", error);
     const errorMessage = error instanceof Error ? error.message : "Purge failed";
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: "admin-purge-data",
+      error: errorMessage,
+      context: { admin_id: user.id },
+    });
+    
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

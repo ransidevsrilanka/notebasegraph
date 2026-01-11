@@ -1,5 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  notifyPaymentSuccess, 
+  notifyPaymentFailure, 
+  notifyEdgeFunctionError,
+  notifySecurityAlert 
+} from "../_shared/notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -383,6 +389,24 @@ serve(async (req) => {
         method,
       });
 
+      // Get payment record to extract user email and ref_creator
+      const { data: paymentRecord } = await supabase
+        .from("payments")
+        .select("ref_creator, user_id")
+        .eq("order_id", orderId)
+        .maybeSingle();
+
+      // Get user email if possible
+      let userEmail: string | undefined;
+      if (paymentRecord?.user_id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("user_id", paymentRecord.user_id)
+          .maybeSingle();
+        userEmail = profile?.email || undefined;
+      }
+
       // Verify the payment signature
       const isValid = verifyPaymentHash(
         notifyMerchantId,
@@ -396,6 +420,14 @@ serve(async (req) => {
 
       if (!isValid) {
         console.error("Invalid payment signature for order:", orderId);
+        
+        // Send security alert for invalid signature
+        await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
+          alertType: "Invalid Payment Signature",
+          details: `Order ${orderId} had an invalid MD5 signature - possible tampering`,
+          userId: paymentRecord?.user_id,
+        });
+        
         // Update payment status to failed with reason
         await supabase
           .from("payments")
@@ -459,8 +491,17 @@ serve(async (req) => {
         console.error("Failed to update payment record:", updateError);
       }
 
-      // Payment successful (status_code = 2)
+      // Send notifications based on payment status
       if (statusCode === "2") {
+        // Payment successful - send success notification
+        await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+          orderId,
+          amount: parseFloat(payhereAmount),
+          tier: custom1,
+          userEmail,
+          refCreator: paymentRecord?.ref_creator || undefined,
+        });
+
         console.log("Payment successful for order:", orderId);
 
         // Check if this is an upgrade or new purchase
@@ -516,6 +557,13 @@ serve(async (req) => {
           tier: custom1,
         });
       } else {
+        // Payment failed/cancelled - send failure notification
+        await notifyPaymentFailure(supabaseUrl, supabaseServiceKey, {
+          orderId,
+          reason: failureReason || `Status code: ${statusCode}`,
+          amount: parseFloat(payhereAmount),
+        });
+        
         console.log("Payment not successful. Status code:", statusCode, "Reason:", failureReason);
       }
 
@@ -562,6 +610,14 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Error in payhere-checkout function:", error);
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: "payhere-checkout",
+      error: error instanceof Error ? error.message : "Unknown error",
+      context: { path },
+    });
+    
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       {
