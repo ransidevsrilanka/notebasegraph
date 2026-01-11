@@ -46,6 +46,7 @@ import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 import InboxButton from '@/components/inbox/InboxButton';
+import { Trash2 } from 'lucide-react';
 
 interface CreatorAnalytics {
   id: string;
@@ -64,6 +65,8 @@ interface CreatorAnalytics {
   total_commission_earned: number;
   discount_code_count: number;
   total_referred_users: number;
+  tier_protection_until: string | null;
+  current_tier_level: number;
 }
 
 interface DiscountCode {
@@ -150,9 +153,8 @@ const CreatorDashboard = () => {
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [selectedMethodId, setSelectedMethodId] = useState('');
 
-  // Discount code form
+  // Discount code form - only need the code name now (fixed 10% discount)
   const [newDiscountCode, setNewDiscountCode] = useState('');
-  const [newDiscountPercent, setNewDiscountPercent] = useState('10');
 
   const MAX_DISCOUNT_CODES = 5;
 
@@ -261,12 +263,26 @@ const CreatorDashboard = () => {
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', creatorProfile.id);
 
-        // Calculate commission rate based on MONTHLY users using commission_tiers
+        // Calculate commission rate based on tier protection or monthly performance
         const monthlyCount = monthlyPaidUsers || 0;
-        let currentCommissionRate = 8; // Default base rate
-        for (const tier of commissionTiers) {
-          if (monthlyCount >= tier.monthly_user_threshold) {
-            currentCommissionRate = tier.commission_rate;
+        const isInProtectionPeriod = creatorProfile.tier_protection_until 
+          ? new Date(creatorProfile.tier_protection_until) > new Date()
+          : false;
+        
+        let currentCommissionRate = 12; // Default for new creators (Tier 2)
+        let effectiveTierLevel = creatorProfile.current_tier_level || 2;
+        
+        if (isInProtectionPeriod) {
+          // During protection period, use the protected tier rate
+          const protectedTier = commissionTiers.find(t => t.tier_level === effectiveTierLevel);
+          currentCommissionRate = protectedTier?.commission_rate || 12;
+        } else {
+          // After protection period, calculate based on monthly performance
+          for (const tier of commissionTiers) {
+            if (monthlyCount >= tier.monthly_user_threshold) {
+              currentCommissionRate = tier.commission_rate;
+              effectiveTierLevel = tier.tier_level;
+            }
           }
         }
 
@@ -288,6 +304,8 @@ const CreatorDashboard = () => {
           total_commission_earned: totalCommission,
           discount_code_count: discountCodeCount || 0,
           total_referred_users: totalReferred || 0,
+          tier_protection_until: creatorProfile.tier_protection_until,
+          current_tier_level: effectiveTierLevel,
         };
 
         setCreatorData(analyticsData);
@@ -454,25 +472,25 @@ const CreatorDashboard = () => {
     }
 
     const code = newDiscountCode.trim().toUpperCase();
-    const percent = parseInt(newDiscountPercent);
 
-    if (!code || code.length < 4) {
-      toast.error('Code must be at least 4 characters');
+    if (!code || code.length < 4 || code.length > 20) {
+      toast.error('Code must be 4-20 characters');
       return;
     }
 
-    if (isNaN(percent) || percent < 5 || percent > 50) {
-      toast.error('Discount must be between 5% and 50%');
+    if (!/^[A-Z0-9]+$/.test(code)) {
+      toast.error('Code can only contain letters and numbers');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      // Fixed discount at 10% - creators don't choose percentage
       const { error } = await supabase.from('discount_codes').insert({
         creator_id: creatorData.id,
         code,
-        discount_percent: percent,
+        discount_percent: 10, // Fixed 10% discount for all creator codes
         is_active: true,
       });
 
@@ -485,16 +503,38 @@ const CreatorDashboard = () => {
         return;
       }
 
-      toast.success('Discount code created!');
+      toast.success('Discount code created with 10% discount!');
       setAddDiscountCodeDialogOpen(false);
       setNewDiscountCode('');
-      setNewDiscountPercent('10');
       fetchData();
     } catch (error: any) {
       console.error('Error creating discount code:', error);
       toast.error(error.message || 'Failed to create discount code');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteDiscountCode = async (codeId: string, codeName: string) => {
+    if (!creatorData) return;
+    
+    const confirmed = window.confirm(`Are you sure you want to delete the discount code "${codeName}"?`);
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('discount_codes')
+        .delete()
+        .eq('id', codeId)
+        .eq('creator_id', creatorData.id);
+
+      if (error) throw error;
+
+      toast.success('Discount code deleted');
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting discount code:', error);
+      toast.error(error.message || 'Failed to delete discount code');
     }
   };
 
@@ -527,24 +567,18 @@ const CreatorDashboard = () => {
   const feePreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) * 0.03 : 0;
   const netPreview = parseFloat(withdrawAmount) ? parseFloat(withdrawAmount) - feePreview : 0;
 
-  // Commission tier progress - based on MONTHLY users now
+  // Get current tier based on tier_protection or performance
   const getCurrentTier = () => {
-    let current = commissionTiers[0];
-    for (const tier of commissionTiers) {
-      if (monthlyPaidUsers >= tier.monthly_user_threshold) {
-        current = tier;
-      }
-    }
-    return current;
+    const effectiveTierLevel = creatorData?.current_tier_level || 2;
+    return commissionTiers.find(t => t.tier_level === effectiveTierLevel) || commissionTiers[0];
   };
 
   const getNextTier = () => {
-    for (const tier of commissionTiers) {
-      if (monthlyPaidUsers < tier.monthly_user_threshold) {
-        return tier;
-      }
-    }
-    return null;
+    const currentTierLevel = creatorData?.current_tier_level || 2;
+    // Find next tier after current
+    const sortedTiers = [...commissionTiers].sort((a, b) => a.tier_level - b.tier_level);
+    const currentIndex = sortedTiers.findIndex(t => t.tier_level === currentTierLevel);
+    return sortedTiers[currentIndex + 1] || null;
   };
 
   const currentTier = getCurrentTier();
@@ -553,6 +587,10 @@ const CreatorDashboard = () => {
     ? Math.min((monthlyPaidUsers / nextTier.monthly_user_threshold) * 100, 100)
     : 100;
   const isTopTier = !nextTier;
+  const isInProtectionPeriod = creatorData?.tier_protection_until 
+    ? new Date(creatorData.tier_protection_until) > new Date()
+    : false;
+
 
   // Funnel data
   const funnelData = [
@@ -728,14 +766,16 @@ const CreatorDashboard = () => {
         {/* Commission Tier Progress - Enhanced Visual Display */}
         <div className="glass-card p-6 mb-8">
           <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="font-semibold text-foreground text-lg">Your Commission Tier</h3>
-              <p className="text-sm text-muted-foreground">
-                {isTopTier 
+          <div>
+            <h3 className="font-semibold text-foreground text-lg">Your Commission Tier</h3>
+            <p className="text-sm text-muted-foreground">
+              {isInProtectionPeriod 
+                ? `🛡️ Protected until ${format(new Date(creatorData?.tier_protection_until!), 'PP')} - maintain ${currentTier?.monthly_user_threshold || 0}+ users/month to keep your tier`
+                : isTopTier 
                   ? `Congratulations! You've reached the highest tier!` 
                   : `Get ${(nextTier?.monthly_user_threshold || 0) - monthlyPaidUsers} more users this month to unlock ${nextTier?.commission_rate}%`}
-              </p>
-            </div>
+            </p>
+          </div>
             <div className="text-right">
               <p className="text-3xl font-bold text-brand">{currentTier?.commission_rate || 8}%</p>
               <p className="text-xs text-muted-foreground">Current Rate</p>
@@ -745,10 +785,10 @@ const CreatorDashboard = () => {
           {/* Visual Tier Cards */}
           {commissionTiers.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              {commissionTiers.map((tier, index) => {
-                const isCurrentTier = currentTier?.id === tier.id;
-                const isPastTier = monthlyPaidUsers >= tier.monthly_user_threshold && !isCurrentTier;
-                const isFutureTier = monthlyPaidUsers < tier.monthly_user_threshold;
+            {commissionTiers.map((tier, index) => {
+                const isCurrentTier = currentTier?.tier_level === tier.tier_level;
+                const isPastTier = (creatorData?.current_tier_level || 2) > tier.tier_level;
+                const isFutureTier = (creatorData?.current_tier_level || 2) < tier.tier_level;
                 
                 return (
                   <div 
@@ -883,26 +923,66 @@ const CreatorDashboard = () => {
             )}
           </div>
           {discountCodes.length > 0 ? (
-            <div className="space-y-3">
-              {discountCodes.map((dc) => (
-                <div key={dc.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <code className="font-mono font-medium text-foreground">{dc.code}</code>
-                    <span className="text-xs text-muted-foreground">({dc.discount_percent}% off)</span>
+            <>
+              {/* Discount Code Usage Analytics Chart */}
+              <div className="mb-6">
+                <h4 className="text-sm font-medium text-muted-foreground mb-3">Usage Analytics</h4>
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart data={discountCodeData}>
+                    <XAxis dataKey="name" stroke="#888" fontSize={11} />
+                    <YAxis stroke="#888" fontSize={11} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    />
+                    <Bar dataKey="usage" name="Total Uses" fill="hsl(262, 83%, 58%)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="conversions" name="Paid Conversions" fill="hsl(142, 71%, 45%)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="flex justify-center gap-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-purple-500" />
+                    <span className="text-xs text-muted-foreground">Total Uses</span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">{dc.paid_conversions} conversions</span>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => copyToClipboard(dc.code, 'Discount code')}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-green-500" />
+                    <span className="text-xs text-muted-foreground">Paid Conversions</span>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+              
+              {/* Discount Code List */}
+              <div className="space-y-3">
+                {discountCodes.map((dc) => (
+                  <div key={dc.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <code className="font-mono font-medium text-foreground">{dc.code}</code>
+                      <span className="text-xs text-muted-foreground">({dc.discount_percent}% off)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <span className="text-sm text-muted-foreground">{dc.paid_conversions} conversions</span>
+                        <span className="text-xs text-muted-foreground ml-2">({dc.usage_count} uses)</span>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => copyToClipboard(dc.code, 'Discount code')}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteDiscountCode(dc.id, dc.code)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="text-center py-6">
               <Tag className="w-10 h-10 text-muted-foreground mx-auto mb-2 opacity-50" />
@@ -1204,29 +1284,17 @@ const CreatorDashboard = () => {
               />
               <p className="text-xs text-muted-foreground mt-1">4-20 characters, letters and numbers only</p>
             </div>
-            <div>
-              <label className="text-sm font-medium text-foreground mb-1.5 block">
-                Discount Percentage
-              </label>
-              <Select value={newDiscountPercent} onValueChange={setNewDiscountPercent}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select discount %" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">5% off</SelectItem>
-                  <SelectItem value="10">10% off</SelectItem>
-                  <SelectItem value="15">15% off</SelectItem>
-                  <SelectItem value="20">20% off</SelectItem>
-                  <SelectItem value="25">25% off</SelectItem>
-                  <SelectItem value="30">30% off</SelectItem>
-                  <SelectItem value="40">40% off</SelectItem>
-                  <SelectItem value="50">50% off</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="p-3 bg-brand/10 rounded-lg border border-brand/20">
+              <p className="text-sm text-foreground font-medium mb-1">
+                ✨ Fixed 10% Discount
+              </p>
+              <p className="text-xs text-muted-foreground">
+                All creator discount codes provide a 10% discount to your audience. This helps maintain fair pricing while rewarding your referrals.
+              </p>
             </div>
             <div className="p-3 bg-muted/30 rounded-lg">
               <p className="text-xs text-muted-foreground">
-                💡 <strong>Tips:</strong> Use memorable codes related to your brand. Higher discounts may convert better but reduce your commission per sale.
+                💡 <strong>Tips:</strong> Use memorable codes related to your brand or content. Make it easy for your audience to remember!
               </p>
             </div>
           </div>
