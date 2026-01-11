@@ -42,13 +42,13 @@ const Dashboard = () => {
           userSubjectsAny.subject_1_code,
           userSubjectsAny.subject_2_code,
           userSubjectsAny.subject_3_code,
-        ].filter(Boolean);
+        ].filter(Boolean) as string[];
         
         const selectedSubjectNames = [
           userSubjects.subject_1,
           userSubjects.subject_2,
           userSubjects.subject_3,
-        ].filter(Boolean);
+        ].filter(Boolean) as string[];
 
         if (selectedSubjectCodes.length === 0 && selectedSubjectNames.length === 0) {
           setSubjects([]);
@@ -56,33 +56,42 @@ const Dashboard = () => {
           return;
         }
 
-        // Build query - prefer subject_code matching
-        let query = supabase
+        // FIXED: Query subjects by subject_code matching
+        // This ensures we find content even if the subject name differs
+        const { data, error } = await supabase
           .from('subjects')
           .select('*')
           .eq('grade', enrollment.grade)
           .eq('is_active', true)
+          .eq('medium', enrollment.medium || 'english')
+          .in('subject_code', selectedSubjectCodes.length > 0 ? selectedSubjectCodes : selectedSubjectNames)
           .order('sort_order');
-        
-        // Filter by stream if available
-        if (enrollment.stream) {
-          query = query.contains('streams', [enrollment.stream]);
-        }
-        
-        // Filter by medium if available
-        if (enrollment.medium) {
-          query = query.eq('medium', enrollment.medium);
+
+        if (error) {
+          console.error('Error fetching subjects:', error);
         }
 
-        // Use subject_code if available, otherwise fall back to name
-        if (selectedSubjectCodes.length > 0) {
-          query = query.in('subject_code', selectedSubjectCodes);
+        if (!error && data && data.length > 0) {
+          setSubjects(data as Subject[]);
         } else {
-          query = query.in('name', selectedSubjectNames);
-        }
+          // Fallback: if no subjects found by code, try by name as last resort
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('subjects')
+            .select('*')
+            .eq('grade', enrollment.grade)
+            .eq('is_active', true)
+            .eq('medium', enrollment.medium || 'english')
+            .order('sort_order');
 
-        const { data, error } = await query;
-        if (!error && data) setSubjects(data as Subject[]);
+          if (!fallbackError && fallbackData) {
+            // Filter by subject_code OR name matching user's selection
+            const filtered = fallbackData.filter(s => 
+              selectedSubjectCodes.includes(s.subject_code || '') ||
+              selectedSubjectNames.includes(s.name)
+            );
+            setSubjects(filtered as Subject[]);
+          }
+        }
       } else {
         // O/L students - show all subjects for their grade/medium
         let query = supabase
@@ -91,11 +100,6 @@ const Dashboard = () => {
           .eq('grade', enrollment.grade)
           .eq('is_active', true)
           .order('sort_order');
-        
-        // Only filter by stream for A/L students
-        if (!isOLevel && enrollment.stream) {
-          query = query.contains('streams', [enrollment.stream]);
-        }
         
         // Only filter by medium if it exists
         if (enrollment.medium) {

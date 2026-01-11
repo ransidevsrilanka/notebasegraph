@@ -419,21 +419,36 @@ const PaidSignup = () => {
     const effectiveRefCreator = paymentData.refCreator || localStorage.getItem('refCreator');
     const effectiveDiscountCode = paymentData.discountCode;
 
+    // IMPORTANT: paymentData.amount is ALREADY the discounted amount charged by PayHere
+    // The discount was applied in PricingSection before payment was made
+    // DO NOT apply discount again here - this was causing double-discount bug (10000 -> 9000 -> 8100)
+    // 
+    // Get the original amount from localStorage if available, otherwise use paymentData.amount
+    const storedPayment = localStorage.getItem('pending_payment');
+    let originalAmount = paymentData.amount;
+    if (storedPayment) {
+      try {
+        const parsed = JSON.parse(storedPayment);
+        // If we stored an originalAmount, use it; otherwise the amount IS the original (no discount was applied)
+        originalAmount = parsed.originalAmount || paymentData.amount;
+      } catch {
+        // ignore parse errors
+      }
+    }
+
     if (effectiveRefCreator || effectiveDiscountCode) {
       try {
-        // Calculate discount
-        const discountApplied = effectiveDiscountCode ? paymentData.amount * 0.1 : 0;
-        const finalAmount = paymentData.amount - discountApplied;
-
         // Call edge function to handle commission attribution (bypasses RLS)
+        // FIXED: Use paymentData.amount directly as final_amount (already discounted)
+        // Use originalAmount for original_amount tracking
         const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
           body: {
             order_id: paymentData.orderId,
             enrollment_id: enrollmentData.id,
             payment_type: 'card',
             tier: paymentData.tier,
-            original_amount: paymentData.amount,
-            final_amount: finalAmount,
+            original_amount: originalAmount,
+            final_amount: paymentData.amount, // This is already the discounted amount paid
             ref_creator: effectiveRefCreator,
             discount_code: effectiveDiscountCode,
           },
@@ -450,17 +465,27 @@ const PaidSignup = () => {
       }
     }
 
-    // For A/L students, save subject selection
+    // For A/L students, save subject selection with subject codes
     if (selectedGrade.startsWith('al_') && selectedSubjects.length === 3) {
+      // Get subject codes from stream_subjects for the selected subjects
+      const subjectCodes: (string | null)[] = selectedSubjects.map(subjectName => {
+        const subject = streamSubjects.find(s => s.subject_name === subjectName);
+        return subject?.subject_code || null;
+      });
+
       const { error: subjectsError } = await supabase
         .from('user_subjects')
         .insert({
           user_id: currentUser.id,
           enrollment_id: enrollmentData.id,
           subject_1: selectedSubjects[0],
+          subject_1_code: subjectCodes[0],
           subject_2: selectedSubjects[1],
+          subject_2_code: subjectCodes[1],
           subject_3: selectedSubjects[2],
+          subject_3_code: subjectCodes[2],
           is_locked: true, // Lock subjects after paid signup to allow dashboard access
+          is_confirmed: true,
           locked_at: new Date().toISOString(),
         });
 

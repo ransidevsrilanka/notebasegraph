@@ -207,16 +207,27 @@ const UpgradePage = () => {
         request = data;
       }
 
-      // 2) Upload receipt file.
+      // 2) Upload receipt file with unique timestamp to avoid UPDATE RLS issues
+      // Using unique paths avoids needing UPDATE policy on storage.objects
       const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/${request.id}.${fileExt}`;
+      const timestamp = Date.now();
+      const filePath = `${user.id}/${request.id}_${timestamp}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage.from('upgrade-receipts').upload(filePath, file, {
-        upsert: true,
+        upsert: false, // Don't use upsert to avoid UPDATE policy requirement
         contentType: file.type || undefined,
         cacheControl: '3600',
       });
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        // Log detailed error for debugging
+        console.error('Storage upload error:', {
+          error: uploadError,
+          bucket: 'upgrade-receipts',
+          path: filePath,
+          userId: user.id,
+        });
+        throw uploadError;
+      }
 
       // 3) Persist receipt and keep status = pending.
       const { data: updated, error: updateError } = await supabase
@@ -234,7 +245,7 @@ const UpgradePage = () => {
 
       toast.success('Upgrade request submitted');
     } catch (err: any) {
-      console.error(err);
+      console.error('Upgrade submission error:', err);
       toast.error(err?.message ? `Submission failed: ${err.message}` : 'Submission failed');
     } finally {
       setIsUploading(false);
