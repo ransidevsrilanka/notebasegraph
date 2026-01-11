@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyUpgradeRequest, notifyEdgeFunctionError } from "../_shared/notify.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +12,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
   try {
     const { upgradeRequestId } = await req.json();
     
@@ -18,8 +22,6 @@ serve(async (req) => {
       throw new Error('upgradeRequestId is required');
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const telegramBotToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
     const telegramChatId = Deno.env.get('TELEGRAM_CHAT_ID');
 
@@ -62,7 +64,15 @@ serve(async (req) => {
     const currentTier = tierLabels[request.current_tier] || request.current_tier;
     const requestedTier = tierLabels[request.requested_tier] || request.requested_tier;
 
-    // Build message
+    // Send notification via unified notification system
+    await notifyUpgradeRequest(supabaseUrl, supabaseServiceKey, {
+      currentTier: request.current_tier,
+      requestedTier: request.requested_tier,
+      amount: Number(request.amount),
+      userEmail: userEmail,
+    });
+
+    // Build message for direct Telegram send (with more details)
     const message = `📤 *New Upgrade Request*
 
 👤 *User:* ${userName}
@@ -176,6 +186,13 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in send-upgrade-telegram:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: 'send-upgrade-telegram',
+      error: errorMessage,
+    });
+    
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

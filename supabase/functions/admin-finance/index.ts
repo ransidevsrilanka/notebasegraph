@@ -1,5 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  notifyPaymentSuccess, 
+  notifyJoinRequest,
+  notifyUpgradeRequest,
+  notifyWithdrawalRequest,
+  notifyEdgeFunctionError 
+} from "../_shared/notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -487,6 +494,21 @@ serve(async (req) => {
         }
       }
 
+      // Send payment success notification
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("user_id", user_id)
+        .maybeSingle();
+
+      await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+        orderId: order_id,
+        amount: final_amount,
+        tier,
+        userEmail: userProfile?.email,
+        refCreator: ref_creator,
+      });
+
       return new Response(
         JSON.stringify({ success: true, creator_id: creatorId, commission: creatorCommissionAmount }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -712,6 +734,22 @@ serve(async (req) => {
         })
         .eq("id", join_request_id);
 
+      // Get user email for notification
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("user_id", request.user_id)
+        .maybeSingle();
+
+      // Send payment success notification (join request approval = payment confirmed)
+      await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+        orderId,
+        amount: request.amount,
+        tier: request.tier,
+        userEmail: userProfile?.email,
+        refCreator: request.ref_creator,
+      });
+
       console.log("Join request approved:", join_request_id);
 
       return new Response(
@@ -880,6 +918,21 @@ serve(async (req) => {
         })
         .eq("id", upgrade_request_id);
 
+      // Get user email for notification
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("user_id", request.user_id)
+        .maybeSingle();
+
+      // Send payment success notification for upgrade
+      await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+        orderId,
+        amount: request.amount || 0,
+        tier: request.requested_tier,
+        userEmail: userProfile?.email,
+      });
+
       console.log("Upgrade request approved:", upgrade_request_id);
 
       return new Response(
@@ -1023,6 +1076,14 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error("Error:", error);
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: "admin-finance",
+      error: error.message || "Unknown error",
+      context: { path },
+    });
+    
     return new Response(JSON.stringify({ error: error.message || "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

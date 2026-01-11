@@ -1,4 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { notifyEdgeFunctionError } from "../_shared/notify.ts";
+import { sendNotification } from "../_shared/notify.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,10 +30,10 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch all commission tiers
@@ -122,9 +124,39 @@ Deno.serve(async (req) => {
             if (isPromotion) {
               results.promoted++;
               console.log(`Creator ${creator.display_name || creator.id} promoted from Tier ${currentTierLevel} to Tier ${newTierLevel}`);
+              
+              // Send notification for promotion
+              await sendNotification(supabaseUrl, supabaseServiceKey, {
+                type: 'creator_tier_change',
+                message: `Creator ${creator.display_name || 'Unknown'} promoted to Tier ${newTierLevel}`,
+                data: {
+                  creator_id: creator.id,
+                  creator_name: creator.display_name || 'Unknown',
+                  old_tier: currentTierLevel,
+                  new_tier: newTierLevel,
+                  monthly_users: monthlyCount,
+                  change_type: 'promotion',
+                },
+                priority: 'medium',
+              });
             } else {
               results.demoted++;
               console.log(`Creator ${creator.display_name || creator.id} demoted from Tier ${currentTierLevel} to Tier ${newTierLevel}`);
+              
+              // Send notification for demotion
+              await sendNotification(supabaseUrl, supabaseServiceKey, {
+                type: 'creator_tier_change',
+                message: `Creator ${creator.display_name || 'Unknown'} demoted to Tier ${newTierLevel}`,
+                data: {
+                  creator_id: creator.id,
+                  creator_name: creator.display_name || 'Unknown',
+                  old_tier: currentTierLevel,
+                  new_tier: newTierLevel,
+                  monthly_users: monthlyCount,
+                  change_type: 'demotion',
+                },
+                priority: 'high',
+              });
             }
           }
         } else {
@@ -143,6 +175,23 @@ Deno.serve(async (req) => {
 
     console.log('Tier evaluation completed:', results);
 
+    // Send summary notification if there were changes
+    if (results.promoted > 0 || results.demoted > 0) {
+      await sendNotification(supabaseUrl, supabaseServiceKey, {
+        type: 'creator_tier_change',
+        message: `Tier evaluation completed: ${results.promoted} promoted, ${results.demoted} demoted`,
+        data: {
+          evaluated: results.evaluated,
+          promoted: results.promoted,
+          demoted: results.demoted,
+          unchanged: results.unchanged,
+          protected: results.protected,
+          errors_count: results.errors.length,
+        },
+        priority: 'low',
+      });
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -156,6 +205,12 @@ Deno.serve(async (req) => {
     );
   } catch (error: any) {
     console.error('Error evaluating creator tiers:', error);
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: 'evaluate-creator-tiers',
+      error: error.message || 'Unknown error',
+    });
     
     return new Response(
       JSON.stringify({

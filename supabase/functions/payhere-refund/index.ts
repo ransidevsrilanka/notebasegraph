@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { 
+  notifyRefundProcessed, 
+  notifyEdgeFunctionError 
+} from "../_shared/notify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -316,6 +320,13 @@ serve(async (req) => {
       }
     }
 
+    // Send refund notification
+    await notifyRefundProcessed(supabaseUrl, supabaseServiceKey, {
+      orderId: payment.order_id,
+      amount: payment.amount,
+      paymentId: payment_id,
+    });
+
     console.log("Refund processed successfully for payment:", payment_id);
 
     return new Response(
@@ -329,6 +340,13 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error in payhere-refund function:", error);
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: "payhere-refund",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+    
     return new Response(
       JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

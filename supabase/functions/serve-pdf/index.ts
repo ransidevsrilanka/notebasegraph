@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { notifyEdgeFunctionError, sendNotification } from "../_shared/notify.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,16 +13,19 @@ const TIER_HIERARCHY: Record<string, number> = {
   'lifetime': 3,
 }
 
+// Threshold for suspicious activity (downloads per hour)
+const SUSPICIOUS_DOWNLOAD_THRESHOLD = 20;
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
     // Get auth token from request
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
@@ -245,6 +249,29 @@ Deno.serve(async (req) => {
       file_name: note.title
     })
 
+    // Check for suspicious download activity
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentDownloads } = await supabaseAdmin
+      .from('download_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', oneHourAgo);
+
+    if (recentDownloads && recentDownloads > SUSPICIOUS_DOWNLOAD_THRESHOLD) {
+      // Send suspicious activity notification
+      await sendNotification(supabaseUrl, supabaseServiceKey, {
+        type: 'suspicious_download',
+        message: `High download activity detected: ${recentDownloads} downloads in 1 hour`,
+        data: {
+          user_id: user.id,
+          user_email: profile?.email || user.email,
+          downloads_count: recentDownloads,
+          note_accessed: note.title,
+        },
+        priority: 'high',
+      });
+    }
+
     console.log(`PDF access granted: user=${user.id}, note=${noteId}, canDownload=${canDownload}`)
 
     // Generate timestamp for watermark
@@ -277,6 +304,13 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Serve PDF error:', error)
+    
+    // Send error notification
+    await notifyEdgeFunctionError(supabaseUrl, supabaseServiceKey, {
+      functionName: 'serve-pdf',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    
     return new Response(
       JSON.stringify({ error: 'Internal server error', code: 'INTERNAL_ERROR' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
