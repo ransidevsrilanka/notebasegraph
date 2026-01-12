@@ -26,6 +26,7 @@ import {
   Edit2,
   RotateCcw,
   Percent,
+  Download,
 } from 'lucide-react';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
@@ -54,6 +55,10 @@ interface CreatorData {
   available_balance: number | null;
   commission_rate: number;
   custom_commission_rate: number | null;
+  created_at: string;
+  current_tier_level: number | null;
+  total_withdrawn: number | null;
+  tier_protection_until: string | null;
 }
 
 interface PlatformStats {
@@ -172,6 +177,10 @@ const Analytics = () => {
           available_balance: creator.available_balance,
           commission_rate: customRate !== null ? customRate : autoRate,
           custom_commission_rate: customRate,
+          created_at: creator.created_at,
+          current_tier_level: creator.current_tier_level,
+          total_withdrawn: creator.total_withdrawn,
+          tier_protection_until: creator.tier_protection_until,
         };
       });
 
@@ -448,6 +457,111 @@ const Analytics = () => {
       (c.referral_code?.toLowerCase().includes(search) || false)
     );
   });
+
+  // Download creator referrals
+  const downloadCreatorReferrals = async (creator: CreatorData) => {
+    try {
+      toast.info('Downloading referral report...');
+      
+      // Fetch ALL payment attributions for this creator with user details
+      const { data: attributions, error } = await supabase
+        .from('payment_attributions')
+        .select(`
+          id,
+          user_id,
+          creator_commission_amount,
+          creator_commission_rate,
+          final_amount,
+          original_amount,
+          discount_applied,
+          tier,
+          payment_type,
+          created_at
+        `)
+        .eq('creator_id', creator.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+
+      // Fetch profiles for these users
+      const userIds = [...new Set((attributions || []).map(a => a.user_id))];
+      const profileMap: Record<string, { full_name: string | null; email: string | null }> = {};
+      
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, email')
+          .in('user_id', userIds);
+        
+        (profiles || []).forEach(p => {
+          profileMap[p.user_id] = { full_name: p.full_name, email: p.email };
+        });
+      }
+      
+      // Calculate summary stats
+      const totalCommission = attributions?.reduce((sum, a) => 
+        sum + Number(a.creator_commission_amount || 0), 0) || 0;
+      
+      const currentMonthStart = new Date();
+      currentMonthStart.setDate(1);
+      currentMonthStart.setHours(0, 0, 0, 0);
+      
+      const thisMonthUsers = attributions?.filter(a => 
+        new Date(a.created_at) >= currentMonthStart).length || 0;
+      
+      // Build CSV content
+      let csv = '';
+      
+      // Header section
+      csv += 'CREATOR REFERRAL REPORT\n';
+      csv += `Generated:,${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}\n\n`;
+      csv += 'CREATOR SUMMARY\n';
+      csv += `Creator Name:,"${creator.display_name || 'Unknown'}"\n`;
+      csv += `Referral Code:,${creator.referral_code}\n`;
+      csv += `CMO:,"${creator.cmo_name || 'Direct'}"\n`;
+      csv += `Registered Date:,${format(new Date(creator.created_at), 'yyyy-MM-dd')}\n`;
+      csv += `Current Tier Level:,Tier ${creator.current_tier_level || 1}\n`;
+      csv += `Commission Rate:,${Math.round(creator.commission_rate * 100)}%\n`;
+      csv += `Total Lifetime Users:,${creator.lifetime_paid_users}\n`;
+      csv += `Total This Month Users:,${thisMonthUsers}\n`;
+      csv += `Total Commission Earned:,"Rs. ${totalCommission.toLocaleString()}"\n`;
+      csv += `Available Balance:,"Rs. ${(creator.available_balance || 0).toLocaleString()}"\n`;
+      csv += `Total Withdrawn:,"Rs. ${(creator.total_withdrawn || 0).toLocaleString()}"\n`;
+      if (creator.tier_protection_until) {
+        csv += `Tier Protection Until:,${format(new Date(creator.tier_protection_until), 'yyyy-MM-dd')}\n`;
+      }
+      csv += '\n';
+      
+      // Data table
+      csv += 'REFERRAL DETAILS\n';
+      csv += 'End User Name,Email,Commission (Rs.),Commission Rate,Amount Paid (Rs.),Original Amount (Rs.),Discount Applied (Rs.),Tier,Payment Type,Payment Date\n';
+      
+      (attributions || []).forEach(a => {
+        const profile = profileMap[a.user_id] || { full_name: 'N/A', email: 'N/A' };
+        csv += `"${profile.full_name || 'N/A'}","${profile.email || 'N/A'}",${a.creator_commission_amount || 0},${Math.round((a.creator_commission_rate || 0) * 100)}%,${a.final_amount || 0},${a.original_amount || 0},${a.discount_applied || 0},${a.tier || 'N/A'},${a.payment_type || 'N/A'},"${format(new Date(a.created_at), 'yyyy-MM-dd HH:mm')}"\n`;
+      });
+      
+      // Add total row
+      csv += '\n';
+      csv += `TOTAL,${attributions?.length || 0} users,${totalCommission},,,,,,\n`;
+      
+      // Trigger download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${creator.referral_code}_referrals_${format(new Date(), 'yyyyMMdd')}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success(`Downloaded ${attributions?.length || 0} referrals for ${creator.display_name}`);
+    } catch (error) {
+      console.error('Error downloading referrals:', error);
+      toast.error('Failed to download referrals');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -738,6 +852,7 @@ const Analytics = () => {
                       <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Lifetime</th>
                       <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Balance</th>
                       <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Rate</th>
+                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -771,11 +886,22 @@ const Analytics = () => {
                             {creator.custom_commission_rate !== null && ' ⭐'}
                           </span>
                         </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => downloadCreatorReferrals(creator)}
+                            className="h-8 w-8 p-0"
+                            title="Download referrals"
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                     {filteredCreators.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                        <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
                           No creators match your search
                         </td>
                       </tr>
