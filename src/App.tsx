@@ -27,6 +27,8 @@ import PaidSignup from "./pages/PaidSignup";
 import Signup from "./pages/Signup";
 import CreatorSignup from "./pages/CreatorSignup";
 import AwaitingPayment from "./pages/AwaitingPayment";
+import DemoSelection from "./pages/DemoSelection";
+import DemoDashboard from "./pages/DemoDashboard";
 import BankSignup from "./pages/BankSignup";
 import CreatorDashboard from "./pages/creator/CreatorDashboard";
 import CreatorOnboarding from "./pages/creator/CreatorOnboarding";
