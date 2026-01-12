@@ -16,6 +16,7 @@ import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types
 import type { Subject } from '@/types/database';
 import { useBranding } from '@/hooks/useBranding';
 import ReferralProgress from '@/components/dashboard/ReferralProgress';
+import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 
 const Dashboard = () => {
   const { user, enrollment, profile, userSubjects, signOut } = useAuth();
@@ -247,6 +248,18 @@ const Dashboard = () => {
               <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Medium</p>
             </div>
           </section>
+
+          {/* Subscription Status */}
+          {enrollment.tier !== 'lifetime' && (
+            <div className="mb-6">
+              <SubscriptionStatus 
+                expiresAt={enrollment.expires_at || null} 
+                tier={enrollment.tier} 
+                type="user"
+                createdAt={enrollment.created_at}
+              />
+            </div>
+          )}
 
           {/* Referral Progress */}
           <ReferralProgress />

@@ -510,6 +510,7 @@ serve(async (req) => {
           const enrollmentId = custom2;
           const newTier = custom1;
 
+          // For upgrades, update tier but keep existing expires_at
           const { error: enrollmentUpdateError } = await supabase
             .from("enrollments")
             .update({ tier: newTier })

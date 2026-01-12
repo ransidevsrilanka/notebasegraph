@@ -46,6 +46,7 @@ import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 import InboxButton from '@/components/inbox/InboxButton';
+import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 import { Trash2 } from 'lucide-react';
 
 interface CreatorAnalytics {
@@ -662,6 +663,18 @@ const CreatorDashboard = () => {
             Here's how your referrals are performing
           </p>
         </div>
+
+        {/* Trial Status - Show for creators with trial_expires_at */}
+        {creatorData && (
+          <div className="mb-8">
+            <SubscriptionStatus 
+              expiresAt={(creatorData as any).trial_expires_at || null}
+              tier="standard"
+              type="creator"
+              createdAt={creatorData.created_at}
+            />
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
