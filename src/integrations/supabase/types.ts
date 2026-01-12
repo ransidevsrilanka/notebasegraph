@@ -2139,6 +2139,8 @@ export type Database = {
           referrals: number
         }[]
       }
+      get_my_cmo_profile_id: { Args: never; Returns: string }
+      get_my_creator_cmo_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -2146,6 +2148,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_head_ops: { Args: never; Returns: boolean }
       set_creator_role: {
         Args: {
           _cmo_id?: string

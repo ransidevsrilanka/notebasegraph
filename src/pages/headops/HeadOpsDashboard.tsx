@@ -187,22 +187,39 @@ const HeadOpsDashboard = () => {
     if (!user) return;
     setIsLoading(true);
     
-    // Fetch my CMO profile
-    const { data: myProfileData } = await supabase
-      .from('cmo_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    
-    if (myProfileData) {
+    try {
+      // Fetch my CMO profile first - this is critical
+      const { data: myProfileData, error: myProfileError } = await supabase
+        .from('cmo_profiles')
+        .select('id, display_name, referral_code, is_active, user_id, is_head_ops')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (myProfileError) {
+        console.error('Error fetching HOO profile:', myProfileError);
+        toast.error(`Access error: ${myProfileError.message || 'Could not load your profile'}`);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!myProfileData) {
+        console.error('No CMO profile found for HOO user');
+        toast.error('No Head of Ops profile found for your account');
+        setIsLoading(false);
+        return;
+      }
+      
       setMyCMOProfile(myProfileData);
       
       // Fetch MY creators (personal CMO network)
-      const { data: myCreatorsData } = await supabase
+      const { data: myCreatorsData, error: myCreatorsError } = await supabase
         .from('creator_profiles')
         .select('*')
         .eq('cmo_id', myProfileData.id)
         .order('lifetime_paid_users', { ascending: false });
+      
+      if (myCreatorsError) {
+        console.error('Error fetching my creators:', myCreatorsError);
+      }
       
       if (myCreatorsData) {
         const creatorIds = myCreatorsData.map(c => c.id);
@@ -297,92 +314,115 @@ const HeadOpsDashboard = () => {
           { id: '4', title: '10,000 annual paid users for +5% bonus', target: 10000, current: annualPaidUsers, completed: annualPaidUsers >= 10000 },
         ]);
       }
-    }
-    
-    // Fetch ALL CMOs (operational view)
-    const { data: cmosData } = await supabase
-      .from('cmo_profiles')
-      .select('*')
-      .order('display_name');
-    
-    if (cmosData) setCMOs(cmosData);
-
-    // Fetch ALL creators (operational view)
-    const { data: creatorsData } = await supabase
-      .from('creator_profiles')
-      .select('*')
-      .order('display_name');
-    
-    if (creatorsData) setCreators(creatorsData);
-
-    // Fetch my requests
-    const { data: requestsData } = await supabase
-      .from('head_ops_requests')
-      .select('*')
-      .eq('requester_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (requestsData) setMyRequests(requestsData as HeadOpsRequest[]);
-
-    // Fetch content overview
-    const { data: contentData } = await supabase
-      .from('subjects')
-      .select(`id, name, grade, stream, is_active, topics (id, notes:notes(id))`)
-      .order('grade')
-      .order('stream');
-    
-    if (contentData) {
-      const overview = contentData.map(s => ({
-        subject_id: s.id,
-        subject_name: s.name,
-        grade: s.grade || '',
-        stream: s.stream || '',
-        topic_count: (s.topics as any[])?.length || 0,
-        note_count: (s.topics as any[])?.reduce((acc: number, t: any) => acc + (t.notes?.length || 0), 0) || 0,
-        is_active: s.is_active ?? true
-      }));
-      setContentOverview(overview);
-    }
-
-    // Fetch CMO performance data
-    const { data: cmoData } = await supabase
-      .from('cmo_profiles')
-      .select(`id, display_name, is_active, creator_profiles (id, lifetime_paid_users, monthly_paid_users)`)
-      .order('display_name');
-    
-    if (cmoData) {
-      const performance = cmoData.map(cmo => ({
-        cmo_id: cmo.id,
-        display_name: cmo.display_name || 'Unknown',
-        is_active: cmo.is_active ?? true,
-        creators_count: (cmo.creator_profiles as any[])?.length || 0,
-        total_paid_users: (cmo.creator_profiles as any[])?.reduce((acc: number, c: any) => acc + (c.lifetime_paid_users || 0), 0) || 0,
-        monthly_paid_users: (cmo.creator_profiles as any[])?.reduce((acc: number, c: any) => acc + (c.monthly_paid_users || 0), 0) || 0
-      }));
-      setCMOPerformance(performance);
-    }
-
-    // Fetch platform financials
-    const { data: paData } = await supabase
-      .from('payment_attributions')
-      .select('final_amount, creator_id, created_at, user_id');
-    
-    if (paData) {
-      const thisMonth = new Date();
-      thisMonth.setDate(1);
-      thisMonth.setHours(0, 0, 0, 0);
       
-      setFinancials({
-        total_revenue: paData.reduce((sum, p) => sum + (p.final_amount || 0), 0),
-        referral_revenue: paData.filter(p => p.creator_id).reduce((sum, p) => sum + (p.final_amount || 0), 0),
-        non_referral_revenue: paData.filter(p => !p.creator_id).reduce((sum, p) => sum + (p.final_amount || 0), 0),
-        this_month_revenue: paData.filter(p => new Date(p.created_at) >= thisMonth).reduce((sum, p) => sum + (p.final_amount || 0), 0),
-        total_paid_users: new Set(paData.map(p => p.user_id)).size
-      });
-    }
+      // Fetch ALL CMOs (operational view) - HOO needs access to all CMOs
+      const { data: cmosData, error: cmosError } = await supabase
+        .from('cmo_profiles')
+        .select('id, display_name, referral_code, is_active, user_id, is_head_ops')
+        .order('display_name');
+      
+      if (cmosError) {
+        console.error('Error fetching all CMOs:', cmosError);
+        // Don't fail completely, just log the error
+      } else if (cmosData) {
+        setCMOs(cmosData);
+      }
 
-    setLastUpdated(new Date());
-    setIsLoading(false);
+      // Fetch ALL creators (operational view)
+      const { data: creatorsData, error: creatorsError } = await supabase
+        .from('creator_profiles')
+        .select('*')
+        .order('display_name');
+      
+      if (creatorsError) {
+        console.error('Error fetching all creators:', creatorsError);
+      } else if (creatorsData) {
+        setCreators(creatorsData);
+      }
+
+      // Fetch my requests
+      const { data: requestsData, error: requestsError } = await supabase
+        .from('head_ops_requests')
+        .select('*')
+        .eq('requester_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (requestsError) {
+        console.error('Error fetching requests:', requestsError);
+      } else if (requestsData) {
+        setMyRequests(requestsData as HeadOpsRequest[]);
+      }
+
+      // Fetch content overview
+      const { data: contentData, error: contentError } = await supabase
+        .from('subjects')
+        .select(`id, name, grade, stream, is_active, topics (id, notes:notes(id))`)
+        .order('grade')
+        .order('stream');
+      
+      if (contentError) {
+        console.error('Error fetching content:', contentError);
+      } else if (contentData) {
+        const overview = contentData.map(s => ({
+          subject_id: s.id,
+          subject_name: s.name,
+          grade: s.grade || '',
+          stream: s.stream || '',
+          topic_count: (s.topics as any[])?.length || 0,
+          note_count: (s.topics as any[])?.reduce((acc: number, t: any) => acc + (t.notes?.length || 0), 0) || 0,
+          is_active: s.is_active ?? true
+        }));
+        setContentOverview(overview);
+      }
+
+      // Fetch CMO performance data
+      const { data: cmoData, error: cmoPerformanceError } = await supabase
+        .from('cmo_profiles')
+        .select(`id, display_name, is_active, creator_profiles (id, lifetime_paid_users, monthly_paid_users)`)
+        .order('display_name');
+      
+      if (cmoPerformanceError) {
+        console.error('Error fetching CMO performance:', cmoPerformanceError);
+      } else if (cmoData) {
+        const performance = cmoData.map(cmo => ({
+          cmo_id: cmo.id,
+          display_name: cmo.display_name || 'Unknown',
+          is_active: cmo.is_active ?? true,
+          creators_count: (cmo.creator_profiles as any[])?.length || 0,
+          total_paid_users: (cmo.creator_profiles as any[])?.reduce((acc: number, c: any) => acc + (c.lifetime_paid_users || 0), 0) || 0,
+          monthly_paid_users: (cmo.creator_profiles as any[])?.reduce((acc: number, c: any) => acc + (c.monthly_paid_users || 0), 0) || 0
+        }));
+        setCMOPerformance(performance);
+      }
+
+      // Fetch platform financials
+      const { data: paData, error: paError } = await supabase
+        .from('payment_attributions')
+        .select('final_amount, creator_id, created_at, user_id');
+      
+      if (paError) {
+        console.error('Error fetching financials:', paError);
+      } else if (paData) {
+        const thisMonth = new Date();
+        thisMonth.setDate(1);
+        thisMonth.setHours(0, 0, 0, 0);
+        
+        setFinancials({
+          total_revenue: paData.reduce((sum, p) => sum + (p.final_amount || 0), 0),
+          referral_revenue: paData.filter(p => p.creator_id).reduce((sum, p) => sum + (p.final_amount || 0), 0),
+          non_referral_revenue: paData.filter(p => !p.creator_id).reduce((sum, p) => sum + (p.final_amount || 0), 0),
+          this_month_revenue: paData.filter(p => new Date(p.created_at) >= thisMonth).reduce((sum, p) => sum + (p.final_amount || 0), 0),
+          total_paid_users: new Set(paData.map(p => p.user_id)).size
+        });
+      }
+
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('Unexpected error loading dashboard:', err);
+      toast.error('An unexpected error occurred while loading the dashboard');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmitRequest = async () => {
