@@ -20,7 +20,8 @@ import {
   Brain,
   Layers,
   Edit,
-  Check
+  Check,
+  Save
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType, GradeGroup } from '@/types/database';
@@ -85,10 +86,29 @@ const ContentManagement = () => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // View state
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
+
+  // Edit state
+  const [editingSubjectId, setEditingSubjectId] = useState<string | null>(null);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
+  const [editingQuizId, setEditingQuizId] = useState<string | null>(null);
+  const [editingFlashcardSetId, setEditingFlashcardSetId] = useState<string | null>(null);
+  const [editingFlashcardId, setEditingFlashcardId] = useState<string | null>(null);
+
+  // Edit form state
+  const [editSubjectForm, setEditSubjectForm] = useState<Partial<Subject>>({});
+  const [editTopicForm, setEditTopicForm] = useState<Partial<Topic>>({});
+  const [editNoteForm, setEditNoteForm] = useState<Partial<Note>>({});
+  const [editQuestionForm, setEditQuestionForm] = useState<Partial<Question>>({});
+  const [editQuizForm, setEditQuizForm] = useState<Partial<Quiz>>({});
+  const [editFlashcardSetForm, setEditFlashcardSetForm] = useState<Partial<FlashcardSet>>({});
+  const [editFlashcardForm, setEditFlashcardForm] = useState<Partial<Flashcard>>({});
 
   // Subject form
   const [name, setName] = useState('');
@@ -338,7 +358,8 @@ const ContentManagement = () => {
     fetchTopicQuestions();
   }, [quizForm.topic_id]);
 
-  // Subject/Topic/Note handlers (existing)
+  // ============= ADD HANDLERS =============
+  
   const handleAddSubject = async () => {
     if (!name.trim()) {
       toast.error('Subject name is required');
@@ -364,7 +385,7 @@ const ContentManagement = () => {
       });
 
     if (error) {
-      toast.error('Failed to add subject');
+      toast.error('Failed to add subject: ' + error.message);
     } else {
       toast.success('Subject added');
       setName('');
@@ -392,7 +413,7 @@ const ContentManagement = () => {
       });
 
     if (error) {
-      toast.error('Failed to add topic');
+      toast.error('Failed to add topic: ' + error.message);
     } else {
       toast.success('Topic added');
       setTopicName('');
@@ -440,9 +461,9 @@ const ContentManagement = () => {
       setNoteFile(null);
       setNoteMinTier('starter');
       fetchNotes(selectedTopic.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error('Failed to upload note');
+      toast.error('Failed to upload note: ' + error.message);
     }
     setIsUploading(false);
   };
@@ -453,65 +474,6 @@ const ContentManagement = () => {
     void handleUploadNote();
   }, [noteUploadRequested]);
 
-  const deleteSubject = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this subject?')) return;
-
-    const { error } = await supabase.from('subjects').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete subject');
-    } else {
-      toast.success('Subject deleted');
-      if (selectedSubject?.id === id) setSelectedSubject(null);
-      fetchSubjects();
-    }
-  };
-
-  const deleteTopic = async (id: string) => {
-    if (!confirm('Delete this topic and all its notes?')) return;
-
-    const { error } = await supabase.from('topics').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete topic');
-    } else {
-      toast.success('Topic deleted');
-      if (selectedTopic?.id === id) setSelectedTopic(null);
-      if (selectedSubject) fetchTopics(selectedSubject.id);
-      fetchAllTopics();
-    }
-  };
-
-  const deleteNote = async (id: string, fileUrl: string | null) => {
-    if (!confirm('Delete this note?')) return;
-
-    if (fileUrl) {
-      const path = fileUrl.split('/notes/')[1];
-      if (path) {
-        await supabase.storage.from('notes').remove([path]);
-      }
-    }
-
-    const { error } = await supabase.from('notes').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete note');
-    } else {
-      toast.success('Note deleted');
-      if (selectedTopic) fetchNotes(selectedTopic.id);
-    }
-  };
-
-  const toggleSubjectActive = async (id: string, isActive: boolean) => {
-    const { error } = await supabase.from('subjects').update({ is_active: !isActive }).eq('id', id);
-
-    if (!error) {
-      toast.success(isActive ? 'Subject deactivated' : 'Subject activated');
-      fetchSubjects();
-    }
-  };
-
-  // Question Bank handlers
   const handleAddQuestion = async () => {
     if (!questionForm.question_text.trim()) {
       toast.error('Question text is required');
@@ -536,7 +498,7 @@ const ContentManagement = () => {
     });
 
     if (error) {
-      toast.error('Failed to add question');
+      toast.error('Failed to add question: ' + error.message);
     } else {
       toast.success('Question added');
       setQuestionForm({
@@ -554,20 +516,6 @@ const ContentManagement = () => {
     setIsAdding(false);
   };
 
-  const deleteQuestion = async (id: string) => {
-    if (!confirm('Delete this question?')) return;
-
-    const { error } = await supabase.from('question_bank').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete question');
-    } else {
-      toast.success('Question deleted');
-      fetchQuestions();
-    }
-  };
-
-  // Quiz handlers
   const handleAddQuiz = async () => {
     if (!quizForm.title.trim()) {
       toast.error('Quiz title is required');
@@ -591,7 +539,7 @@ const ContentManagement = () => {
     });
 
     if (error) {
-      toast.error('Failed to create quiz');
+      toast.error('Failed to create quiz: ' + error.message);
     } else {
       toast.success('Quiz created');
       setQuizForm({
@@ -608,20 +556,6 @@ const ContentManagement = () => {
     setIsAdding(false);
   };
 
-  const deleteQuiz = async (id: string) => {
-    if (!confirm('Delete this quiz?')) return;
-
-    const { error } = await supabase.from('quizzes').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete quiz');
-    } else {
-      toast.success('Quiz deleted');
-      fetchQuizzes();
-    }
-  };
-
-  // Flashcard handlers
   const handleAddFlashcardSet = async () => {
     if (!flashcardSetForm.title.trim()) {
       toast.error('Set title is required');
@@ -638,7 +572,7 @@ const ContentManagement = () => {
     });
 
     if (error) {
-      toast.error('Failed to create flashcard set');
+      toast.error('Failed to create flashcard set: ' + error.message);
     } else {
       toast.success('Flashcard set created');
       setFlashcardSetForm({
@@ -650,20 +584,6 @@ const ContentManagement = () => {
       fetchFlashcardSets();
     }
     setIsAdding(false);
-  };
-
-  const deleteFlashcardSet = async (id: string) => {
-    if (!confirm('Delete this flashcard set and all its cards?')) return;
-
-    const { error } = await supabase.from('flashcard_sets').delete().eq('id', id);
-
-    if (error) {
-      toast.error('Failed to delete flashcard set');
-    } else {
-      toast.success('Flashcard set deleted');
-      if (selectedFlashcardSet?.id === id) setSelectedFlashcardSet(null);
-      fetchFlashcardSets();
-    }
   };
 
   const handleAddFlashcard = async () => {
@@ -682,15 +602,264 @@ const ContentManagement = () => {
     });
 
     if (error) {
-      toast.error('Failed to add flashcard');
+      toast.error('Failed to add flashcard: ' + error.message);
     } else {
       toast.success('Flashcard added');
       setFlashcardForm({ front_text: '', back_text: '' });
       fetchFlashcards(selectedFlashcardSet.id);
-      // Update card count
       await supabase.from('flashcard_sets').update({ card_count: flashcards.length + 1 }).eq('id', selectedFlashcardSet.id);
     }
     setIsAdding(false);
+  };
+
+  // ============= UPDATE HANDLERS =============
+
+  const handleUpdateSubject = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('subjects')
+      .update({
+        name: editSubjectForm.name,
+        description: editSubjectForm.description,
+        grade: editSubjectForm.grade,
+        stream: editSubjectForm.stream,
+        streams: editSubjectForm.streams,
+        medium: editSubjectForm.medium,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update subject: ' + error.message);
+    } else {
+      toast.success('Subject updated');
+      setEditingSubjectId(null);
+      fetchSubjects();
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateTopic = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('topics')
+      .update({
+        name: editTopicForm.name,
+        description: editTopicForm.description,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update topic: ' + error.message);
+    } else {
+      toast.success('Topic updated');
+      setEditingTopicId(null);
+      if (selectedSubject) fetchTopics(selectedSubject.id);
+      fetchAllTopics();
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateNote = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('notes')
+      .update({
+        title: editNoteForm.title,
+        description: editNoteForm.description,
+        min_tier: editNoteForm.min_tier,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update note: ' + error.message);
+    } else {
+      toast.success('Note updated');
+      setEditingNoteId(null);
+      if (selectedTopic) fetchNotes(selectedTopic.id);
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateQuestion = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('question_bank')
+      .update({
+        question_text: editQuestionForm.question_text,
+        question_type: editQuestionForm.question_type,
+        options: editQuestionForm.question_type === 'mcq' ? editQuestionForm.options : null,
+        correct_answer: editQuestionForm.correct_answer,
+        explanation: editQuestionForm.explanation,
+        difficulty: editQuestionForm.difficulty,
+        min_tier: editQuestionForm.min_tier,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update question: ' + error.message);
+    } else {
+      toast.success('Question updated');
+      setEditingQuestionId(null);
+      fetchQuestions();
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateQuiz = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('quizzes')
+      .update({
+        title: editQuizForm.title,
+        description: editQuizForm.description,
+        time_limit_minutes: editQuizForm.time_limit_minutes,
+        pass_percentage: editQuizForm.pass_percentage,
+        min_tier: editQuizForm.min_tier,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update quiz: ' + error.message);
+    } else {
+      toast.success('Quiz updated');
+      setEditingQuizId(null);
+      fetchQuizzes();
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateFlashcardSet = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('flashcard_sets')
+      .update({
+        title: editFlashcardSetForm.title,
+        description: editFlashcardSetForm.description,
+        min_tier: editFlashcardSetForm.min_tier,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update flashcard set: ' + error.message);
+    } else {
+      toast.success('Flashcard set updated');
+      setEditingFlashcardSetId(null);
+      fetchFlashcardSets();
+    }
+    setIsSaving(false);
+  };
+
+  const handleUpdateFlashcard = async (id: string) => {
+    setIsSaving(true);
+    const { error } = await supabase
+      .from('flashcards')
+      .update({
+        front_text: editFlashcardForm.front_text,
+        back_text: editFlashcardForm.back_text,
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Failed to update flashcard: ' + error.message);
+    } else {
+      toast.success('Flashcard updated');
+      setEditingFlashcardId(null);
+      if (selectedFlashcardSet) fetchFlashcards(selectedFlashcardSet.id);
+    }
+    setIsSaving(false);
+  };
+
+  // ============= DELETE HANDLERS =============
+
+  const deleteSubject = async (id: string) => {
+    const subject = subjects.find(s => s.id === id);
+    const topicCount = allTopics.filter(t => (t as any).subject_id === id).length;
+    
+    if (!confirm(`Delete "${subject?.name}"? This will also delete ${topicCount} topic(s) and all associated notes, questions, quizzes, and flashcards.`)) return;
+
+    const { error } = await supabase.from('subjects').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete subject: ' + error.message);
+    } else {
+      toast.success('Subject and all related content deleted');
+      if (selectedSubject?.id === id) setSelectedSubject(null);
+      fetchSubjects();
+      fetchAllTopics();
+    }
+  };
+
+  const deleteTopic = async (id: string) => {
+    const topic = topics.find(t => t.id === id);
+    if (!confirm(`Delete "${topic?.name}" and all its notes, questions, quizzes, and flashcards?`)) return;
+
+    const { error } = await supabase.from('topics').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete topic: ' + error.message);
+    } else {
+      toast.success('Topic and all related content deleted');
+      if (selectedTopic?.id === id) setSelectedTopic(null);
+      if (selectedSubject) fetchTopics(selectedSubject.id);
+      fetchAllTopics();
+    }
+  };
+
+  const deleteNote = async (id: string, fileUrl: string | null) => {
+    if (!confirm('Delete this note?')) return;
+
+    if (fileUrl) {
+      await supabase.storage.from('notes').remove([fileUrl]);
+    }
+
+    const { error } = await supabase.from('notes').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete note: ' + error.message);
+    } else {
+      toast.success('Note deleted');
+      if (selectedTopic) fetchNotes(selectedTopic.id);
+    }
+  };
+
+  const deleteQuestion = async (id: string) => {
+    if (!confirm('Delete this question?')) return;
+
+    const { error } = await supabase.from('question_bank').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete question: ' + error.message);
+    } else {
+      toast.success('Question deleted');
+      fetchQuestions();
+    }
+  };
+
+  const deleteQuiz = async (id: string) => {
+    if (!confirm('Delete this quiz?')) return;
+
+    const { error } = await supabase.from('quizzes').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete quiz: ' + error.message);
+    } else {
+      toast.success('Quiz deleted');
+      fetchQuizzes();
+    }
+  };
+
+  const deleteFlashcardSet = async (id: string) => {
+    if (!confirm('Delete this flashcard set and all its cards?')) return;
+
+    const { error } = await supabase.from('flashcard_sets').delete().eq('id', id);
+
+    if (error) {
+      toast.error('Failed to delete flashcard set: ' + error.message);
+    } else {
+      toast.success('Flashcard set deleted');
+      if (selectedFlashcardSet?.id === id) setSelectedFlashcardSet(null);
+      fetchFlashcardSets();
+    }
   };
 
   const deleteFlashcard = async (id: string) => {
@@ -699,7 +868,7 @@ const ContentManagement = () => {
     const { error } = await supabase.from('flashcards').delete().eq('id', id);
 
     if (error) {
-      toast.error('Failed to delete flashcard');
+      toast.error('Failed to delete flashcard: ' + error.message);
     } else {
       toast.success('Flashcard deleted');
       if (selectedFlashcardSet) {
@@ -707,6 +876,87 @@ const ContentManagement = () => {
         await supabase.from('flashcard_sets').update({ card_count: flashcards.length - 1 }).eq('id', selectedFlashcardSet.id);
       }
     }
+  };
+
+  const toggleSubjectActive = async (id: string, isActive: boolean) => {
+    const { error } = await supabase.from('subjects').update({ is_active: !isActive }).eq('id', id);
+
+    if (!error) {
+      toast.success(isActive ? 'Subject deactivated' : 'Subject activated');
+      fetchSubjects();
+    }
+  };
+
+  // ============= EDIT START HANDLERS =============
+
+  const startEditSubject = (subject: Subject) => {
+    setEditingSubjectId(subject.id);
+    setEditSubjectForm({
+      name: subject.name,
+      description: subject.description,
+      grade: subject.grade,
+      stream: subject.stream,
+      streams: subject.streams || [subject.stream],
+      medium: subject.medium,
+    });
+  };
+
+  const startEditTopic = (topic: Topic) => {
+    setEditingTopicId(topic.id);
+    setEditTopicForm({
+      name: topic.name,
+      description: topic.description,
+    });
+  };
+
+  const startEditNote = (note: Note) => {
+    setEditingNoteId(note.id);
+    setEditNoteForm({
+      title: note.title,
+      description: note.description,
+      min_tier: note.min_tier,
+    });
+  };
+
+  const startEditQuestion = (question: Question) => {
+    setEditingQuestionId(question.id);
+    setEditQuestionForm({
+      question_text: question.question_text,
+      question_type: question.question_type,
+      options: question.options || ['', '', '', ''],
+      correct_answer: question.correct_answer,
+      explanation: question.explanation,
+      difficulty: question.difficulty,
+      min_tier: question.min_tier,
+    });
+  };
+
+  const startEditQuiz = (quiz: Quiz) => {
+    setEditingQuizId(quiz.id);
+    setEditQuizForm({
+      title: quiz.title,
+      description: quiz.description,
+      time_limit_minutes: quiz.time_limit_minutes,
+      pass_percentage: quiz.pass_percentage,
+      min_tier: quiz.min_tier,
+    });
+  };
+
+  const startEditFlashcardSet = (set: FlashcardSet) => {
+    setEditingFlashcardSetId(set.id);
+    setEditFlashcardSetForm({
+      title: set.title,
+      description: set.description,
+      min_tier: set.min_tier,
+    });
+  };
+
+  const startEditFlashcard = (card: Flashcard) => {
+    setEditingFlashcardId(card.id);
+    setEditFlashcardForm({
+      front_text: card.front_text,
+      back_text: card.back_text,
+    });
   };
 
   // Breadcrumb navigation
@@ -856,15 +1106,7 @@ const ContentManagement = () => {
         <div className="p-4 border-b border-border flex items-center justify-between gap-4 flex-wrap">
           <h2 className="font-medium text-foreground text-sm flex items-center gap-2">
             <BookOpen className="w-4 h-4 text-brand" />
-            Subjects ({subjects.filter(s => {
-              if (!subjectSearch) return true;
-              const search = subjectSearch.toLowerCase();
-              return (
-                s.name.toLowerCase().includes(search) ||
-                (GRADE_LABELS[s.grade]?.toLowerCase().includes(search) || false) ||
-                (STREAM_LABELS[s.stream]?.toLowerCase().includes(search) || false)
-              );
-            }).length})
+            Subjects ({filterSubjects(subjectSearch).length})
           </h2>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -889,16 +1131,7 @@ const ContentManagement = () => {
         ) : (
           <div>
             {Object.entries(GRADE_GROUPS).map(([groupKey, { label, grades }]) => {
-              const allGroupSubjects = subjects.filter(s => grades.includes(s.grade as GradeLevel));
-              const groupSubjects = allGroupSubjects.filter(s => {
-                if (!subjectSearch) return true;
-                const search = subjectSearch.toLowerCase();
-                return (
-                  s.name.toLowerCase().includes(search) ||
-                  (GRADE_LABELS[s.grade]?.toLowerCase().includes(search) || false) ||
-                  (STREAM_LABELS[s.stream]?.toLowerCase().includes(search) || false)
-                );
-              });
+              const groupSubjects = filterSubjects(subjectSearch).filter(s => grades.includes(s.grade as GradeLevel));
               if (groupSubjects.length === 0) return null;
               
               return (
@@ -908,54 +1141,94 @@ const ContentManagement = () => {
                   </div>
                   <div className="divide-y divide-border">
                     {groupSubjects.map((subject) => (
-                      <div key={subject.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                        <button
-                          onClick={() => setSelectedSubject(subject)}
-                          className="flex-1 text-left"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
-                              <BookOpen className="w-5 h-5 text-brand" />
-                            </div>
-                            <div>
-                              <p className={`text-foreground font-medium text-sm ${subject.medium === 'sinhala' ? 'font-sinhala' : ''}`}>
-                                {subject.name}
-                              </p>
-                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                <span className="text-muted-foreground text-xs">
-                                  {GRADE_LABELS[subject.grade]} • {MEDIUM_LABELS[subject.medium]}
-                                </span>
-                                <span className="text-muted-foreground text-xs">•</span>
-                                {(subject.streams || [subject.stream]).map((s) => (
-                                  <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                    {STREAM_LABELS[s]}
-                                  </Badge>
+                      <div key={subject.id} className="p-4 hover:bg-secondary/30">
+                        {editingSubjectId === subject.id ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                              <Input
+                                value={editSubjectForm.name || ''}
+                                onChange={(e) => setEditSubjectForm({ ...editSubjectForm, name: e.target.value })}
+                                placeholder="Subject name"
+                                className="bg-secondary border-border h-9"
+                              />
+                              <Input
+                                value={editSubjectForm.description || ''}
+                                onChange={(e) => setEditSubjectForm({ ...editSubjectForm, description: e.target.value })}
+                                placeholder="Description"
+                                className="bg-secondary border-border h-9"
+                              />
+                              <select
+                                value={editSubjectForm.medium || 'english'}
+                                onChange={(e) => setEditSubjectForm({ ...editSubjectForm, medium: e.target.value as MediumType })}
+                                className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                              >
+                                {Object.entries(MEDIUM_LABELS).map(([value, label]) => (
+                                  <option key={value} value={value}>{label}</option>
                                 ))}
-                              </div>
+                              </select>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button variant="brand" size="sm" onClick={() => handleUpdateSubject(subject.id)} disabled={isSaving}>
+                                {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                                Save
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setEditingSubjectId(null)}>
+                                <X className="w-4 h-4 mr-1" />
+                                Cancel
+                              </Button>
                             </div>
                           </div>
-                        </button>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => toggleSubjectActive(subject.id, subject.is_active)}
-                            className={`px-2 py-1 rounded text-xs font-medium ${
-                              subject.is_active ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'
-                            }`}
-                          >
-                            {subject.is_active ? 'Active' : 'Inactive'}
-                          </button>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedSubject(subject)}>
-                            <ChevronRight className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteSubject(subject.id)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <button onClick={() => setSelectedSubject(subject)} className="flex-1 text-left">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                                  <BookOpen className="w-5 h-5 text-brand" />
+                                </div>
+                                <div>
+                                  <p className={`text-foreground font-medium text-sm ${subject.medium === 'sinhala' ? 'font-sinhala' : ''}`}>
+                                    {subject.name}
+                                  </p>
+                                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span className="text-muted-foreground text-xs">
+                                      {GRADE_LABELS[subject.grade]} • {MEDIUM_LABELS[subject.medium]}
+                                    </span>
+                                    <span className="text-muted-foreground text-xs">•</span>
+                                    {(subject.streams || [subject.stream]).map((s) => (
+                                      <Badge key={s} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                        {STREAM_LABELS[s]}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleSubjectActive(subject.id, subject.is_active)}
+                                className={`px-2 py-1 rounded text-xs font-medium ${
+                                  subject.is_active ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'
+                                }`}
+                              >
+                                {subject.is_active ? 'Active' : 'Inactive'}
+                              </button>
+                              <Button variant="ghost" size="sm" onClick={() => startEditSubject(subject)}>
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setSelectedSubject(subject)}>
+                                <ChevronRight className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteSubject(subject.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -968,13 +1241,13 @@ const ContentManagement = () => {
     </>
   );
 
-  // Topics View
+  // Topic List View
   const renderTopicList = () => (
     <>
       <div className="glass-card p-5 mb-6">
         <h2 className="font-display text-base font-semibold text-foreground mb-4 flex items-center gap-2">
           <Plus className="w-4 h-4 text-brand" />
-          Add Topic to {selectedSubject?.name}
+          Add New Topic to "{selectedSubject?.name}"
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
@@ -983,7 +1256,7 @@ const ContentManagement = () => {
             <Input
               value={topicName}
               onChange={(e) => setTopicName(e.target.value)}
-              placeholder="e.g., Differentiation"
+              placeholder="e.g., Integration"
               className="bg-secondary border-border h-9"
             />
           </div>
@@ -1017,26 +1290,60 @@ const ContentManagement = () => {
         ) : (
           <div className="divide-y divide-border">
             {topics.map((topic) => (
-              <div key={topic.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                <button onClick={() => setSelectedTopic(topic)} className="flex-1 text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
-                      <FolderOpen className="w-5 h-5 text-brand" />
+              <div key={topic.id} className="p-4 hover:bg-secondary/30">
+                {editingTopicId === topic.id ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input
+                        value={editTopicForm.name || ''}
+                        onChange={(e) => setEditTopicForm({ ...editTopicForm, name: e.target.value })}
+                        placeholder="Topic name"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <Input
+                        value={editTopicForm.description || ''}
+                        onChange={(e) => setEditTopicForm({ ...editTopicForm, description: e.target.value })}
+                        placeholder="Description"
+                        className="bg-secondary border-border h-9"
+                      />
                     </div>
-                    <div>
-                      <p className="text-foreground font-medium text-sm">{topic.name}</p>
-                      {topic.description && <p className="text-muted-foreground text-xs">{topic.description}</p>}
+                    <div className="flex items-center gap-2">
+                      <Button variant="brand" size="sm" onClick={() => handleUpdateTopic(topic.id)} disabled={isSaving}>
+                        {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                        Save
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingTopicId(null)}>
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
                     </div>
                   </div>
-                </button>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedTopic(topic)}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => deleteTopic(topic.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <button onClick={() => setSelectedTopic(topic)} className="flex-1 text-left">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                          <FolderOpen className="w-5 h-5 text-brand" />
+                        </div>
+                        <div>
+                          <p className="text-foreground font-medium text-sm">{topic.name}</p>
+                          {topic.description && <p className="text-muted-foreground text-xs">{topic.description}</p>}
+                        </div>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => startEditTopic(topic)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setSelectedTopic(topic)}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteTopic(topic.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1130,28 +1437,71 @@ const ContentManagement = () => {
         ) : (
           <div className="divide-y divide-border">
             {notes.map((note) => (
-              <div key={note.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-brand" />
+              <div key={note.id} className="p-4 hover:bg-secondary/30">
+                {editingNoteId === note.id ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <Input
+                        value={editNoteForm.title || ''}
+                        onChange={(e) => setEditNoteForm({ ...editNoteForm, title: e.target.value })}
+                        placeholder="Note title"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <Input
+                        value={editNoteForm.description || ''}
+                        onChange={(e) => setEditNoteForm({ ...editNoteForm, description: e.target.value })}
+                        placeholder="Description"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <select
+                        value={editNoteForm.min_tier || 'starter'}
+                        onChange={(e) => setEditNoteForm({ ...editNoteForm, min_tier: e.target.value as TierType })}
+                        className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                      >
+                        {Object.entries(TIER_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="brand" size="sm" onClick={() => handleUpdateNote(note.id)} disabled={isSaving}>
+                        {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                        Save
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingNoteId(null)}>
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-foreground font-medium text-sm">{note.title}</p>
-                    <p className="text-muted-foreground text-xs">
-                      Min: {TIER_LABELS[note.min_tier]} • {note.file_size ? `${(note.file_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'}
-                    </p>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-lg bg-brand/10 flex items-center justify-center">
+                        <FileText className="w-5 h-5 text-brand" />
+                      </div>
+                      <div>
+                        <p className="text-foreground font-medium text-sm">{note.title}</p>
+                        <p className="text-muted-foreground text-xs">
+                          Min: {TIER_LABELS[note.min_tier]} • {note.file_size ? `${(note.file_size / 1024 / 1024).toFixed(2)} MB` : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {note.file_url && (
+                        <a href={note.file_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline text-sm">
+                          View
+                        </a>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => startEditNote(note)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteNote(note.id, note.file_url)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {note.file_url && (
-                    <a href={note.file_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline text-sm">
-                      View
-                    </a>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={() => deleteNote(note.id, note.file_url)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                )}
               </div>
             ))}
           </div>
@@ -1234,9 +1584,6 @@ const ContentManagement = () => {
                 <option key={topic.id} value={topic.id}>{topic.name}</option>
               ))}
             </select>
-            {questionSubjectId && questionFilteredTopics.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
-            )}
           </div>
 
           {questionForm.question_type === 'mcq' && (
@@ -1344,22 +1691,74 @@ const ContentManagement = () => {
           <div className="divide-y divide-border">
             {questions.map((q) => (
               <div key={q.id} className="p-4 hover:bg-secondary/30">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <p className="text-foreground text-sm font-medium">{q.question_text}</p>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <Badge variant="secondary" className="text-xs">{q.question_type}</Badge>
-                      <Badge variant="outline" className="text-xs">{q.difficulty}</Badge>
-                      <Badge variant="outline" className="text-xs">{TIER_LABELS[q.min_tier as TierType]}</Badge>
+                {editingQuestionId === q.id ? (
+                  <div className="space-y-3">
+                    <Textarea
+                      value={editQuestionForm.question_text || ''}
+                      onChange={(e) => setEditQuestionForm({ ...editQuestionForm, question_text: e.target.value })}
+                      placeholder="Question text"
+                      className="bg-secondary border-border min-h-[60px]"
+                    />
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <Input
+                        value={editQuestionForm.correct_answer || ''}
+                        onChange={(e) => setEditQuestionForm({ ...editQuestionForm, correct_answer: e.target.value })}
+                        placeholder="Correct answer"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <select
+                        value={editQuestionForm.difficulty || 'medium'}
+                        onChange={(e) => setEditQuestionForm({ ...editQuestionForm, difficulty: e.target.value as any })}
+                        className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                      <select
+                        value={editQuestionForm.min_tier || 'starter'}
+                        onChange={(e) => setEditQuestionForm({ ...editQuestionForm, min_tier: e.target.value as TierType })}
+                        className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                      >
+                        {Object.entries(TIER_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
                     </div>
-                    <p className="text-muted-foreground text-xs mt-2">
-                      Answer: <span className="text-brand">{q.correct_answer}</span>
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button variant="brand" size="sm" onClick={() => handleUpdateQuestion(q.id)} disabled={isSaving}>
+                        {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                        Save
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingQuestionId(null)}>
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => deleteQuestion(q.id)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="text-foreground text-sm font-medium">{q.question_text}</p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <Badge variant="secondary" className="text-xs">{q.question_type}</Badge>
+                        <Badge variant="outline" className="text-xs">{q.difficulty}</Badge>
+                        <Badge variant="outline" className="text-xs">{TIER_LABELS[q.min_tier as TierType]}</Badge>
+                      </div>
+                      <p className="text-muted-foreground text-xs mt-2">
+                        Answer: <span className="text-brand">{q.correct_answer}</span>
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditQuestion(q)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteQuestion(q.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1429,9 +1828,16 @@ const ContentManagement = () => {
                 <option key={topic.id} value={topic.id}>{topic.name}</option>
               ))}
             </select>
-            {quizSubjectId && quizFilteredTopics.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
-            )}
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Description</label>
+            <Input
+              value={quizForm.description}
+              onChange={(e) => setQuizForm({ ...quizForm, description: e.target.value })}
+              placeholder="Brief description"
+              className="bg-secondary border-border h-9"
+            />
           </div>
 
           <div>
@@ -1439,7 +1845,7 @@ const ContentManagement = () => {
             <Input
               type="number"
               value={quizForm.time_limit_minutes}
-              onChange={(e) => setQuizForm({ ...quizForm, time_limit_minutes: Number(e.target.value) })}
+              onChange={(e) => setQuizForm({ ...quizForm, time_limit_minutes: parseInt(e.target.value) || 30 })}
               className="bg-secondary border-border h-9"
             />
           </div>
@@ -1449,7 +1855,7 @@ const ContentManagement = () => {
             <Input
               type="number"
               value={quizForm.pass_percentage}
-              onChange={(e) => setQuizForm({ ...quizForm, pass_percentage: Number(e.target.value) })}
+              onChange={(e) => setQuizForm({ ...quizForm, pass_percentage: parseInt(e.target.value) || 60 })}
               className="bg-secondary border-border h-9"
             />
           </div>
@@ -1467,27 +1873,17 @@ const ContentManagement = () => {
             </select>
           </div>
 
-          <div className="md:col-span-2">
-            <label className="text-xs text-muted-foreground mb-1 block">Description</label>
-            <Input
-              value={quizForm.description}
-              onChange={(e) => setQuizForm({ ...quizForm, description: e.target.value })}
-              placeholder="Brief description"
-              className="bg-secondary border-border h-9"
-            />
-          </div>
-
           {quizForm.topic_id && (
             <div className="md:col-span-2">
-              <label className="text-xs text-muted-foreground mb-2 block">
+              <label className="text-xs text-muted-foreground mb-1 block">
                 Select Questions ({quizForm.question_ids.length} selected)
               </label>
               {topicQuestions.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No questions for this topic. Add questions first.</p>
+                <p className="text-muted-foreground text-sm">No questions available for this topic.</p>
               ) : (
                 <div className="max-h-48 overflow-y-auto border border-border rounded-md p-2 space-y-2">
                   {topicQuestions.map((q) => (
-                    <label key={q.id} className="flex items-start gap-2 p-2 rounded hover:bg-secondary cursor-pointer">
+                    <label key={q.id} className="flex items-start gap-2 p-2 hover:bg-secondary/50 rounded cursor-pointer">
                       <Checkbox
                         checked={quizForm.question_ids.includes(q.id)}
                         onCheckedChange={(checked) => {
@@ -1531,20 +1927,73 @@ const ContentManagement = () => {
         ) : (
           <div className="divide-y divide-border">
             {quizzes.map((quiz) => (
-              <div key={quiz.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                <div>
-                  <p className="text-foreground font-medium text-sm">{quiz.title}</p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-muted-foreground text-xs">{quiz.question_ids.length} questions</span>
-                    <span className="text-muted-foreground text-xs">•</span>
-                    <span className="text-muted-foreground text-xs">{quiz.time_limit_minutes} min</span>
-                    <span className="text-muted-foreground text-xs">•</span>
-                    <span className="text-muted-foreground text-xs">{quiz.pass_percentage}% to pass</span>
+              <div key={quiz.id} className="p-4 hover:bg-secondary/30">
+                {editingQuizId === quiz.id ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <Input
+                        value={editQuizForm.title || ''}
+                        onChange={(e) => setEditQuizForm({ ...editQuizForm, title: e.target.value })}
+                        placeholder="Quiz title"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <Input
+                        type="number"
+                        value={editQuizForm.time_limit_minutes || 30}
+                        onChange={(e) => setEditQuizForm({ ...editQuizForm, time_limit_minutes: parseInt(e.target.value) || 30 })}
+                        placeholder="Time limit"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <Input
+                        type="number"
+                        value={editQuizForm.pass_percentage || 60}
+                        onChange={(e) => setEditQuizForm({ ...editQuizForm, pass_percentage: parseInt(e.target.value) || 60 })}
+                        placeholder="Pass %"
+                        className="bg-secondary border-border h-9"
+                      />
+                      <select
+                        value={editQuizForm.min_tier || 'starter'}
+                        onChange={(e) => setEditQuizForm({ ...editQuizForm, min_tier: e.target.value as TierType })}
+                        className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                      >
+                        {Object.entries(TIER_LABELS).map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="brand" size="sm" onClick={() => handleUpdateQuiz(quiz.id)} disabled={isSaving}>
+                        {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                        Save
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditingQuizId(null)}>
+                        <X className="w-4 h-4 mr-1" />
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => deleteQuiz(quiz.id)} className="text-destructive hover:text-destructive">
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-foreground font-medium text-sm">{quiz.title}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-muted-foreground text-xs">{quiz.question_ids.length} questions</span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground text-xs">{quiz.time_limit_minutes} min</span>
+                        <span className="text-muted-foreground text-xs">•</span>
+                        <span className="text-muted-foreground text-xs">{quiz.pass_percentage}% to pass</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => startEditQuiz(quiz)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => deleteQuiz(quiz.id)} className="text-destructive hover:text-destructive">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1616,9 +2065,6 @@ const ContentManagement = () => {
                     <option key={topic.id} value={topic.id}>{topic.name}</option>
                   ))}
                 </select>
-                {flashcardSubjectId && flashcardFilteredTopics.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">No topics for this subject. Add topics first.</p>
-                )}
               </div>
 
               <div>
@@ -1669,21 +2115,64 @@ const ContentManagement = () => {
             ) : (
               <div className="divide-y divide-border">
                 {flashcardSets.map((set) => (
-                  <div key={set.id} className="p-4 hover:bg-secondary/30 flex items-center justify-between">
-                    <button onClick={() => setSelectedFlashcardSet(set)} className="flex-1 text-left">
-                      <p className="text-foreground font-medium text-sm">{set.title}</p>
-                      <p className="text-muted-foreground text-xs mt-1">
-                        {set.card_count || 0} cards • {TIER_LABELS[set.min_tier as TierType]}
-                      </p>
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => setSelectedFlashcardSet(set)}>
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => deleteFlashcardSet(set.id)} className="text-destructive hover:text-destructive">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <div key={set.id} className="p-4 hover:bg-secondary/30">
+                    {editingFlashcardSetId === set.id ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <Input
+                            value={editFlashcardSetForm.title || ''}
+                            onChange={(e) => setEditFlashcardSetForm({ ...editFlashcardSetForm, title: e.target.value })}
+                            placeholder="Set title"
+                            className="bg-secondary border-border h-9"
+                          />
+                          <Input
+                            value={editFlashcardSetForm.description || ''}
+                            onChange={(e) => setEditFlashcardSetForm({ ...editFlashcardSetForm, description: e.target.value })}
+                            placeholder="Description"
+                            className="bg-secondary border-border h-9"
+                          />
+                          <select
+                            value={editFlashcardSetForm.min_tier || 'starter'}
+                            onChange={(e) => setEditFlashcardSetForm({ ...editFlashcardSetForm, min_tier: e.target.value as TierType })}
+                            className="w-full h-9 px-3 rounded-md bg-secondary border border-border text-foreground text-sm"
+                          >
+                            {Object.entries(TIER_LABELS).map(([value, label]) => (
+                              <option key={value} value={value}>{label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="brand" size="sm" onClick={() => handleUpdateFlashcardSet(set.id)} disabled={isSaving}>
+                            {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                            Save
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingFlashcardSetId(null)}>
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <button onClick={() => setSelectedFlashcardSet(set)} className="flex-1 text-left">
+                          <p className="text-foreground font-medium text-sm">{set.title}</p>
+                          <p className="text-muted-foreground text-xs mt-1">
+                            {set.card_count || 0} cards • {TIER_LABELS[set.min_tier as TierType]}
+                          </p>
+                        </button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => startEditFlashcardSet(set)}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setSelectedFlashcardSet(set)}>
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteFlashcardSet(set.id)} className="text-destructive hover:text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1747,18 +2236,52 @@ const ContentManagement = () => {
               <div className="divide-y divide-border">
                 {flashcards.map((card, idx) => (
                   <div key={card.id} className="p-4 hover:bg-secondary/30">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-muted-foreground text-xs">#{idx + 1}</span>
+                    {editingFlashcardId === card.id ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Textarea
+                            value={editFlashcardForm.front_text || ''}
+                            onChange={(e) => setEditFlashcardForm({ ...editFlashcardForm, front_text: e.target.value })}
+                            placeholder="Front text"
+                            className="bg-secondary border-border min-h-[60px]"
+                          />
+                          <Textarea
+                            value={editFlashcardForm.back_text || ''}
+                            onChange={(e) => setEditFlashcardForm({ ...editFlashcardForm, back_text: e.target.value })}
+                            placeholder="Back text"
+                            className="bg-secondary border-border min-h-[60px]"
+                          />
                         </div>
-                        <p className="text-foreground text-sm font-medium mb-1">Front: {card.front_text}</p>
-                        <p className="text-muted-foreground text-sm">Back: {card.back_text}</p>
+                        <div className="flex items-center gap-2">
+                          <Button variant="brand" size="sm" onClick={() => handleUpdateFlashcard(card.id)} disabled={isSaving}>
+                            {isSaving ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                            Save
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setEditingFlashcardId(null)}>
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => deleteFlashcard(card.id)} className="text-destructive hover:text-destructive">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-muted-foreground text-xs">#{idx + 1}</span>
+                          </div>
+                          <p className="text-foreground text-sm font-medium mb-1">Front: {card.front_text}</p>
+                          <p className="text-muted-foreground text-sm">Back: {card.back_text}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => startEditFlashcard(card)}>
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteFlashcard(card.id)} className="text-destructive hover:text-destructive">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
