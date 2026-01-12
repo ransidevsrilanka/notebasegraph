@@ -20,7 +20,7 @@ const CREATOR_DEFAULT_RATE = 0.12; // 12% for new creators (30-day protection)
 // CMO Commission rates
 const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
 const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
-const CMO_ANNUAL_USER_GOAL = 280; // 280 users annually for bonus
+const CMO_ANNUAL_USER_GOAL = 10000; // 10,000 users annually for bonus
 
 // Helper function to get commission rate from database based on MONTHLY users (rolling 30 days)
 // Includes 30-day tier protection for new creators
@@ -208,8 +208,8 @@ serve(async (req) => {
         }
       }
 
-      // Find creator by discount code if not found by ref
-      if (!creatorId && discount_code) {
+      // ALSO track discount code if used (even if creator was found via ref_creator)
+      if (discount_code) {
         const { data: dcData } = await supabase
           .from("discount_codes")
           .select("id, creator_id")
@@ -217,23 +217,27 @@ serve(async (req) => {
           .eq("is_active", true)
           .maybeSingle();
 
-        if (dcData && dcData.creator_id) {
-          creatorId = dcData.creator_id;
+        if (dcData) {
           discountCodeId = dcData.id;
+          
+          // If no creator found yet, use the discount code's creator
+          if (!creatorId && dcData.creator_id) {
+            creatorId = dcData.creator_id;
 
-          const { data: foundCreator } = await supabase
-            .from("creator_profiles")
-            .select("id, lifetime_paid_users, available_balance, cmo_id")
-            .eq("id", creatorId)
-            .single();
+            const { data: foundCreator } = await supabase
+              .from("creator_profiles")
+              .select("id, lifetime_paid_users, available_balance, cmo_id")
+              .eq("id", creatorId)
+              .single();
 
-          if (foundCreator) {
-            creatorData = foundCreator;
-            // Use dynamic commission rate from DB tiers
-            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-            // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-            creatorCommissionAmount = final_amount * creatorCommissionRate;
-            console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
+            if (foundCreator) {
+              creatorData = foundCreator;
+              // Use dynamic commission rate from DB tiers
+              creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+              // COMMISSION FORMULA: commission = final_sale_price × commission_rate
+              creatorCommissionAmount = final_amount * creatorCommissionRate;
+              console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
+            }
           }
         }
       }
@@ -273,12 +277,12 @@ serve(async (req) => {
       console.log("Payment attribution created successfully for order:", order_id);
 
       // STEP 4: Only NOW update stats (since attribution was successfully created)
+      // NOTE: lifetime_paid_users and monthly_paid_users are updated by trigger on_payment_attribution_insert
       if (creatorId && creatorData) {
-        // Update creator balance and paid users
+        // Update creator balance only (stats handled by trigger)
         await supabase
           .from("creator_profiles")
           .update({
-            lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
             available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
           })
           .eq("id", creatorId);
@@ -291,28 +295,28 @@ serve(async (req) => {
           referral_source: discountCodeId ? "discount_code" : "link",
         }, { onConflict: "user_id" });
 
-        // Update discount code stats if applicable
-        if (discountCodeId) {
-          const { data: currentDC } = await supabase
-            .from("discount_codes")
-            .select("usage_count, paid_conversions")
-            .eq("id", discountCodeId)
-            .single();
-
-          if (currentDC) {
-            await supabase
-              .from("discount_codes")
-              .update({
-                usage_count: (currentDC.usage_count || 0) + 1,
-                paid_conversions: (currentDC.paid_conversions || 0) + 1,
-              })
-              .eq("id", discountCodeId);
-          }
-        }
-
         // Handle CMO commission
         if (creatorData.cmo_id) {
           await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
+        }
+      }
+
+      // Update discount code stats if applicable (always, even if creator found via ref_creator)
+      if (discountCodeId) {
+        const { data: currentDC } = await supabase
+          .from("discount_codes")
+          .select("usage_count, paid_conversions")
+          .eq("id", discountCodeId)
+          .single();
+
+        if (currentDC) {
+          await supabase
+            .from("discount_codes")
+            .update({
+              usage_count: (currentDC.usage_count || 0) + 1,
+              paid_conversions: (currentDC.paid_conversions || 0) + 1,
+            })
+            .eq("id", discountCodeId);
         }
       }
 
@@ -386,8 +390,8 @@ serve(async (req) => {
         }
       }
 
-      // Find creator by discount code if not found by ref
-      if (!creatorId && discount_code) {
+      // ALSO track discount code if used (even if creator was found via ref_creator)
+      if (discount_code) {
         const { data: dcData } = await supabase
           .from("discount_codes")
           .select("id, creator_id")
@@ -395,23 +399,27 @@ serve(async (req) => {
           .eq("is_active", true)
           .maybeSingle();
 
-        if (dcData && dcData.creator_id) {
-          creatorId = dcData.creator_id;
+        if (dcData) {
           discountCodeId = dcData.id;
+          
+          // If no creator found yet, use the discount code's creator
+          if (!creatorId && dcData.creator_id) {
+            creatorId = dcData.creator_id;
 
-          const { data: foundCreator } = await supabase
-            .from("creator_profiles")
-            .select("id, lifetime_paid_users, available_balance, cmo_id")
-            .eq("id", creatorId)
-            .single();
+            const { data: foundCreator } = await supabase
+              .from("creator_profiles")
+              .select("id, lifetime_paid_users, available_balance, cmo_id")
+              .eq("id", creatorId)
+              .single();
 
-          if (foundCreator) {
-            creatorData = foundCreator;
-            // Use dynamic commission rate from DB tiers
-            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-            // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-            creatorCommissionAmount = final_amount * creatorCommissionRate;
-            console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
+            if (foundCreator) {
+              creatorData = foundCreator;
+              // Use dynamic commission rate from DB tiers
+              creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
+              // COMMISSION FORMULA: commission = final_sale_price × commission_rate
+              creatorCommissionAmount = final_amount * creatorCommissionRate;
+              console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
+            }
           }
         }
       }
@@ -451,12 +459,12 @@ serve(async (req) => {
       console.log("Payment attribution created successfully for order:", order_id);
 
       // STEP 4: Only NOW update stats (since attribution was successfully created)
+      // NOTE: lifetime_paid_users and monthly_paid_users are updated by trigger on_payment_attribution_insert
       if (creatorId && creatorData) {
-        // Update creator balance and paid users
+        // Update creator balance only (stats handled by trigger)
         await supabase
           .from("creator_profiles")
           .update({
-            lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
             available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
           })
           .eq("id", creatorId);
@@ -469,28 +477,28 @@ serve(async (req) => {
           referral_source: discountCodeId ? "discount_code" : "link",
         }, { onConflict: "user_id" });
 
-        // Update discount code stats if applicable
-        if (discountCodeId) {
-          const { data: currentDC } = await supabase
-            .from("discount_codes")
-            .select("usage_count, paid_conversions")
-            .eq("id", discountCodeId)
-            .single();
-
-          if (currentDC) {
-            await supabase
-              .from("discount_codes")
-              .update({
-                usage_count: (currentDC.usage_count || 0) + 1,
-                paid_conversions: (currentDC.paid_conversions || 0) + 1,
-              })
-              .eq("id", discountCodeId);
-          }
-        }
-
         // Handle CMO commission
         if (creatorData.cmo_id) {
           await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
+        }
+      }
+
+      // Update discount code stats if applicable (always, even if creator found via ref_creator)
+      if (discountCodeId) {
+        const { data: currentDC } = await supabase
+          .from("discount_codes")
+          .select("usage_count, paid_conversions")
+          .eq("id", discountCodeId)
+          .single();
+
+        if (currentDC) {
+          await supabase
+            .from("discount_codes")
+            .update({
+              usage_count: (currentDC.usage_count || 0) + 1,
+              paid_conversions: (currentDC.paid_conversions || 0) + 1,
+            })
+            .eq("id", discountCodeId);
         }
       }
 

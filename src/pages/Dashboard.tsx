@@ -317,7 +317,7 @@ const Dashboard = () => {
         <div className="container mx-auto px-4">
           <div className="flex justify-between items-center">
             <p className="text-muted-foreground text-sm">{user?.email}</p>
-            <p className="text-muted-foreground text-xs">© 2024 {branding.siteName}</p>
+            <p className="text-muted-foreground text-xs">© {new Date().getFullYear()} {branding.siteName}</p>
           </div>
         </div>
       </footer>
