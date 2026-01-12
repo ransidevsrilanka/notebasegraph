@@ -294,7 +294,7 @@ const HeadOpsDashboard = () => {
           { id: '1', title: 'Get 5 active creators', target: 5, current: creatorCount, completed: creatorCount >= 5 },
           { id: '2', title: 'Get 20 active creators', target: 20, current: creatorCount, completed: creatorCount >= 20 },
           { id: '3', title: 'Get 100 active creators', target: 100, current: creatorCount, completed: creatorCount >= 100 },
-          { id: '4', title: '280 annual paid users for +5% bonus', target: 280, current: annualPaidUsers, completed: annualPaidUsers >= 280 },
+          { id: '4', title: '10,000 annual paid users for +5% bonus', target: 10000, current: annualPaidUsers, completed: annualPaidUsers >= 10000 },
         ]);
       }
     }
@@ -498,8 +498,8 @@ const HeadOpsDashboard = () => {
     ? `${window.location.origin}/creator-signup?ref_cmo=${myCMOProfile.referral_code}`
     : '';
 
-  const bonusEligible = myStats.annualPaidUsers >= 280;
-  const bonusProgress = Math.min((myStats.annualPaidUsers / 280) * 100, 100);
+  const bonusEligible = myStats.annualPaidUsers >= 10000;
+  const bonusProgress = Math.min((myStats.annualPaidUsers / 10000) * 100, 100);
 
   const chartColors = {
     primary: 'hsl(45, 93%, 47%)',

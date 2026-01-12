@@ -253,10 +253,10 @@ const CMODashboard = () => {
             },
             {
               id: '5',
-              title: 'Bring 280 paid users annually for +5% bonus',
-              target: 280,
+              title: 'Bring 10,000 paid users annually for +5% bonus',
+              target: 10000,
               current: annualPaidUsers,
-              completed: annualPaidUsers >= 280,
+              completed: annualPaidUsers >= 10000,
               description: 'Unlock +5% bonus commission (13% total)',
             },
           ]);
@@ -324,9 +324,9 @@ const CMODashboard = () => {
     ? `${window.location.origin}/creator-signup?ref_cmo=${cmoProfile.referral_code}`
     : '';
 
-  // CMO bonus eligibility: 280 annual users goal
-  const bonusEligible = stats.annualPaidUsers >= 280;
-  const bonusProgress = Math.min((stats.annualPaidUsers / 280) * 100, 100);
+  // CMO bonus eligibility: 10,000 annual users goal
+  const bonusEligible = stats.annualPaidUsers >= 10000;
+  const bonusProgress = Math.min((stats.annualPaidUsers / 10000) * 100, 100);
 
   // Get top 5 creators by revenue
   const topCreators = [...creators].slice(0, 5);

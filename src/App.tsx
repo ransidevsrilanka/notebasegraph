@@ -83,6 +83,8 @@ const App = () => (
             <Route path="/paid-signup" element={<PaidSignup />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/creator-signup" element={<CreatorSignup />} />
+            <Route path="/demo" element={<DemoSelection />} />
+            <Route path="/demo/dashboard" element={<DemoDashboard />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
             <Route path="/select-subjects" element={
