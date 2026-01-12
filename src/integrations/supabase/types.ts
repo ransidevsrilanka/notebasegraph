@@ -435,6 +435,7 @@ export type Database = {
           referral_code: string
           tier_protection_until: string | null
           total_withdrawn: number | null
+          trial_expires_at: string | null
           user_id: string
         }
         Insert: {
@@ -451,6 +452,7 @@ export type Database = {
           referral_code: string
           tier_protection_until?: string | null
           total_withdrawn?: number | null
+          trial_expires_at?: string | null
           user_id: string
         }
         Update: {
@@ -467,6 +469,7 @@ export type Database = {
           referral_code?: string
           tier_protection_until?: string | null
           total_withdrawn?: number | null
+          trial_expires_at?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2149,6 +2152,7 @@ export type Database = {
         Returns: boolean
       }
       is_head_ops: { Args: never; Returns: boolean }
+      reset_monthly_paid_users: { Args: never; Returns: undefined }
       set_creator_role: {
         Args: {
           _cmo_id?: string

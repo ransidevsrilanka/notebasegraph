@@ -741,11 +741,11 @@ const HeadOpsDashboard = () => {
                     color={bonusEligible ? 'hsl(142, 71%, 45%)' : 'hsl(45, 93%, 47%)'}
                   />
                   <div>
-                    <p className="text-2xl font-bold text-foreground">{myStats.annualPaidUsers} / 280</p>
+                    <p className="text-2xl font-bold text-foreground">{myStats.annualPaidUsers.toLocaleString()} / 10,000</p>
                     <p className="text-sm text-muted-foreground">
                       {bonusEligible 
                         ? '🎉 Bonus unlocked! +5% commission' 
-                        : `${280 - myStats.annualPaidUsers} more paid users for +5% bonus`
+                        : `${(10000 - myStats.annualPaidUsers).toLocaleString()} more paid users for +5% bonus`
                       }
                     </p>
                   </div>
