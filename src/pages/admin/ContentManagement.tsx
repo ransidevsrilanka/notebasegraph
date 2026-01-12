@@ -21,8 +21,10 @@ import {
   Layers,
   Edit,
   Check,
-  Save
+  Save,
+  AlertTriangle
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { Subject, Topic, Note, GradeLevel, StreamType, MediumType, TierType, GradeGroup } from '@/types/database';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS, GRADE_GROUPS } from '@/types/database';
@@ -87,6 +89,9 @@ const ContentManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
 
   // View state
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
@@ -887,6 +892,55 @@ const ContentManagement = () => {
     }
   };
 
+  // Delete All Subjects Handler
+  const handleDeleteAllSubjects = async () => {
+    if (deleteConfirmText !== 'DELETE ALL') {
+      toast.error('Please type "DELETE ALL" to confirm');
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      // Get all subject IDs to delete related storage files
+      const subjectIds = subjects.map(s => s.id);
+      
+      // Get all notes file URLs to delete from storage
+      const { data: notesToDelete } = await supabase
+        .from('notes')
+        .select('file_url, topic_id')
+        .in('topic_id', 
+          (await supabase.from('topics').select('id').in('subject_id', subjectIds)).data?.map(t => t.id) || []
+        );
+      
+      // Delete storage files
+      if (notesToDelete && notesToDelete.length > 0) {
+        const fileUrls = notesToDelete.filter(n => n.file_url).map(n => n.file_url as string);
+        if (fileUrls.length > 0) {
+          await supabase.storage.from('notes').remove(fileUrls);
+        }
+      }
+      
+      // Delete all subjects (cascade will handle topics, notes, etc.)
+      const { error } = await supabase.from('subjects').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      
+      if (error) throw error;
+      
+      toast.success(`Deleted ${subjects.length} subjects and all related content`);
+      setShowDeleteAllDialog(false);
+      setDeleteConfirmText('');
+      setSelectedSubject(null);
+      setSelectedTopic(null);
+      fetchSubjects();
+      fetchAllTopics();
+    } catch (error: any) {
+      console.error('Delete all error:', error);
+      toast.error('Failed to delete all subjects: ' + error.message);
+    }
+    
+    setIsDeleting(false);
+  };
+
   // ============= EDIT START HANDLERS =============
 
   const startEditSubject = (subject: Subject) => {
@@ -1121,6 +1175,17 @@ const ContentManagement = () => {
             <Button variant="ghost" size="sm" onClick={fetchSubjects}>
               <RefreshCw className="w-4 h-4" />
             </Button>
+            {subjects.length > 0 && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteAllDialog(true)}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete All
+              </Button>
+            )}
           </div>
         </div>
 
@@ -2349,6 +2414,54 @@ const ContentManagement = () => {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Delete All Confirmation Dialog */}
+      <Dialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Delete All Subjects
+            </DialogTitle>
+            <DialogDescription>
+              This action will permanently delete all {subjects.length} subjects and their associated topics, notes, questions, quizzes, and flashcards. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Type <span className="font-mono font-bold text-destructive">DELETE ALL</span> to confirm:
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type DELETE ALL"
+              className="font-mono"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setShowDeleteAllDialog(false); setDeleteConfirmText(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAllSubjects}
+              disabled={deleteConfirmText !== 'DELETE ALL' || isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete All Subjects
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 };
