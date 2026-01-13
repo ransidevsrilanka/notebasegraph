@@ -436,32 +436,33 @@ const PaidSignup = () => {
       }
     }
 
-    // CRITICAL FIX: Always track ALL payments (direct or referred) for CEO metrics
-    // Previously only tracked payments with referral codes, missing direct payments
-    try {
-      // Call edge function to handle payment attribution (bypasses RLS)
-      // This now tracks ALL payments - direct and referred
-      const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
-        body: {
-          order_id: paymentData.orderId,
-          enrollment_id: enrollmentData.id,
-          payment_type: 'card',
-          tier: paymentData.tier,
-          original_amount: originalAmount,
-          final_amount: paymentData.amount, // This is already the discounted amount paid
-          ref_creator: effectiveRefCreator || null, // null for direct payments
-          discount_code: effectiveDiscountCode || null, // null for direct payments
-        },
-      });
+    if (effectiveRefCreator || effectiveDiscountCode) {
+      try {
+        // Call edge function to handle commission attribution (bypasses RLS)
+        // FIXED: Use paymentData.amount directly as final_amount (already discounted)
+        // Use originalAmount for original_amount tracking
+        const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
+          body: {
+            order_id: paymentData.orderId,
+            enrollment_id: enrollmentData.id,
+            payment_type: 'card',
+            tier: paymentData.tier,
+            original_amount: originalAmount,
+            final_amount: paymentData.amount, // This is already the discounted amount paid
+            ref_creator: effectiveRefCreator,
+            discount_code: effectiveDiscountCode,
+          },
+        });
 
-      if (finError) {
-        console.error('Error finalizing payment attribution:', finError);
-      } else {
-        console.log('Payment attribution finalized successfully (direct or referred)');
+        if (finError) {
+          console.error('Error finalizing payment attribution:', finError);
+        } else {
+          console.log('Payment attribution finalized successfully');
+        }
+      } catch (refError) {
+        console.error('Error processing referral:', refError);
+        // Don't fail the enrollment for referral errors
       }
-    } catch (refError) {
-      console.error('Error processing payment attribution:', refError);
-      // Don't fail the enrollment for attribution errors
     }
 
     // For A/L students, save subject selection with subject codes

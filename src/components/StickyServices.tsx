@@ -1,31 +1,35 @@
-import { useEffect, useRef, useState } from "react";
-import { BookOpen, Shield, Zap } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { FileText, Download, Zap } from "lucide-react";
 
 const services = [
   {
     id: 1,
-    icon: BookOpen,
-    title: "Comprehensive Library",
-    description: "Access hundreds of curated study notes, past papers, and revision materials. Everything organized by subject, topic, and difficulty level for efficient learning."
+    icon: FileText,
+    title: "Curated Study Notes",
+    subtitle: "Comprehensive Coverage",
+    description: "Expertly crafted notes covering every topic in your curriculum. From fundamentals to advanced concepts, organized chapter by chapter for seamless learning.",
+    features: ["Topic-wise breakdown", "Key points highlighted", "Exam-focused content", "Regular updates"]
   },
   {
     id: 2,
-    icon: Shield,
-    title: "Secure Access",
-    description: "One-time activation binds to your account. Your investment is protected with device tracking and secure authentication. No sharing, no leaks."
+    icon: Download,
+    title: "Offline Access",
+    subtitle: "Learn Anywhere",
+    description: "Download materials for offline study. Perfect for students in areas with limited connectivity. Your education shouldn't depend on internet availability.",
+    features: ["PDF downloads", "Watermarked security", "Tier-based access", "Unlimited re-downloads"]
   },
   {
     id: 3,
     icon: Zap,
     title: "Instant Updates",
-    description: "New content added regularly. When exam patterns change, your library updates. Stay ahead with the latest materials and revision techniques."
+    subtitle: "Always Current",
+    description: "Stay ahead with the latest syllabus changes and exam patterns. Our content is continuously updated to reflect the newest educational requirements.",
+    features: ["Syllabus aligned", "New papers added", "Revision materials", "Early access for Premium"]
   }
 ];
 
 const StickyServices = () => {
-  const itemsRef = useRef<(HTMLDivElement | null)[]>([]);
-  const [hoveredCard, setHoveredCard] = useState<number | null>(null);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const cardsRef = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -39,96 +43,107 @@ const StickyServices = () => {
       { threshold: 0.3 }
     );
 
-    itemsRef.current.forEach((item) => {
-      if (item) observer.observe(item);
+    cardsRef.current.forEach((card) => {
+      if (card) observer.observe(card);
     });
 
     return () => observer.disconnect();
   }, []);
 
-  // Handle spotlight effect
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>, index: number) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMousePosition({
-      x: ((e.clientX - rect.left) / rect.width) * 100,
-      y: ((e.clientY - rect.top) / rect.height) * 100
-    });
-    setHoveredCard(index);
-  };
-
   return (
-    <section className="py-28 md:py-36 bg-vault-surface relative overflow-hidden">
-      {/* Subtle background mesh */}
-      <div className="absolute inset-0 opacity-50">
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand/[0.02] rounded-full blur-[150px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-brand/[0.02] rounded-full blur-[120px]" />
-      </div>
-
-      <div className="container mx-auto px-4 sm:px-6 relative z-10">
-        {/* Section header */}
-        <div className="text-center mb-20 md:mb-28">
-          <p className="text-muted-foreground/50 uppercase tracking-[0.3em] text-xs mb-6">
-            What You Get
-          </p>
-          <h2 className="font-display text-4xl sm:text-5xl md:text-6xl font-bold text-foreground tracking-[-0.03em]">
-            Everything you need
-          </h2>
-        </div>
-
-        {services.map((service, index) => (
+    <section className="relative bg-background">
+      {services.map((service, index) => (
+        <div 
+          key={service.id}
+          className="sticky top-0 min-h-screen flex items-center py-16 md:py-20"
+          style={{ 
+            zIndex: index + 1,
+          }}
+        >
           <div 
-            key={service.id} 
-            ref={(el) => (itemsRef.current[index] = el)}
-            className="reveal py-12 md:py-16 border-t border-border/10 first:border-t-0 last:border-b last:border-border/10"
-            style={{ transitionDelay: `${index * 0.12}s` }}
+            className="absolute inset-0 bg-vault-dark"
+            style={{
+              opacity: 0.98 - (index * 0.02)
+            }}
+          />
+          
+          {/* Accent glow */}
+          <div 
+            className={`absolute top-1/2 ${index % 2 === 0 ? 'right-0' : 'left-0'} w-[300px] md:w-[500px] h-[300px] md:h-[500px] -translate-y-1/2 rounded-full blur-[150px] md:blur-[200px] pointer-events-none bg-brand/8`}
+          />
+
+          <div 
+            ref={(el) => (cardsRef.current[index] = el)}
+            className="container mx-auto px-4 sm:px-6 relative z-10 reveal"
+            style={{ transitionDelay: `${index * 0.1}s` }}
           >
-            <div 
-              className="glass-card p-8 md:p-12 relative overflow-hidden group cursor-default"
-              onMouseMove={(e) => handleMouseMove(e, index)}
-              onMouseLeave={() => setHoveredCard(null)}
-              style={{
-                '--spotlight-x': `${mousePosition.x}%`,
-                '--spotlight-y': `${mousePosition.y}%`,
-              } as React.CSSProperties}
-            >
-              {/* Spotlight effect */}
-              <div 
-                className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-                  hoveredCard === index ? 'opacity-100' : 'opacity-0'
-                }`}
-                style={{
-                  background: `radial-gradient(400px circle at ${mousePosition.x}% ${mousePosition.y}%, hsl(var(--brand) / 0.08), transparent 40%)`
-                }}
-              />
-
-              <div className="grid md:grid-cols-[auto_1fr_auto] gap-8 md:gap-12 items-center relative z-10">
-                {/* Number */}
-                <span className="text-muted-foreground/30 text-6xl md:text-7xl font-display font-bold hidden md:block">
-                  0{index + 1}
+            <div className={`grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center ${index % 2 === 1 ? 'lg:flex-row-reverse' : ''}`}>
+              {/* Content */}
+              <div className={`${index % 2 === 1 ? 'lg:order-2' : ''}`}>
+                <span className="font-accent text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4 block">
+                  Service 0{service.id}
                 </span>
+                <h2 className="font-display text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-4 tracking-tight">
+                  {service.title}
+                </h2>
+                <p className="text-lg md:text-xl font-medium mb-6 text-brand">
+                  {service.subtitle}
+                </p>
+                <p className="font-body text-base md:text-lg text-muted-foreground leading-relaxed mb-8 max-w-lg">
+                  {service.description}
+                </p>
 
-                {/* Content */}
-                <div>
-                  <span className="text-muted-foreground/50 text-sm uppercase tracking-[0.2em] font-medium md:hidden mb-4 block">
-                    0{index + 1}
-                  </span>
-                  <h2 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-4 tracking-[-0.02em] group-hover:text-brand transition-colors duration-500">
-                    {service.title}
-                  </h2>
-                  <p className="font-body text-muted-foreground text-base md:text-lg leading-relaxed max-w-xl">
-                    {service.description}
-                  </p>
-                </div>
-                
-                {/* Icon - minimal, refined */}
-                <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-brand/[0.05] border border-brand/10 flex items-center justify-center group-hover:bg-brand/[0.08] group-hover:border-brand/20 transition-all duration-500">
-                  <service.icon className="w-10 h-10 md:w-12 md:h-12 text-brand/50 group-hover:text-brand/70 transition-colors duration-500" strokeWidth={1.5} />
+                {/* Features list */}
+                <ul className="grid grid-cols-2 gap-3">
+                  {service.features.map((feature, fIndex) => (
+                    <li 
+                      key={feature} 
+                      className="flex items-center gap-2 animate-slide-up"
+                      style={{ animationDelay: `${0.3 + fIndex * 0.1}s` }}
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-brand" />
+                      <span className="font-body text-sm text-foreground">{feature}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Visual */}
+              <div className={`${index % 2 === 1 ? 'lg:order-1' : ''}`}>
+                <div className="relative">
+                  {/* Main card */}
+                  <div className="relative p-8 md:p-12 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 backdrop-blur-sm overflow-hidden hover-lift hover-glow">
+                    {/* Icon */}
+                    <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl md:rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-8">
+                      <service.icon className="w-10 h-10 md:w-12 md:h-12 text-brand" />
+                    </div>
+
+                    {/* Decorative number */}
+                    <div className="absolute -right-4 -bottom-8 font-display text-[150px] md:text-[200px] font-black text-foreground/[0.02] leading-none pointer-events-none select-none">
+                      0{service.id}
+                    </div>
+
+                    {/* Grid pattern */}
+                    <div 
+                      className="absolute inset-0 opacity-[0.03]"
+                      style={{
+                        backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+                        backgroundSize: '24px 24px'
+                      }}
+                    />
+                  </div>
+
+                  {/* Floating accent */}
+                  <div className="absolute -top-4 -right-4 w-24 md:w-32 h-24 md:h-32 rounded-full blur-[40px] md:blur-[60px] bg-brand/20" />
                 </div>
               </div>
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* Section separator */}
+          <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border/30 to-transparent" />
+        </div>
+      ))}
     </section>
   );
 };

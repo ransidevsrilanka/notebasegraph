@@ -86,14 +86,14 @@ const UpgradeRequests = () => {
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      // Fetch profiles for each request - FIX: use user_id instead of id
+      // Fetch profiles for each request
       const userIds = [...new Set(data.map(r => r.user_id))];
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, user_id, email, full_name')
-        .in('user_id', userIds);
+        .select('id, email, full_name')
+        .in('id', userIds);
 
-      const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
       
       const enrichedRequests = data.map(r => ({
         ...r,
@@ -110,9 +110,8 @@ const UpgradeRequests = () => {
     setReviewNotes(request.admin_notes || '');
     
     if (request.receipt_url) {
-      // FIX: Use correct bucket name 'upgrade-receipts' instead of 'receipts'
       const { data } = await supabase.storage
-        .from('upgrade-receipts')
+        .from('receipts')
         .createSignedUrl(request.receipt_url, 3600);
       
       setReceiptUrl(data?.signedUrl || null);
@@ -150,9 +149,8 @@ const UpgradeRequests = () => {
     if (!selectedRequest?.receipt_url) return;
     
     try {
-      // FIX: Use correct bucket name 'upgrade-receipts' instead of 'receipts'
       const { error } = await supabase.storage
-        .from('upgrade-receipts')
+        .from('receipts')
         .remove([selectedRequest.receipt_url]);
       
       if (error) throw error;
