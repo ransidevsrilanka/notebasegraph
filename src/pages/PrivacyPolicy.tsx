@@ -11,26 +11,23 @@ const PrivacyPolicy = () => {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="pt-32 md:pt-40 pb-24 md:pb-32">
-        <div className="container mx-auto px-4 sm:px-6 max-w-3xl">
-          <div className="mb-12 md:mb-16">
-            <p className="text-muted-foreground/60 uppercase tracking-[0.25em] text-xs mb-4">
-              Legal
-            </p>
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4 tracking-[-0.02em]">
+      <main className="pt-32 pb-20">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <div className="animate-reveal">
+            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
               Privacy Policy
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-12">
               Last updated: December 17, 2024
             </p>
           </div>
 
-          <div className="prose prose-lg max-w-none">
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+          <div className="prose prose-invert max-w-none space-y-8">
+            <section className="animate-reveal" style={{ animationDelay: '0.1s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 1. Introduction
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 Welcome to Notebase ("we," "our," or "us"). We are committed
                 to protecting your personal information and your right to
                 privacy. This Privacy Policy explains how we collect, use,
@@ -39,15 +36,15 @@ const PrivacyPolicy = () => {
               </p>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.15s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 2. Information We Collect
               </h2>
-              <p className="text-muted-foreground leading-[1.8] mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 We collect information that you provide directly to us,
                 including:
               </p>
-              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4 leading-[1.8]">
+              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4">
                 <li>Personal identification information (name, email address)</li>
                 <li>Account credentials and authentication data</li>
                 <li>Payment and billing information</li>
@@ -58,14 +55,14 @@ const PrivacyPolicy = () => {
               </ul>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.2s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 3. How We Use Your Information
               </h2>
-              <p className="text-muted-foreground leading-[1.8] mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 We use the collected information for various purposes, including:
               </p>
-              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4 leading-[1.8]">
+              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4">
                 <li>Providing and maintaining our educational services</li>
                 <li>Processing transactions and managing subscriptions</li>
                 <li>Preventing fraud, unauthorized access, and abuse</li>
@@ -76,11 +73,11 @@ const PrivacyPolicy = () => {
               </ul>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.25s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 4. Device Tracking & Security
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 To protect our content and prevent unauthorized sharing, Notebase
                 employs device fingerprinting and session tracking
                 technologies. By using our services, you consent to the
@@ -91,14 +88,14 @@ const PrivacyPolicy = () => {
               </p>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.3s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 5. Data Sharing & Disclosure
               </h2>
-              <p className="text-muted-foreground leading-[1.8] mb-4">
+              <p className="text-muted-foreground leading-relaxed mb-4">
                 We may share your information in the following circumstances:
               </p>
-              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4 leading-[1.8]">
+              <ul className="list-disc list-inside text-muted-foreground space-y-2 ml-4">
                 <li>With service providers who assist in our operations</li>
                 <li>To comply with legal obligations or court orders</li>
                 <li>To protect our rights, privacy, safety, or property</li>
@@ -107,11 +104,11 @@ const PrivacyPolicy = () => {
               </ul>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.35s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 6. Data Retention
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 We retain your personal information for as long as necessary to
                 fulfill the purposes outlined in this policy, comply with legal
                 obligations, resolve disputes, and enforce our agreements. Even
@@ -120,11 +117,11 @@ const PrivacyPolicy = () => {
               </p>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.4s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 7. Your Rights
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 Depending on your jurisdiction, you may have certain rights
                 regarding your personal data. These rights may be limited where
                 we have legitimate business interests or legal obligations. To
@@ -133,11 +130,11 @@ const PrivacyPolicy = () => {
               </p>
             </section>
 
-            <section className="mb-10">
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.45s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 8. Changes to This Policy
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 Notebase reserves the right to update this Privacy Policy at
                 any time. Changes will be effective immediately upon posting.
                 Continued use of our services constitutes acceptance of the
@@ -145,15 +142,15 @@ const PrivacyPolicy = () => {
               </p>
             </section>
 
-            <section>
-              <h2 className="font-display text-xl md:text-2xl font-semibold text-foreground mb-4">
+            <section className="animate-reveal" style={{ animationDelay: '0.5s' }}>
+              <h2 className="font-display text-2xl font-semibold text-foreground mb-4">
                 9. Contact Us
               </h2>
-              <p className="text-muted-foreground leading-[1.8]">
+              <p className="text-muted-foreground leading-relaxed">
                 If you have questions about this Privacy Policy, contact us at{' '}
                 <a
                   href="mailto:ransibeats@gmail.com"
-                  className="text-brand hover:underline"
+                  className="text-primary hover:underline"
                 >
                   ransibeats@gmail.com
                 </a>
