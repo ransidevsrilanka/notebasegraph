@@ -67,6 +67,19 @@ interface PlatformStats {
   totalAttributedUsers: number;
   totalPaidUsersAllTime: number;
   totalCreatorBalances: number;
+  directPaymentsCount: number;
+  directPaymentsRevenue: number;
+}
+
+interface DirectPayment {
+  id: string;
+  user_id: string;
+  user_name: string | null;
+  user_email: string | null;
+  final_amount: number;
+  tier: string | null;
+  payment_type: string | null;
+  created_at: string;
 }
 
 interface PayoutItem {
@@ -82,6 +95,7 @@ const Analytics = () => {
   const { user, signOut } = useAuth();
   const [cmos, setCMOs] = useState<CMOData[]>([]);
   const [creators, setCreators] = useState<CreatorData[]>([]);
+  const [directPayments, setDirectPayments] = useState<DirectPayment[]>([]);
   const [pendingPayouts, setPendingPayouts] = useState<PayoutItem[]>([]);
   const [stats, setStats] = useState<PlatformStats>({
     totalCMOs: 0,
@@ -89,6 +103,8 @@ const Analytics = () => {
     totalAttributedUsers: 0,
     totalPaidUsersAllTime: 0,
     totalCreatorBalances: 0,
+    directPaymentsCount: 0,
+    directPaymentsRevenue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [expandedCMO, setExpandedCMO] = useState<string | null>(null);
@@ -253,6 +269,43 @@ const Analytics = () => {
 
       setPendingPayouts(allPayouts);
 
+      // Fetch DIRECT payments (no creator, no referral) - this is 100% platform revenue
+      const { data: directPaymentsData } = await supabase
+        .from('payment_attributions')
+        .select('id, user_id, final_amount, tier, payment_type, created_at')
+        .is('creator_id', null)
+        .order('created_at', { ascending: false });
+
+      // Get profile info for direct payments
+      const directUserIds = [...new Set((directPaymentsData || []).map(d => d.user_id))];
+      const directProfileMap: Record<string, { full_name: string | null; email: string | null }> = {};
+      
+      if (directUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, full_name, email')
+          .in('user_id', directUserIds);
+        
+        (profiles || []).forEach(p => {
+          directProfileMap[p.user_id] = { full_name: p.full_name, email: p.email };
+        });
+      }
+
+      const enrichedDirectPayments: DirectPayment[] = (directPaymentsData || []).map(p => ({
+        id: p.id,
+        user_id: p.user_id,
+        user_name: directProfileMap[p.user_id]?.full_name || null,
+        user_email: directProfileMap[p.user_id]?.email || null,
+        final_amount: Number(p.final_amount) || 0,
+        tier: p.tier,
+        payment_type: p.payment_type,
+        created_at: p.created_at,
+      }));
+
+      setDirectPayments(enrichedDirectPayments);
+
+      const directPaymentsRevenue = enrichedDirectPayments.reduce((sum, p) => sum + p.final_amount, 0);
+
       // Calculate platform stats
       const { count: totalAttributed } = await supabase
         .from('user_attributions')
@@ -267,6 +320,8 @@ const Analytics = () => {
         totalAttributedUsers: totalAttributed || 0,
         totalPaidUsersAllTime,
         totalCreatorBalances,
+        directPaymentsCount: enrichedDirectPayments.length,
+        directPaymentsRevenue,
       });
 
       // Pie chart data
@@ -630,12 +685,18 @@ const Analytics = () => {
 
       <div className="container mx-auto px-4 py-8">
         {/* Platform Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
           <StatCard label="Total CMOs" value={stats.totalCMOs} icon={Building2} />
           <StatCard label="Total Creators" value={stats.totalCreators} icon={Users} />
           <StatCard label="Attributed Users" value={stats.totalAttributedUsers} icon={TrendingUp} />
           <StatCard label="Paid Users (All Time)" value={stats.totalPaidUsersAllTime} icon={Award} />
           <StatCard label="Creator Balances" value={`Rs. ${stats.totalCreatorBalances.toLocaleString()}`} icon={DollarSign} />
+          <StatCard 
+            label="Direct Revenue" 
+            value={`Rs. ${stats.directPaymentsRevenue.toLocaleString()}`} 
+            icon={DollarSign}
+            subtitle={`${stats.directPaymentsCount} payments (100% platform)`}
+          />
         </div>
 
         {/* Charts Row */}
@@ -662,6 +723,7 @@ const Analytics = () => {
           <TabsList className="bg-muted/50">
             <TabsTrigger value="hierarchy">CMO → Creator Hierarchy</TabsTrigger>
             <TabsTrigger value="creators">All Creators</TabsTrigger>
+            <TabsTrigger value="direct">Direct Payments</TabsTrigger>
             <TabsTrigger value="commissions">Commission Management</TabsTrigger>
             <TabsTrigger value="payouts">Pending Payouts</TabsTrigger>
           </TabsList>
@@ -909,6 +971,74 @@ const Analytics = () => {
                   </tbody>
                 </table>
               </div>
+            </div>
+          </TabsContent>
+
+          {/* Direct Payments - 100% Platform Revenue */}
+          <TabsContent value="direct">
+            <div className="glass-card p-4 mb-4 border-green-500/30 bg-green-500/5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-green-500" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Direct Payments = 100% Platform Revenue</p>
+                  <p className="text-sm text-muted-foreground">
+                    These users paid directly without any referral. Total: Rs. {stats.directPaymentsRevenue.toLocaleString()} from {stats.directPaymentsCount} payments.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card overflow-hidden">
+              {directPayments.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-muted/30 border-b border-border">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">User</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Email</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Amount</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Tier</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Method</th>
+                        <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {directPayments.map((payment) => (
+                        <tr key={payment.id} className="hover:bg-muted/10">
+                          <td className="px-4 py-3 text-sm text-foreground">
+                            {payment.user_name || 'Unknown'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {payment.user_email || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm font-medium text-green-400">
+                            Rs. {payment.final_amount.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="text-xs px-2 py-0.5 rounded bg-muted text-foreground capitalize">
+                              {payment.tier || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground capitalize">
+                            {payment.payment_type || 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {format(new Date(payment.created_at), 'MMM d, yyyy')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center">
+                  <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No direct payments yet</p>
+                  <p className="text-sm text-muted-foreground mt-1">Direct payments are made without any creator referral</p>
+                </div>
+              )}
             </div>
           </TabsContent>
 
