@@ -46,8 +46,11 @@ interface BankTransferData {
   tierName: string;
   amount: number;
   originalAmount: number;
-  discountCode: string | null;
-  refCreator: string | null;
+  // UNIFIED: Single creator code for both referral attribution AND discount
+  creatorCode: string | null;
+  // Legacy fields for backwards compatibility
+  discountCode?: string | null;
+  refCreator?: string | null;
   timestamp: number;
 }
 
@@ -258,6 +261,9 @@ const BankSignup = () => {
       return;
     }
 
+    // UNIFIED: Get creator code from new field or legacy fields
+    const creatorCode = bankData.creatorCode || bankData.refCreator || bankData.discountCode || null;
+
     // Create join request
     const referenceNumber = generateReferenceNumber();
     const { error: joinError } = await supabase
@@ -273,8 +279,9 @@ const BankSignup = () => {
         subject_2: selectedSubjects[1] || null,
         subject_3: selectedSubjects[2] || null,
         amount: bankData.amount,
-        ref_creator: bankData.refCreator || null,
-        discount_code: bankData.discountCode || null,
+        // UNIFIED: Store creator code in both fields for compatibility
+        ref_creator: creatorCode,
+        discount_code: creatorCode,
         status: 'pending',
       });
 
@@ -287,12 +294,12 @@ const BankSignup = () => {
 
     // Create user attribution immediately (referral association)
     // This ensures the referrer sees the user in their dashboard right away
-    if (bankData.refCreator) {
+    if (creatorCode) {
       try {
         const { data: creatorData } = await supabase
           .from('creator_profiles')
           .select('id')
-          .eq('referral_code', bankData.refCreator.toUpperCase())
+          .eq('referral_code', creatorCode.toUpperCase())
           .maybeSingle();
 
         if (creatorData) {

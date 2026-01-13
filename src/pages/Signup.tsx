@@ -4,25 +4,38 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 /**
  * Signup redirect page
  * Captures referral parameters and redirects to pricing page
- * This ensures creator referral links work: /signup?ref_creator=CODE
+ * 
+ * UNIFIED IDENTITY: ref_creator AND discount_code are treated as the SAME thing
+ * - ref_creator = creator's referral code (e.g., CRT93YHGB)
+ * - discount_code = same creator's referral code
+ * Both map to creator_profiles.referral_code
  */
 const Signup = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
+    // Get either ref_creator or discount_code - they are the SAME identity
     const refCreator = searchParams.get('ref_creator');
     const discountCode = searchParams.get('discount_code');
+    
+    // Unified code: prefer ref_creator, fallback to discount_code
+    const creatorCode = (refCreator || discountCode || '').toUpperCase().trim();
 
-    // Build the redirect URL with preserved params
+    // Store in localStorage for attribution during checkout
+    if (creatorCode) {
+      localStorage.setItem('refCreator', creatorCode);
+    }
+
+    // Redirect to pricing page with unified param
     const params = new URLSearchParams();
-    if (refCreator) params.set('ref_creator', refCreator);
-    if (discountCode) params.set('discount_code', discountCode);
+    if (creatorCode) {
+      params.set('ref_creator', creatorCode);
+    }
 
     const queryString = params.toString();
     const redirectUrl = queryString ? `/pricing?${queryString}` : '/pricing';
 
-    // Redirect to pricing page with params preserved
     navigate(redirectUrl, { replace: true });
   }, [navigate, searchParams]);
 

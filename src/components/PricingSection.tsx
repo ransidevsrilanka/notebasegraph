@@ -53,6 +53,9 @@ const defaultTiers: TierDisplay[] = [
   },
 ];
 
+// Fixed discount percentage for all creator codes
+const CREATOR_DISCOUNT_PERCENT = 10;
+
 const PricingSection = () => {
   const [tiers, setTiers] = useState<TierDisplay[]>(defaultTiers);
   const [loadingError, setLoadingError] = useState<string | null>(null);
@@ -64,70 +67,111 @@ const PricingSection = () => {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState<TierDisplay | null>(null);
   
-  // Discount code state
+  // Discount code state - UNIFIED: creator code = discount code
   const [discountCodeInput, setDiscountCodeInput] = useState("");
-  const [appliedDiscount, setAppliedDiscount] = useState<{ code: string; percent: number } | null>(null);
+  const [appliedCreatorCode, setAppliedCreatorCode] = useState<{ code: string; creatorName: string } | null>(null);
   const [isValidatingCode, setIsValidatingCode] = useState(false);
   
-  // Referral params from URL
-  const refCreator = searchParams.get("ref_creator") || "";
-  const discountFromUrl = searchParams.get("discount_code") || "";
+  // Get ref_creator from URL (unified identity)
+  const refCreatorFromUrl = searchParams.get("ref_creator") || "";
 
   useEffect(() => {
     fetchPricing();
     
-    // Auto-apply discount code from URL
-    if (discountFromUrl) {
-      setDiscountCodeInput(discountFromUrl);
-      validateDiscountCode(discountFromUrl);
-    } 
-    // If ref_creator is present, lookup their discount code
-    else if (refCreator) {
-      fetchCreatorDiscountCode(refCreator);
+    // Auto-apply creator code from URL
+    const storedCode = localStorage.getItem('refCreator');
+    const codeToValidate = refCreatorFromUrl || storedCode;
+    
+    if (codeToValidate) {
+      validateCreatorCode(codeToValidate, true);
     }
-  }, [discountFromUrl, refCreator]);
+  }, [refCreatorFromUrl]);
 
-  const fetchCreatorDiscountCode = async (referralCode: string) => {
+  /**
+   * UNIFIED VALIDATION: Validates a code against creator_profiles.referral_code
+   * This is the SINGLE SOURCE of truth for discount/referral codes
+   */
+  const validateCreatorCode = async (code: string, isAutoApply: boolean = false) => {
+    if (!code.trim()) return;
+    
+    const normalizedCode = code.toUpperCase().trim();
+    setIsValidatingCode(true);
+    
     try {
-      // First find the creator by their referral code
-      const { data: creatorData, error: creatorError } = await supabase
+      // Validate against creator_profiles.referral_code (the single source of truth)
+      const { data, error } = await supabase
         .from('creator_profiles')
-        .select('id, display_name')
-        .eq('referral_code', referralCode.toUpperCase().trim())
+        .select('id, referral_code, display_name')
+        .eq('referral_code', normalizedCode)
         .eq('is_active', true)
         .maybeSingle();
 
-      if (creatorError || !creatorData) {
-        console.warn('Creator not found for referral code:', referralCode);
+      if (error || !data) {
+        // Fallback: check legacy discount_codes table
+        const { data: legacyCode, error: legacyError } = await supabase
+          .from('discount_codes')
+          .select('code, creator_id')
+          .eq('code', normalizedCode)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        if (legacyError || !legacyCode) {
+          if (!isAutoApply) {
+            toast.error("Invalid discount code");
+          }
+          setAppliedCreatorCode(null);
+          return;
+        }
+        
+        // Get creator info from legacy code
+        if (legacyCode.creator_id) {
+          const { data: creatorData } = await supabase
+            .from('creator_profiles')
+            .select('referral_code, display_name')
+            .eq('id', legacyCode.creator_id)
+            .maybeSingle();
+          
+          if (creatorData) {
+            // Use the creator's referral_code as the unified identity
+            const creatorCode = creatorData.referral_code;
+            setDiscountCodeInput(creatorCode);
+            setAppliedCreatorCode({ 
+              code: creatorCode, 
+              creatorName: creatorData.display_name || 'Creator'
+            });
+            localStorage.setItem('refCreator', creatorCode);
+            toast.success(`${creatorData.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
+            return;
+          }
+        }
+        
+        if (!isAutoApply) {
+          toast.error("Invalid discount code");
+        }
+        setAppliedCreatorCode(null);
         return;
       }
 
-      // Then find their active discount code
-      const { data: discountData, error: discountError } = await supabase
-        .from('discount_codes')
-        .select('code, discount_percent')
-        .eq('creator_id', creatorData.id)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-
-      if (discountError || !discountData) {
-        console.warn('No discount code found for creator:', creatorData.display_name);
-        return;
-      }
-
-      // Auto-apply the discount
-      setDiscountCodeInput(discountData.code);
-      setAppliedDiscount({ 
-        code: discountData.code, 
-        percent: discountData.discount_percent || 10 
+      // Success: Apply the creator's referral code
+      setDiscountCodeInput(data.referral_code);
+      setAppliedCreatorCode({ 
+        code: data.referral_code, 
+        creatorName: data.display_name || 'Creator'
       });
-      toast.success(`${creatorData.display_name}'s ${discountData.discount_percent || 10}% discount applied!`);
+      localStorage.setItem('refCreator', data.referral_code);
       
-      // Store creator ref in localStorage for attribution
-      localStorage.setItem('refCreator', referralCode);
+      if (!isAutoApply) {
+        toast.success(`${data.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
+      } else {
+        toast.success(`${data.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
+      }
     } catch (err) {
-      console.error('Error fetching creator discount:', err);
+      console.error("Error validating creator code:", err);
+      if (!isAutoApply) {
+        toast.error("Failed to validate discount code");
+      }
+    } finally {
+      setIsValidatingCode(false);
     }
   };
 
@@ -162,69 +206,41 @@ const PricingSection = () => {
     setTiers(displayTiers);
   };
 
-  const validateDiscountCode = async (code: string) => {
-    if (!code.trim()) return;
-    
-    setIsValidatingCode(true);
-    try {
-      const { data, error } = await supabase
-        .from('discount_codes')
-        .select('code, discount_percent')
-        .eq('code', code.toUpperCase().trim())
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (error || !data) {
-        toast.error("Invalid or expired discount code");
-        setAppliedDiscount(null);
-      } else {
-        setAppliedDiscount({ code: data.code, percent: data.discount_percent || 10 });
-        toast.success(`Discount code applied! ${data.discount_percent || 10}% off`);
-      }
-    } catch (err) {
-      console.error("Error validating discount code:", err);
-      toast.error("Failed to validate discount code");
-    } finally {
-      setIsValidatingCode(false);
-    }
-  };
-
   const handleApplyDiscount = () => {
-    validateDiscountCode(discountCodeInput);
+    validateCreatorCode(discountCodeInput);
   };
 
   const handleRemoveDiscount = () => {
-    setAppliedDiscount(null);
+    setAppliedCreatorCode(null);
     setDiscountCodeInput("");
+    localStorage.removeItem('refCreator');
   };
 
   const getDiscountedPrice = (price: number) => {
-    if (!appliedDiscount) return price;
-    return Math.round(price * (1 - appliedDiscount.percent / 100));
+    if (!appliedCreatorCode) return price;
+    return Math.round(price * (1 - CREATOR_DISCOUNT_PERCENT / 100));
   };
 
   const handleGetTier = (tier: TierDisplay) => {
-    // Allow both logged-in and non-logged-in users to open payment dialog
     setSelectedTier(tier);
     setPaymentDialogOpen(true);
   };
 
   const handleBankTransfer = () => {
-    // Store selected tier info for bank transfer signup flow
     const tier = selectedTier;
     if (!tier) return;
     
+    // Store payment info with UNIFIED creator code
     localStorage.setItem('bank_transfer_pending', JSON.stringify({
       tier: tier.key,
       tierName: tier.name,
       amount: getDiscountedPrice(tier.price),
       originalAmount: tier.price,
-      discountCode: appliedDiscount?.code || null,
-      refCreator: refCreator || localStorage.getItem('refCreator') || null,
+      // UNIFIED: Use creator code as both ref_creator and discount_code
+      creatorCode: appliedCreatorCode?.code || null,
       timestamp: Date.now(),
     }));
     
-    // Close dialog and redirect to bank transfer signup
     setPaymentDialogOpen(false);
     navigate('/bank-signup');
   };
@@ -241,7 +257,6 @@ const PricingSection = () => {
       </section>
     );
   }
-
 
   return (
     <>
@@ -260,11 +275,11 @@ const PricingSection = () => {
 
           {/* Discount Code Input */}
           <div className="max-w-md mx-auto mb-8">
-            {appliedDiscount ? (
+            {appliedCreatorCode ? (
               <div className="flex items-center justify-center gap-2 p-3 bg-brand/10 border border-brand/30 rounded-lg">
                 <Tag className="w-4 h-4 text-brand" />
                 <span className="text-sm text-foreground">
-                  Code <span className="font-semibold">{appliedDiscount.code}</span> applied - {appliedDiscount.percent}% off!
+                  Code <span className="font-semibold">{appliedCreatorCode.code}</span> applied - {CREATOR_DISCOUNT_PERCENT}% off!
                 </span>
                 <Button
                   variant="ghost"
@@ -314,7 +329,7 @@ const PricingSection = () => {
                 <div className="text-center mb-5">
                   <h3 className="font-display text-lg font-semibold text-foreground mb-1">{tier.name}</h3>
                   <div className="flex items-baseline justify-center gap-1">
-                    {appliedDiscount ? (
+                    {appliedCreatorCode ? (
                       <>
                         <span className="font-display text-lg text-muted-foreground line-through">Rs. {tier.price.toLocaleString()}</span>
                         <span className="font-display text-3xl font-bold text-brand">Rs. {getDiscountedPrice(tier.price).toLocaleString()}</span>
@@ -364,8 +379,8 @@ const PricingSection = () => {
           tierName={selectedTier.name}
           amount={getDiscountedPrice(selectedTier.price)}
           originalAmount={selectedTier.price}
-          discountCode={appliedDiscount?.code}
-          refCreator={refCreator || localStorage.getItem('refCreator') || undefined}
+          // UNIFIED: Pass creator code as single identity
+          creatorCode={appliedCreatorCode?.code}
           userEmail={user?.email}
           userName={profile?.full_name || user?.email?.split("@")[0]}
           isNewUser={!user}
