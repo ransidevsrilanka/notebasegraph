@@ -27,7 +27,10 @@ import {
   RotateCcw,
   Percent,
   Download,
+  FileText,
 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
 
@@ -458,10 +461,10 @@ const Analytics = () => {
     );
   });
 
-  // Download creator referrals
+  // Download creator referrals as PDF
   const downloadCreatorReferrals = async (creator: CreatorData) => {
     try {
-      toast.info('Downloading referral report...');
+      toast.info('Generating PDF report...');
       
       // Fetch ALL payment attributions for this creator with user details
       const { data: attributions, error } = await supabase
@@ -508,55 +511,177 @@ const Analytics = () => {
       
       const thisMonthUsers = attributions?.filter(a => 
         new Date(a.created_at) >= currentMonthStart).length || 0;
+
+      // Create PDF document
+      const doc = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      let yPos = margin;
+
+      // Helper function for adding page numbers
+      const addPageNumber = () => {
+        const pageCount = doc.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+          doc.setPage(i);
+          doc.setFontSize(9);
+          doc.setTextColor(128, 128, 128);
+          doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+          doc.text(`Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`, margin, pageHeight - 10);
+        }
+      };
+
+      // Header
+      doc.setFillColor(10, 10, 10);
+      doc.rect(0, 0, pageWidth, 45, 'F');
       
-      // Build CSV content
-      let csv = '';
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CREATOR REFERRAL REPORT', margin, 25);
       
-      // Header section
-      csv += 'CREATOR REFERRAL REPORT\n';
-      csv += `Generated:,${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}\n\n`;
-      csv += 'CREATOR SUMMARY\n';
-      csv += `Creator Name:,"${creator.display_name || 'Unknown'}"\n`;
-      csv += `Referral Code:,${creator.referral_code}\n`;
-      csv += `CMO:,"${creator.cmo_name || 'Direct'}"\n`;
-      csv += `Registered Date:,${format(new Date(creator.created_at), 'yyyy-MM-dd')}\n`;
-      csv += `Current Tier Level:,Tier ${creator.current_tier_level || 1}\n`;
-      csv += `Commission Rate:,${Math.round(creator.commission_rate * 100)}%\n`;
-      csv += `Total Lifetime Users:,${creator.lifetime_paid_users}\n`;
-      csv += `Total This Month Users:,${thisMonthUsers}\n`;
-      csv += `Total Commission Earned:,"Rs. ${totalCommission.toLocaleString()}"\n`;
-      csv += `Available Balance:,"Rs. ${(creator.available_balance || 0).toLocaleString()}"\n`;
-      csv += `Total Withdrawn:,"Rs. ${(creator.total_withdrawn || 0).toLocaleString()}"\n`;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${creator.display_name || 'Unknown Creator'}`, margin, 35);
+      doc.text(format(new Date(), 'MMMM dd, yyyy'), pageWidth - margin, 35, { align: 'right' });
+
+      yPos = 60;
+
+      // Summary Section
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CREATOR SUMMARY', margin, yPos);
+      yPos += 10;
+
+      // Summary box
+      doc.setDrawColor(220, 220, 220);
+      doc.setFillColor(250, 250, 250);
+      doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 65, 3, 3, 'FD');
+      
+      const summaryData = [
+        ['Referral Code:', creator.referral_code],
+        ['CMO:', creator.cmo_name || 'Direct'],
+        ['Registered Date:', format(new Date(creator.created_at), 'MMM dd, yyyy')],
+        ['Current Tier Level:', `Tier ${creator.current_tier_level || 1}`],
+        ['Commission Rate:', `${Math.round(creator.commission_rate * 100)}%`],
+      ];
+
+      const summaryData2 = [
+        ['Total Lifetime Users:', creator.lifetime_paid_users.toLocaleString()],
+        ['Total This Month Users:', thisMonthUsers.toLocaleString()],
+        ['Total Commission Earned:', `Rs. ${totalCommission.toLocaleString()}`],
+        ['Available Balance:', `Rs. ${(creator.available_balance || 0).toLocaleString()}`],
+        ['Total Withdrawn:', `Rs. ${(creator.total_withdrawn || 0).toLocaleString()}`],
+      ];
+
       if (creator.tier_protection_until) {
-        csv += `Tier Protection Until:,${format(new Date(creator.tier_protection_until), 'yyyy-MM-dd')}\n`;
+        summaryData.push(['Tier Protection Until:', format(new Date(creator.tier_protection_until), 'MMM dd, yyyy')]);
       }
-      csv += '\n';
+
+      doc.setFontSize(10);
+      let colY = yPos + 8;
       
-      // Data table
-      csv += 'REFERRAL DETAILS\n';
-      csv += 'End User Name,Email,Commission (Rs.),Commission Rate,Amount Paid (Rs.),Original Amount (Rs.),Discount Applied (Rs.),Tier,Payment Type,Payment Date\n';
-      
-      (attributions || []).forEach(a => {
-        const profile = profileMap[a.user_id] || { full_name: 'N/A', email: 'N/A' };
-        csv += `"${profile.full_name || 'N/A'}","${profile.email || 'N/A'}",${a.creator_commission_amount || 0},${Math.round((a.creator_commission_rate || 0) * 100)}%,${a.final_amount || 0},${a.original_amount || 0},${a.discount_applied || 0},${a.tier || 'N/A'},${a.payment_type || 'N/A'},"${format(new Date(a.created_at), 'yyyy-MM-dd HH:mm')}"\n`;
+      // Left column
+      summaryData.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(label, margin + 5, colY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(String(value), margin + 50, colY);
+        colY += 6;
       });
+
+      // Right column
+      colY = yPos + 8;
+      const rightColX = pageWidth / 2 + 10;
+      summaryData2.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        doc.text(label, rightColX, colY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(String(value), rightColX + 48, colY);
+        colY += 6;
+      });
+
+      yPos += 75;
+
+      // Referral Details Table
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`REFERRAL DETAILS (${attributions?.length || 0} records)`, margin, yPos);
+      yPos += 8;
+
+      // Table data
+      const tableData = (attributions || []).map((a, index) => {
+        const profile = profileMap[a.user_id] || { full_name: 'N/A', email: 'N/A' };
+        return [
+          (index + 1).toString(),
+          profile.full_name || 'N/A',
+          profile.email || 'N/A',
+          `Rs. ${Number(a.creator_commission_amount || 0).toLocaleString()}`,
+          `Rs. ${Number(a.final_amount || 0).toLocaleString()}`,
+          a.tier || 'N/A',
+          format(new Date(a.created_at), 'MMM dd, yyyy'),
+        ];
+      });
+
+      // Use autoTable for the referral details
+      (doc as any).autoTable({
+        startY: yPos,
+        head: [['#', 'End User Name', 'Email', 'Commission', 'Amount Paid', 'Tier', 'Payment Date']],
+        body: tableData,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [30, 30, 30],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 9,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          textColor: [50, 50, 50],
+        },
+        alternateRowStyles: {
+          fillColor: [248, 248, 248],
+        },
+        columnStyles: {
+          0: { cellWidth: 10 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 20 },
+          6: { cellWidth: 25 },
+        },
+        margin: { left: margin, right: margin },
+        didDrawPage: () => {
+          // This ensures proper pagination
+        },
+      });
+
+      // Add totals row at the bottom
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
+      if (finalY < pageHeight - 30) {
+        doc.setFillColor(30, 30, 30);
+        doc.roundedRect(margin, finalY, pageWidth - 2 * margin, 12, 2, 2, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`TOTAL: ${attributions?.length || 0} referrals`, margin + 5, finalY + 8);
+        doc.text(`Total Commission: Rs. ${totalCommission.toLocaleString()}`, pageWidth - margin - 5, finalY + 8, { align: 'right' });
+      }
+
+      // Add page numbers to all pages
+      addPageNumber();
+
+      // Save the PDF
+      doc.save(`${creator.referral_code}_referrals_${format(new Date(), 'yyyyMMdd')}.pdf`);
       
-      // Add total row
-      csv += '\n';
-      csv += `TOTAL,${attributions?.length || 0} users,${totalCommission},,,,,,\n`;
-      
-      // Trigger download
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${creator.referral_code}_referrals_${format(new Date(), 'yyyyMMdd')}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      
-      toast.success(`Downloaded ${attributions?.length || 0} referrals for ${creator.display_name}`);
+      toast.success(`Downloaded PDF with ${attributions?.length || 0} referrals for ${creator.display_name}`);
     } catch (error) {
       console.error('Error downloading referrals:', error);
       toast.error('Failed to download referrals');
