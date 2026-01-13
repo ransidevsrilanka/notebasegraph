@@ -124,151 +124,15 @@ const JoinRequests = () => {
     setIsProcessing(true);
 
     try {
-      // Calculate expiry based on tier (1 year for silver/gold, null for platinum)
-      const durationDays = request.tier === 'lifetime' ? null : 365;
-      const expiresAt = durationDays 
-        ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString()
-        : null;
-
-      // Create enrollment
-      const { data: enrollment, error: enrollmentError } = await supabase
-        .from('enrollments')
-        .insert({
-          user_id: request.user_id,
-          grade: request.grade,
-          stream: request.stream || 'maths',
-          medium: request.medium || 'english',
-          tier: request.tier,
-          expires_at: expiresAt,
-          is_active: true,
-          payment_order_id: `BANK-${request.reference_number}`,
-        })
-        .select()
-        .single();
-
-      if (enrollmentError) throw enrollmentError;
-
-      // Save subjects if provided
-      if (request.subject_1 && request.subject_2 && request.subject_3) {
-        await supabase.from('user_subjects').insert({
-          user_id: request.user_id,
-          enrollment_id: enrollment.id,
-          subject_1: request.subject_1,
-          subject_2: request.subject_2,
-          subject_3: request.subject_3,
-          is_locked: true,
-          locked_at: new Date().toISOString(),
-        });
-      }
-
-      // Handle referral attribution if present
-      if (request.ref_creator) {
-        const { data: creatorData } = await supabase
-          .from('creator_profiles')
-          .select('id, lifetime_paid_users, available_balance, cmo_id')
-          .eq('referral_code', request.ref_creator.toUpperCase())
-          .maybeSingle();
-
-        if (creatorData) {
-          // Check if user attribution already exists (may have been created on signup)
-          const { data: existingAttribution } = await supabase
-            .from('user_attributions')
-            .select('id')
-            .eq('user_id', request.user_id)
-            .eq('creator_id', creatorData.id)
-            .maybeSingle();
-
-          // Create user attribution only if it doesn't exist
-          if (!existingAttribution) {
-            const { error: uaError } = await supabase.from('user_attributions').insert({
-              user_id: request.user_id,
-              creator_id: creatorData.id,
-              referral_source: 'link',
-            });
-            if (uaError) console.error('User attribution error:', uaError);
-          }
-
-          // Create payment attribution
-          const commissionRate = (creatorData.lifetime_paid_users || 0) >= 500 ? 0.12 : 0.08;
-          const commissionAmount = request.amount * commissionRate;
-          const currentMonth = new Date();
-          currentMonth.setDate(1);
-          const paymentMonth = currentMonth.toISOString().split('T')[0];
-
-          const { error: paError } = await supabase.from('payment_attributions').insert({
-            user_id: request.user_id,
-            creator_id: creatorData.id,
-            enrollment_id: enrollment.id,
-            amount: request.amount,
-            original_amount: request.amount,
-            final_amount: request.amount,
-            creator_commission_rate: commissionRate,
-            creator_commission_amount: commissionAmount,
-            payment_month: paymentMonth,
-            tier: request.tier,
-            payment_type: 'bank',
-          });
-          if (paError) console.error('Payment attribution error:', paError);
-
-          // Update creator lifetime paid users AND available balance
-          const { error: cpError } = await supabase
-            .from('creator_profiles')
-            .update({ 
-              lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
-              available_balance: (creatorData.available_balance || 0) + commissionAmount,
-            })
-            .eq('id', creatorData.id);
-          if (cpError) console.error('Creator profile update error:', cpError);
-
-          // Update CMO payout if creator has a CMO
-          if (creatorData.cmo_id) {
-            const cmoCommissionRate = 0.03; // CMO gets 3% of creator earnings
-            const cmoCommission = commissionAmount * cmoCommissionRate;
-
-            // Check if payout record exists for this month
-            const { data: existingPayout } = await supabase
-              .from('cmo_payouts')
-              .select('*')
-              .eq('cmo_id', creatorData.cmo_id)
-              .eq('payout_month', paymentMonth)
-              .maybeSingle();
-
-            if (existingPayout) {
-              // Update existing payout
-              await supabase
-                .from('cmo_payouts')
-                .update({
-                  total_paid_users: (existingPayout.total_paid_users || 0) + 1,
-                  base_commission_amount: (existingPayout.base_commission_amount || 0) + cmoCommission,
-                  total_commission: (existingPayout.total_commission || 0) + cmoCommission,
-                })
-                .eq('id', existingPayout.id);
-            } else {
-              // Create new payout record
-              await supabase.from('cmo_payouts').insert({
-                cmo_id: creatorData.cmo_id,
-                payout_month: paymentMonth,
-                total_paid_users: 1,
-                base_commission_amount: cmoCommission,
-                total_commission: cmoCommission,
-                status: 'pending',
-              });
-            }
-          }
-        }
-      }
-
-      // Update join request status
-      const { error: updateError } = await supabase
-        .from('join_requests')
-        .update({
-          status: 'approved',
-          reviewed_at: new Date().toISOString(),
+      const { data, error } = await supabase.functions.invoke('admin-finance/approve-join-request', {
+        body: {
+          join_request_id: request.id,
           admin_notes: adminNotes || null,
-        })
-        .eq('id', request.id);
+        },
+      });
 
-      if (updateError) throw updateError;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast.success('Join request approved! User now has access.');
       setViewDialogOpen(false);

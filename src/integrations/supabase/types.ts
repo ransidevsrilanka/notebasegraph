@@ -2163,6 +2163,13 @@ export type Database = {
         Returns: Json
       }
       validate_access_code: { Args: { _code: string }; Returns: Json }
+      validate_cmo_referral: {
+        Args: { _code: string }
+        Returns: {
+          display_name: string
+          id: string
+        }[]
+      }
     }
     Enums: {
       app_role:

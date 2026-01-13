@@ -58,9 +58,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastUserIdRef = useRef<string | null>(null);
 
   const isAdmin = roles.some((r) =>
-    ['super_admin', 'content_admin', 'support_admin'].includes(r)
+    ['admin', 'super_admin', 'content_admin', 'support_admin'].includes(r)
   );
-  
+
   const isCMO = roles.includes('cmo');
   const isCreator = roles.includes('creator');
 
