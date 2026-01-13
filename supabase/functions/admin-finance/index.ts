@@ -22,6 +22,19 @@ const CMO_COMMISSION_RATE = 0.08; // 8% of revenue from their creators
 const CMO_BONUS_RATE = 0.05; // Additional 5% bonus
 const CMO_ANNUAL_USER_GOAL = 10000; // 10,000 users annually for bonus
 
+// Fixed discount percentage for all creator codes
+const CREATOR_DISCOUNT_PERCENT = 10;
+
+/**
+ * UNIFIED IDENTITY RULE:
+ * ref_creator and discount_code are the SAME thing - the creator's referral_code.
+ * This function extracts the single unified code from either field.
+ */
+function getUnifiedCreatorCode(refCreator?: string | null, discountCode?: string | null): string | null {
+  const code = (refCreator || discountCode || '').toUpperCase().trim();
+  return code || null;
+}
+
 // Helper function to get commission rate from database based on MONTHLY users (rolling 30 days)
 // Includes 30-day tier protection for new creators
 async function getCreatorCommissionRate(supabase: any, creatorId: string): Promise<number> {
@@ -86,6 +99,64 @@ async function getCreatorCommissionRate(supabase: any, creatorId: string): Promi
 
   console.log(`Creator ${creatorId}: ${monthlyPaidUsers} monthly users (30-day rolling), Tier ${currentTierLevel}, rate: ${commissionRate * 100}%`);
   return commissionRate;
+}
+
+/**
+ * Find creator by unified code (checks creator_profiles.referral_code first, then legacy discount_codes)
+ */
+async function findCreatorByCode(supabase: any, code: string | null): Promise<{
+  creatorId: string | null;
+  creatorData: any | null;
+  discountCodeId: string | null;
+}> {
+  if (!code) {
+    return { creatorId: null, creatorData: null, discountCodeId: null };
+  }
+
+  const normalizedCode = code.toUpperCase().trim();
+
+  // PRIMARY: Check creator_profiles.referral_code (the single source of truth)
+  const { data: creatorByReferral } = await supabase
+    .from("creator_profiles")
+    .select("id, lifetime_paid_users, available_balance, cmo_id, referral_code")
+    .eq("referral_code", normalizedCode)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (creatorByReferral) {
+    return {
+      creatorId: creatorByReferral.id,
+      creatorData: creatorByReferral,
+      discountCodeId: null, // No legacy discount code used
+    };
+  }
+
+  // FALLBACK: Check legacy discount_codes table
+  const { data: discountCodeData } = await supabase
+    .from("discount_codes")
+    .select("id, creator_id")
+    .eq("code", normalizedCode)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (discountCodeData && discountCodeData.creator_id) {
+    const { data: creatorByDiscount } = await supabase
+      .from("creator_profiles")
+      .select("id, lifetime_paid_users, available_balance, cmo_id, referral_code")
+      .eq("id", discountCodeData.creator_id)
+      .eq("is_active", true)
+      .single();
+
+    if (creatorByDiscount) {
+      return {
+        creatorId: creatorByDiscount.id,
+        creatorData: creatorByDiscount,
+        discountCodeId: discountCodeData.id,
+      };
+    }
+  }
+
+  return { creatorId: null, creatorData: null, discountCodeId: null };
 }
 
 serve(async (req) => {
@@ -159,7 +230,10 @@ serve(async (req) => {
       // IMPORTANT: Use the authenticated user's ID, not from request body
       const user_id = user.id;
 
-      console.log("Finalizing payment (user):", { order_id, user_id, tier, final_amount, ref_creator });
+      // UNIFIED: Get single creator code from either field
+      const creatorCode = getUnifiedCreatorCode(ref_creator, discount_code);
+
+      console.log("Finalizing payment (user):", { order_id, user_id, tier, final_amount, creatorCode });
 
       // STEP 1: Check if attribution already exists - EARLY EXIT if so
       const { data: existingAttribution } = await supabase
@@ -176,70 +250,25 @@ serve(async (req) => {
         );
       }
 
-      // STEP 2: Find creator (but DON'T update stats yet)
+      // STEP 2: Find creator using unified code
       const currentMonth = new Date();
       currentMonth.setDate(1);
       currentMonth.setHours(0, 0, 0, 0);
       const paymentMonth = currentMonth.toISOString().split("T")[0];
 
-      let creatorId: string | null = null;
-      let discountCodeId: string | null = null;
+      const { creatorId, creatorData, discountCodeId } = await findCreatorByCode(supabase, creatorCode);
+
       let creatorCommissionAmount = 0;
       let creatorCommissionRate = 0;
-      let creatorData: any = null;
 
-      // Find creator by referral code
-      if (ref_creator) {
-        const { data: foundCreator } = await supabase
-          .from("creator_profiles")
-          .select("id, lifetime_paid_users, available_balance, cmo_id")
-          .eq("referral_code", ref_creator.toUpperCase())
-          .maybeSingle();
-
-        if (foundCreator) {
-          creatorId = foundCreator.id;
-          creatorData = foundCreator;
-          // Use dynamic commission rate from DB tiers
-          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-          // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-          // This is the CORRECT calculation - always from final amount (sale price after discount)
-          creatorCommissionAmount = final_amount * creatorCommissionRate;
-          console.log(`[COMMISSION] Creator ${creatorId} | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)} | Formula: ${final_amount} × ${creatorCommissionRate} = ${creatorCommissionAmount}`);
-        }
-      }
-
-      // ALSO track discount code if used (even if creator was found via ref_creator)
-      if (discount_code) {
-        const { data: dcData } = await supabase
-          .from("discount_codes")
-          .select("id, creator_id")
-          .eq("code", discount_code.toUpperCase())
-          .eq("is_active", true)
-          .maybeSingle();
-
-        if (dcData) {
-          discountCodeId = dcData.id;
-          
-          // If no creator found yet, use the discount code's creator
-          if (!creatorId && dcData.creator_id) {
-            creatorId = dcData.creator_id;
-
-            const { data: foundCreator } = await supabase
-              .from("creator_profiles")
-              .select("id, lifetime_paid_users, available_balance, cmo_id")
-              .eq("id", creatorId)
-              .single();
-
-            if (foundCreator) {
-              creatorData = foundCreator;
-              // Use dynamic commission rate from DB tiers
-              creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-              // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-              creatorCommissionAmount = final_amount * creatorCommissionRate;
-              console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
-            }
-          }
-        }
+      if (creatorId && creatorData) {
+        // Use dynamic commission rate from DB tiers
+        creatorCommissionRate = await getCreatorCommissionRate(supabase, creatorId);
+        // COMMISSION FORMULA: commission = final_sale_price × commission_rate
+        creatorCommissionAmount = final_amount * creatorCommissionRate;
+        console.log(`[COMMISSION] Creator ${creatorId} | Code: ${creatorCode} | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
+      } else if (creatorCode) {
+        console.log(`[WARNING] Creator code ${creatorCode} not found - treating as direct payment`);
       }
 
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
@@ -277,7 +306,6 @@ serve(async (req) => {
       console.log("Payment attribution created successfully for order:", order_id);
 
       // STEP 4: Only NOW update stats (since attribution was successfully created)
-      // NOTE: lifetime_paid_users and monthly_paid_users are updated by trigger on_payment_attribution_insert
       if (creatorId && creatorData) {
         // Update creator balance only (stats handled by trigger)
         await supabase
@@ -292,7 +320,7 @@ serve(async (req) => {
           user_id,
           creator_id: creatorId,
           discount_code_id: discountCodeId,
-          referral_source: discountCodeId ? "discount_code" : "link",
+          referral_source: "link",
         }, { onConflict: "user_id" });
 
         // Handle CMO commission
@@ -301,7 +329,7 @@ serve(async (req) => {
         }
       }
 
-      // Update discount code stats if applicable (always, even if creator found via ref_creator)
+      // Update discount code stats if applicable
       if (discountCodeId) {
         const { data: currentDC } = await supabase
           .from("discount_codes")
@@ -342,7 +370,10 @@ serve(async (req) => {
         discount_code,
       } = body;
 
-      console.log("Finalizing payment:", { order_id, user_id, tier, final_amount, ref_creator });
+      // UNIFIED: Get single creator code from either field
+      const creatorCode = getUnifiedCreatorCode(ref_creator, discount_code);
+
+      console.log("Finalizing payment:", { order_id, user_id, tier, final_amount, creatorCode });
 
       // STEP 1: Check if attribution already exists - EARLY EXIT if so
       const { data: existingAttribution } = await supabase
@@ -359,69 +390,23 @@ serve(async (req) => {
         );
       }
 
-      // STEP 2: Find creator (but DON'T update stats yet)
+      // STEP 2: Find creator using unified code
       const currentMonth = new Date();
       currentMonth.setDate(1);
       currentMonth.setHours(0, 0, 0, 0);
       const paymentMonth = currentMonth.toISOString().split("T")[0];
 
-      let creatorId: string | null = null;
-      let discountCodeId: string | null = null;
+      const { creatorId, creatorData, discountCodeId } = await findCreatorByCode(supabase, creatorCode);
+
       let creatorCommissionAmount = 0;
       let creatorCommissionRate = 0;
-      let creatorData: any = null;
 
-      // Find creator by referral code
-      if (ref_creator) {
-        const { data: foundCreator } = await supabase
-          .from("creator_profiles")
-          .select("id, lifetime_paid_users, available_balance, cmo_id")
-          .eq("referral_code", ref_creator.toUpperCase())
-          .maybeSingle();
-
-        if (foundCreator) {
-          creatorId = foundCreator.id;
-          creatorData = foundCreator;
-          // Use dynamic commission rate from DB tiers
-          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-          // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-          creatorCommissionAmount = final_amount * creatorCommissionRate;
-          console.log(`[COMMISSION] Creator ${creatorId} | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)} | Formula: ${final_amount} × ${creatorCommissionRate} = ${creatorCommissionAmount}`);
-        }
-      }
-
-      // ALSO track discount code if used (even if creator was found via ref_creator)
-      if (discount_code) {
-        const { data: dcData } = await supabase
-          .from("discount_codes")
-          .select("id, creator_id")
-          .eq("code", discount_code.toUpperCase())
-          .eq("is_active", true)
-          .maybeSingle();
-
-        if (dcData) {
-          discountCodeId = dcData.id;
-          
-          // If no creator found yet, use the discount code's creator
-          if (!creatorId && dcData.creator_id) {
-            creatorId = dcData.creator_id;
-
-            const { data: foundCreator } = await supabase
-              .from("creator_profiles")
-              .select("id, lifetime_paid_users, available_balance, cmo_id")
-              .eq("id", creatorId)
-              .single();
-
-            if (foundCreator) {
-              creatorData = foundCreator;
-              // Use dynamic commission rate from DB tiers
-              creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-              // COMMISSION FORMULA: commission = final_sale_price × commission_rate
-              creatorCommissionAmount = final_amount * creatorCommissionRate;
-              console.log(`[COMMISSION] Creator ${foundCreator.id} (via discount code) | Final Sale Price: Rs.${final_amount} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
-            }
-          }
-        }
+      if (creatorId && creatorData) {
+        // Use dynamic commission rate from DB tiers
+        creatorCommissionRate = await getCreatorCommissionRate(supabase, creatorId);
+        // COMMISSION FORMULA: commission = final_sale_price × commission_rate
+        creatorCommissionAmount = final_amount * creatorCommissionRate;
+        console.log(`[COMMISSION] Creator ${creatorId} | Code: ${creatorCode} | Rate: ${(creatorCommissionRate * 100).toFixed(1)}% | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
       }
 
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
@@ -459,7 +444,6 @@ serve(async (req) => {
       console.log("Payment attribution created successfully for order:", order_id);
 
       // STEP 4: Only NOW update stats (since attribution was successfully created)
-      // NOTE: lifetime_paid_users and monthly_paid_users are updated by trigger on_payment_attribution_insert
       if (creatorId && creatorData) {
         // Update creator balance only (stats handled by trigger)
         await supabase
@@ -474,7 +458,7 @@ serve(async (req) => {
           user_id,
           creator_id: creatorId,
           discount_code_id: discountCodeId,
-          referral_source: discountCodeId ? "discount_code" : "link",
+          referral_source: "link",
         }, { onConflict: "user_id" });
 
         // Handle CMO commission
@@ -483,7 +467,7 @@ serve(async (req) => {
         }
       }
 
-      // Update discount code stats if applicable (always, even if creator found via ref_creator)
+      // Update discount code stats if applicable
       if (discountCodeId) {
         const { data: currentDC } = await supabase
           .from("discount_codes")
@@ -509,12 +493,13 @@ serve(async (req) => {
         .eq("user_id", user_id)
         .maybeSingle();
 
+      // TELEGRAM: Show creator code if present (NEVER "Direct" when discounted)
       await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
         orderId: order_id,
         amount: final_amount,
         tier,
         userEmail: userProfile?.email,
-        refCreator: ref_creator,
+        refCreator: creatorCode || undefined, // Use unified code
       });
 
       return new Response(
@@ -622,60 +607,21 @@ serve(async (req) => {
         });
       }
 
-      // STEP 2: Find creator (but DON'T update stats yet)
+      // STEP 2: UNIFIED - Get single creator code from either field
+      const creatorCode = getUnifiedCreatorCode(request.ref_creator, request.discount_code);
       const paymentMonth = new Date();
       paymentMonth.setDate(1);
       const paymentMonthStr = paymentMonth.toISOString().split("T")[0];
 
-      let creatorId: string | null = null;
+      const { creatorId, creatorData, discountCodeId } = await findCreatorByCode(supabase, creatorCode);
+
       let creatorCommissionAmount = 0;
       let creatorCommissionRate = 0;
-      let creatorData: any = null;
-      let discountCodeId: string | null = null;
 
-      // Handle referral
-      if (request.ref_creator) {
-        const { data: foundCreator } = await supabase
-          .from("creator_profiles")
-          .select("id, lifetime_paid_users, available_balance, cmo_id")
-          .eq("referral_code", request.ref_creator.toUpperCase())
-          .maybeSingle();
-
-        if (foundCreator) {
-          creatorId = foundCreator.id;
-          creatorData = foundCreator;
-          // Use dynamic commission rate from DB tiers
-          creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-          creatorCommissionAmount = request.amount * creatorCommissionRate;
-        }
-      }
-
-      // Also check discount code
-      if (!creatorId && request.discount_code) {
-        const { data: dcData } = await supabase
-          .from("discount_codes")
-          .select("id, creator_id")
-          .eq("code", request.discount_code.toUpperCase())
-          .eq("is_active", true)
-          .maybeSingle();
-
-        if (dcData && dcData.creator_id) {
-          creatorId = dcData.creator_id;
-          discountCodeId = dcData.id;
-
-          const { data: foundCreator } = await supabase
-            .from("creator_profiles")
-            .select("id, lifetime_paid_users, available_balance, cmo_id")
-            .eq("id", creatorId)
-            .single();
-
-          if (foundCreator) {
-            creatorData = foundCreator;
-            // Use dynamic commission rate from DB tiers
-            creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
-            creatorCommissionAmount = request.amount * creatorCommissionRate;
-          }
-        }
+      if (creatorId && creatorData) {
+        creatorCommissionRate = await getCreatorCommissionRate(supabase, creatorId);
+        creatorCommissionAmount = request.amount * creatorCommissionRate;
+        console.log(`[JOIN REQUEST] Creator ${creatorId} | Code: ${creatorCode} | Amount: Rs.${request.amount} | Commission: Rs.${creatorCommissionAmount.toFixed(2)}`);
       }
 
       // CRITICAL RULE: NO REFERRAL = NO COMMISSION - 100% revenue to platform
@@ -685,7 +631,7 @@ serve(async (req) => {
         creatorCommissionRate = 0;
       }
 
-      // STEP 3: Create payment attribution FIRST (source of truth)
+      // STEP 3: Create payment attribution FIRST (source of truth) - FAIL if this fails
       const { error: paError } = await supabase.from("payment_attributions").insert({
         order_id: orderId,
         user_id: request.user_id,
@@ -702,12 +648,31 @@ serve(async (req) => {
       });
 
       if (paError) {
-        console.error("Payment attribution error:", paError);
-        // Don't fail the whole request, just log it
+        console.error("CRITICAL: Payment attribution error:", paError);
+        // FAIL the entire approval if attribution fails - this is critical for data integrity
+        return new Response(
+          JSON.stringify({ success: false, error: "Failed to create payment attribution: " + paError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
+      // Also create a payments record for payment method metrics
+      await supabase.from("payments").insert({
+        order_id: orderId,
+        user_id: request.user_id,
+        amount: request.amount,
+        currency: "LKR",
+        status: "completed",
+        payment_method: "bank",
+        tier: request.tier,
+        ref_creator: creatorCode,
+        discount_code: creatorCode,
+        enrollment_id: enrollment.id,
+        processed_at: new Date().toISOString(),
+      });
+
       // STEP 4: Only NOW update stats (since attribution was created)
-      if (creatorId && creatorData && !paError) {
+      if (creatorId && creatorData) {
         // Update creator
         await supabase
           .from("creator_profiles")
@@ -722,7 +687,7 @@ serve(async (req) => {
           user_id: request.user_id,
           creator_id: creatorId,
           discount_code_id: discountCodeId,
-          referral_source: discountCodeId ? "discount_code" : "link",
+          referral_source: "link",
         }, { onConflict: "user_id" });
 
         // CMO commission
@@ -749,13 +714,13 @@ serve(async (req) => {
         .eq("user_id", request.user_id)
         .maybeSingle();
 
-      // Send payment success notification (join request approval = payment confirmed)
+      // TELEGRAM: Show creator code if present (NEVER "Direct" when discounted)
       await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
         orderId,
         amount: request.amount,
         tier: request.tier,
         userEmail: userProfile?.email,
-        refCreator: request.ref_creator,
+        refCreator: creatorCode || undefined, // Use unified code
       });
 
       console.log("Join request approved:", join_request_id);
@@ -854,8 +819,10 @@ serve(async (req) => {
       paymentMonth.setDate(1);
       const paymentMonthStr = paymentMonth.toISOString().split("T")[0];
 
+      let creatorCode: string | null = null;
+
       if (request.amount && request.amount > 0) {
-        // Find original referrer
+        // Find original referrer from user_attributions
         const { data: userAttribution } = await supabase
           .from("user_attributions")
           .select("creator_id")
@@ -871,19 +838,19 @@ serve(async (req) => {
           creatorId = userAttribution.creator_id;
           const { data: foundCreator } = await supabase
             .from("creator_profiles")
-            .select("id, lifetime_paid_users, available_balance, cmo_id")
+            .select("id, lifetime_paid_users, available_balance, cmo_id, referral_code")
             .eq("id", creatorId)
             .single();
 
           if (foundCreator) {
             creatorData = foundCreator;
-            // Use dynamic commission rate from DB tiers
+            creatorCode = foundCreator.referral_code; // Get the code for Telegram
             creatorCommissionRate = await getCreatorCommissionRate(supabase, foundCreator.id);
             creatorCommissionAmount = request.amount * creatorCommissionRate;
           }
         }
 
-        // Create attribution
+        // Create attribution - FAIL if this fails
         const { error: paError } = await supabase.from("payment_attributions").insert({
           order_id: orderId,
           user_id: request.user_id,
@@ -899,7 +866,29 @@ serve(async (req) => {
           payment_type: "upgrade",
         });
 
-        if (!paError && creatorId && creatorData) {
+        if (paError) {
+          console.error("CRITICAL: Upgrade attribution error:", paError);
+          return new Response(
+            JSON.stringify({ success: false, error: "Failed to create payment attribution: " + paError.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Also create a payments record
+        await supabase.from("payments").insert({
+          order_id: orderId,
+          user_id: request.user_id,
+          amount: request.amount,
+          currency: "LKR",
+          status: "completed",
+          payment_method: "bank",
+          tier: request.requested_tier,
+          ref_creator: creatorCode,
+          enrollment_id: request.enrollment_id,
+          processed_at: new Date().toISOString(),
+        });
+
+        if (creatorId && creatorData) {
           // Update creator stats
           await supabase
             .from("creator_profiles")
@@ -933,12 +922,13 @@ serve(async (req) => {
         .eq("user_id", request.user_id)
         .maybeSingle();
 
-      // Send payment success notification for upgrade
+      // TELEGRAM: Show creator code if present
       await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
         orderId,
         amount: request.amount || 0,
         tier: request.requested_tier,
         userEmail: userProfile?.email,
+        refCreator: creatorCode || undefined, // Use creator's referral_code
       });
 
       console.log("Upgrade request approved:", upgrade_request_id);

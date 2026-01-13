@@ -18,13 +18,13 @@ interface PaymentMethodDialogProps {
   tier: string;
   tierName: string;
   amount: number;
-  originalAmount?: number; // Original price before discount
-  discountCode?: string; // Applied discount code
-  refCreator?: string; // Referral creator code from URL
+  originalAmount?: number;
+  // UNIFIED: Single creator code for both referral attribution AND discount
+  creatorCode?: string;
   userEmail?: string;
   userName?: string;
-  enrollmentId?: string; // For upgrades
-  isNewUser?: boolean; // For non-logged-in users buying from pricing page
+  enrollmentId?: string;
+  isNewUser?: boolean;
   onBankTransfer: () => void;
 }
 
@@ -68,8 +68,7 @@ const PaymentMethodDialog = ({
   tierName,
   amount,
   originalAmount,
-  discountCode,
-  refCreator,
+  creatorCode,
   userEmail,
   userName,
   enrollmentId,
@@ -96,11 +95,9 @@ const PaymentMethodDialog = ({
   };
 
   const handleCardPayment = async () => {
-    // CRITICAL: Close dialog IMMEDIATELY before anything else
     onOpenChange(false);
     setIsLoading(true);
 
-    // Helper to notify admin via Telegram
     const notifyPaymentFailure = async (reason: string) => {
       try {
         await supabase.functions.invoke('send-telegram-notification', {
@@ -121,17 +118,14 @@ const PaymentMethodDialog = ({
     };
 
     try {
-      // Load PayHere with retry logic
       try {
         await loadPayHereScript();
       } catch (loadError) {
         console.log('First PayHere load attempt failed, retrying...');
-        // Wait 1 second and retry
         await new Promise(resolve => setTimeout(resolve, 1000));
         try {
           await loadPayHereScript();
         } catch (retryError) {
-          // Both attempts failed - notify admin and show error
           await notifyPaymentFailure('PayHere SDK failed to load after retry');
           toast.error("Payment system unavailable. Please refresh the page and try again.");
           setIsLoading(false);
@@ -144,11 +138,11 @@ const PaymentMethodDialog = ({
       const firstName = nameParts[0] || "Customer";
       const lastName = nameParts.slice(1).join(" ") || "User";
 
-      // Get refCreator from localStorage as fallback
-      const effectiveRefCreator = refCreator || localStorage.getItem('refCreator') || undefined;
-      const effectiveDiscountCode = discountCode || localStorage.getItem('discount_code') || undefined;
+      // UNIFIED: Get creator code from prop or localStorage
+      const effectiveCreatorCode = creatorCode || localStorage.getItem('refCreator') || undefined;
 
       // Get hash from edge function
+      // UNIFIED: Pass creatorCode as both ref_creator (for attribution) and discount_code (legacy compatibility)
       const { data, error } = await supabase.functions.invoke(
         "payhere-checkout/generate-hash",
         {
@@ -166,8 +160,9 @@ const PaymentMethodDialog = ({
             country: "Sri Lanka",
             custom_1: tier,
             custom_2: enrollmentId || "new",
-            ref_creator: effectiveRefCreator,
-            discount_code: effectiveDiscountCode,
+            // UNIFIED: Single identity for both referral and discount
+            ref_creator: effectiveCreatorCode,
+            discount_code: effectiveCreatorCode, // Legacy compatibility
           },
         }
       );
@@ -183,30 +178,24 @@ const PaymentMethodDialog = ({
         : `${window.location.origin}/dashboard?payment=success`;
       const cancelUrl = `${window.location.origin}/pricing?payment=cancelled`;
 
-      // Setup PayHere callbacks
-      // IMPORTANT: onCompleted fires when popup closes - NOT when payment succeeds
-      // The actual payment status is only confirmed via the server-side notify webhook
       window.payhere.onCompleted = (completedOrderId: string) => {
         console.log("PayHere popup closed. OrderID:", completedOrderId);
         
         if (isNewUser) {
-          // Store payment data with PENDING status - will verify on PaidSignup page
           localStorage.setItem('pending_payment', JSON.stringify({
             tier,
             amount,
             originalAmount: originalAmount || amount,
             orderId: completedOrderId,
             timestamp: Date.now(),
-            refCreator: effectiveRefCreator || undefined,
-            discountCode: effectiveDiscountCode || undefined,
-            status: 'pending', // Mark as pending - needs verification
+            // UNIFIED: Store single creator code
+            creatorCode: effectiveCreatorCode || undefined,
+            status: 'pending',
           }));
           
-          // Don't show success message - payment status is unknown at this point
           toast.info("Processing payment... Please wait while we verify.");
           navigate('/paid-signup');
         } else {
-          // For upgrades, redirect and let the page verify
           toast.info("Processing payment... Please wait while we verify.");
           window.location.href = `${returnUrl}&orderId=${completedOrderId}`;
         }
