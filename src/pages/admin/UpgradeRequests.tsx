@@ -174,36 +174,26 @@ const UpgradeRequests = () => {
     if (!selectedRequest) return;
     setIsProcessing(true);
 
-    // Update enrollment tier
-    const { error: enrollmentError } = await supabase
-      .from('enrollments')
-      .update({ tier: selectedRequest.requested_tier })
-      .eq('id', selectedRequest.enrollment_id);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-finance/approve-upgrade-request', {
+        body: {
+          upgrade_request_id: selectedRequest.id,
+          admin_notes: reviewNotes || null,
+        },
+      });
 
-    if (enrollmentError) {
-      toast.error('Failed to update enrollment');
-      setIsProcessing(false);
-      return;
-    }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-    // Update request status
-    const { error: requestError } = await supabase
-      .from('upgrade_requests')
-      .update({
-        status: 'approved',
-        admin_notes: reviewNotes,
-        reviewed_at: new Date().toISOString(),
-      })
-      .eq('id', selectedRequest.id);
-
-    if (requestError) {
-      toast.error('Failed to update request');
-    } else {
       toast.success(`Upgraded to ${TIER_LABELS[selectedRequest.requested_tier]} successfully!`);
       setSelectedRequest(null);
       fetchRequests();
+    } catch (err: any) {
+      console.error('Approve upgrade failed:', err);
+      toast.error(err?.message || 'Failed to approve upgrade');
+    } finally {
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
   };
 
   const rejectRequest = async () => {

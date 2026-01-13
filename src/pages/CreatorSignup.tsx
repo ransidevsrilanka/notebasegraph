@@ -55,16 +55,14 @@ const CreatorSignup = () => {
       }
 
       const { data, error } = await supabase
-        .from('cmo_profiles')
-        .select('id, display_name')
-        .eq('referral_code', refCmo.toUpperCase())
-        .eq('is_active', true)
-        .maybeSingle();
+        .rpc('validate_cmo_referral', { _code: refCmo });
 
-      if (error || !data) {
+      const row = Array.isArray(data) ? data[0] : null;
+
+      if (error || !row?.id) {
         setRefError("Invalid or inactive referral link. Please contact your CMO for a valid invitation.");
       } else {
-        setCmoProfile(data);
+        setCmoProfile({ id: row.id, display_name: row.display_name || 'CMO' });
       }
       setIsValidatingRef(false);
     };
