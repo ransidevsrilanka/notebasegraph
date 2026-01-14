@@ -99,11 +99,12 @@ const PricingSection = () => {
     
     try {
       // Validate against creator_profiles.referral_code (the single source of truth)
+      // NOTE: Some older rows may have is_active = NULL; treat that as active.
       const { data, error } = await supabase
         .from('creator_profiles')
         .select('id, referral_code, display_name')
         .eq('referral_code', normalizedCode)
-        .eq('is_active', true)
+        .or('is_active.is.null,is_active.eq.true')
         .maybeSingle();
 
       if (error || !data) {
@@ -112,7 +113,7 @@ const PricingSection = () => {
           .from('discount_codes')
           .select('code, creator_id')
           .eq('code', normalizedCode)
-          .eq('is_active', true)
+          .or('is_active.is.null,is_active.eq.true')
           .maybeSingle();
         
         if (legacyError || !legacyCode) {
