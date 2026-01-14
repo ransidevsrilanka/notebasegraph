@@ -889,11 +889,12 @@ serve(async (req) => {
         });
 
         if (creatorId && creatorData) {
-          // Update creator stats
+          // Update creator stats (balance + lifetime count for upgrades)
           await supabase
             .from("creator_profiles")
             .update({
               available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
+              lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
             })
             .eq("id", creatorId);
 
