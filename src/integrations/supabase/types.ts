@@ -2153,6 +2153,14 @@ export type Database = {
       }
       is_head_ops: { Args: never; Returns: boolean }
       reset_monthly_paid_users: { Args: never; Returns: undefined }
+      resolve_referral_code: {
+        Args: { p_code: string }
+        Returns: {
+          creator_id: string
+          creator_name: string
+          referral_code: string
+        }[]
+      }
       set_creator_role: {
         Args: {
           _cmo_id?: string
