@@ -13,8 +13,8 @@ const Index = () => {
       <ParallaxHero />
       <FeaturesGrid />
       <StickyServices />
-      <WhyChooseUs />
       <PricingSection />
+      <WhyChooseUs />
       <Footer />
     </main>
   );

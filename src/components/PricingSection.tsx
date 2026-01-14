@@ -88,64 +88,32 @@ const PricingSection = () => {
   }, [refCreatorFromUrl]);
 
   /**
-   * UNIFIED VALIDATION: Validates a code against creator_profiles.referral_code
-   * This is the SINGLE SOURCE of truth for discount/referral codes
+   * UNIFIED VALIDATION: Uses resolve_referral_code RPC (works for anon users)
+   * Handles both creator referral codes and legacy discount_codes
    */
   const validateCreatorCode = async (code: string, isAutoApply: boolean = false) => {
     if (!code.trim()) return;
     
-    const normalizedCode = code.toUpperCase().trim();
+    const normalizedCode = code.trim();
     setIsValidatingCode(true);
     
     try {
-      // Validate against creator_profiles.referral_code (the single source of truth)
-      // NOTE: Some older rows may have is_active = NULL; treat that as active.
-      const { data, error } = await supabase
-        .from('creator_profiles')
-        .select('id, referral_code, display_name')
-        .eq('referral_code', normalizedCode)
-        .or('is_active.is.null,is_active.eq.true')
-        .maybeSingle();
+      // Use RPC function that bypasses RLS and handles both code types
+      const { data, error } = await supabase.rpc('resolve_referral_code', {
+        p_code: normalizedCode
+      });
 
-      if (error || !data) {
-        // Fallback: check legacy discount_codes table
-        const { data: legacyCode, error: legacyError } = await supabase
-          .from('discount_codes')
-          .select('code, creator_id')
-          .eq('code', normalizedCode)
-          .or('is_active.is.null,is_active.eq.true')
-          .maybeSingle();
-        
-        if (legacyError || !legacyCode) {
-          if (!isAutoApply) {
-            toast.error("Invalid discount code");
-          }
-          setAppliedCreatorCode(null);
-          return;
+      if (error) {
+        console.error("RPC error:", error);
+        if (!isAutoApply) {
+          toast.error("Failed to validate discount code");
         }
-        
-        // Get creator info from legacy code
-        if (legacyCode.creator_id) {
-          const { data: creatorData } = await supabase
-            .from('creator_profiles')
-            .select('referral_code, display_name')
-            .eq('id', legacyCode.creator_id)
-            .maybeSingle();
-          
-          if (creatorData) {
-            // Use the creator's referral_code as the unified identity
-            const creatorCode = creatorData.referral_code;
-            setDiscountCodeInput(creatorCode);
-            setAppliedCreatorCode({ 
-              code: creatorCode, 
-              creatorName: creatorData.display_name || 'Creator'
-            });
-            localStorage.setItem('refCreator', creatorCode);
-            toast.success(`${creatorData.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
-            return;
-          }
-        }
-        
+        setAppliedCreatorCode(null);
+        return;
+      }
+
+      // RPC returns array - check if we got a result
+      if (!data || data.length === 0) {
         if (!isAutoApply) {
           toast.error("Invalid discount code");
         }
@@ -154,18 +122,15 @@ const PricingSection = () => {
       }
 
       // Success: Apply the creator's referral code
-      setDiscountCodeInput(data.referral_code);
+      const result = data[0];
+      setDiscountCodeInput(result.referral_code);
       setAppliedCreatorCode({ 
-        code: data.referral_code, 
-        creatorName: data.display_name || 'Creator'
+        code: result.referral_code, 
+        creatorName: result.creator_name || 'Creator'
       });
-      localStorage.setItem('refCreator', data.referral_code);
+      localStorage.setItem('refCreator', result.referral_code);
       
-      if (!isAutoApply) {
-        toast.success(`${data.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
-      } else {
-        toast.success(`${data.display_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
-      }
+      toast.success(`${result.creator_name}'s ${CREATOR_DISCOUNT_PERCENT}% discount applied!`);
     } catch (err) {
       console.error("Error validating creator code:", err);
       if (!isAutoApply) {
