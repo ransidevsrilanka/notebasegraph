@@ -188,8 +188,8 @@ const PaymentMethodDialog = ({
             originalAmount: originalAmount || amount,
             orderId: completedOrderId,
             timestamp: Date.now(),
-            // UNIFIED: Store single creator code
-            creatorCode: effectiveCreatorCode || undefined,
+            // UNIFIED: Store single creator code (use refCreator key to match PaidSignup)
+            refCreator: effectiveCreatorCode || undefined,
             status: 'pending',
           }));
           

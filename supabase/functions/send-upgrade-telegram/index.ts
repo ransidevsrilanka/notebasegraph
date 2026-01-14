@@ -111,13 +111,13 @@ serve(async (req) => {
       
       // First check if file exists by listing
       const { data: listData, error: listError } = await supabase.storage
-        .from('receipts')
+        .from('upgrade-receipts')
         .list(request.receipt_url.split('/').slice(0, -1).join('/'));
       
       console.log('Storage list result:', { listData, listError });
       
       const { data: fileData, error: downloadError } = await supabase.storage
-        .from('receipts')
+        .from('upgrade-receipts')
         .download(request.receipt_url);
 
       if (downloadError) {
