@@ -159,6 +159,7 @@ const HeadOpsDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [activeTab, setActiveTab] = useState('my-performance');
   
   // Request form state
   const [selectedRequestType, setSelectedRequestType] = useState<string>('');
@@ -656,7 +657,7 @@ const HeadOpsDashboard = () => {
         </div>
 
         {/* Main Content Tabs */}
-        <Tabs defaultValue="my-performance" className="space-y-6">
+        <Tabs defaultValue="my-performance" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-3 md:grid-cols-7 w-full bg-secondary/50">
             <TabsTrigger value="my-performance">My Performance</TabsTrigger>
             <TabsTrigger value="my-creators">My Creators</TabsTrigger>
@@ -952,6 +953,8 @@ const HeadOpsDashboard = () => {
                               setSelectedRequestType('remove_creator');
                               setSelectedTarget(creator.id);
                               setRequestDetails(`Request to remove creator: ${creator.display_name}`);
+                              setActiveTab('requests');
+                              toast.info('Request prepared - complete the details below');
                             }}
                             className="text-xs"
                           >
@@ -1000,6 +1003,8 @@ const HeadOpsDashboard = () => {
                             setSelectedRequestType('demote_cmo');
                             setSelectedTarget(cmo.cmo_id);
                             setRequestDetails(`Request regarding CMO: ${cmo.display_name}`);
+                            setActiveTab('requests');
+                            toast.info('Request prepared - complete the details below');
                           }}
                           className="text-xs"
                         >
@@ -1053,6 +1058,8 @@ const HeadOpsDashboard = () => {
                             setSelectedRequestType('flag_content');
                             setSelectedTarget(subject.subject_id);
                             setRequestDetails(`Content issue with: ${subject.subject_name}`);
+                            setActiveTab('requests');
+                            toast.info('Request prepared - complete the details below');
                           }}
                           className="text-xs"
                         >

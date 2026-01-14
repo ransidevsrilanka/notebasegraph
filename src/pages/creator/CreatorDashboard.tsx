@@ -45,6 +45,8 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
+import { EarningsCalendar } from '@/components/dashboard/EarningsCalendar';
+import { QRCodeModal } from '@/components/dashboard/QRCodeModal';
 import InboxButton from '@/components/inbox/InboxButton';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 import { Trash2 } from 'lucide-react';
@@ -131,6 +133,7 @@ const CreatorDashboard = () => {
   const [minimumPayout, setMinimumPayout] = useState(10000);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [dailyEarnings, setDailyEarnings] = useState<{ date: string; amount: number }[]>([]);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -348,6 +351,22 @@ const CreatorDashboard = () => {
             referrals: Number(m.referrals) || 0,
             conversions: Number(m.conversions) || 0,
           })));
+        }
+
+        // Fetch daily earnings for calendar
+        const { data: dailyData } = await supabase
+          .from('payment_attributions')
+          .select('created_at, creator_commission_amount')
+          .eq('creator_id', creatorProfile.id)
+          .gte('created_at', new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString());
+
+        if (dailyData) {
+          const dailyMap: Record<string, number> = {};
+          dailyData.forEach(p => {
+            const date = new Date(p.created_at).toISOString().split('T')[0];
+            dailyMap[date] = (dailyMap[date] || 0) + Number(p.creator_commission_amount || 0);
+          });
+          setDailyEarnings(Object.entries(dailyMap).map(([date, amount]) => ({ date, amount })));
         }
       }
     } catch (error) {
@@ -897,6 +916,11 @@ const CreatorDashboard = () => {
               value={referralLink}
               readOnly
               className="font-mono text-sm"
+            />
+            <QRCodeModal 
+              url={referralLink} 
+              referralCode={creatorData?.referral_code || ''} 
+              title="Share Your Referral Link"
             />
             <Button 
               variant="outline" 
