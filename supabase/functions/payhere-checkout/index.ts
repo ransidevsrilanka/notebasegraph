@@ -504,6 +504,82 @@ serve(async (req) => {
 
         console.log("Payment successful for order:", orderId);
 
+        // ==== BUG FIX: Create payment_attributions on server-side callback ====
+        // This ensures attribution happens even if user closes browser after payment
+        // Get payment record with full details for attribution
+        const { data: fullPaymentRecord } = await supabase
+          .from("payments")
+          .select("*")
+          .eq("order_id", orderId)
+          .maybeSingle();
+
+        if (fullPaymentRecord) {
+          // Check if attribution already exists (idempotent check)
+          const { data: existingAttribution } = await supabase
+            .from("payment_attributions")
+            .select("id")
+            .eq("order_id", orderId)
+            .maybeSingle();
+
+          if (!existingAttribution) {
+            // Create attribution
+            const paymentMonth = new Date();
+            paymentMonth.setDate(1);
+            const paymentMonthStr = paymentMonth.toISOString().split("T")[0];
+
+            // Find creator by ref_creator code
+            let creatorId = null;
+            let creatorCommissionRate = 0;
+            let creatorCommissionAmount = 0;
+
+            if (fullPaymentRecord.ref_creator) {
+              const normalizedCode = fullPaymentRecord.ref_creator.toUpperCase().trim();
+              const { data: creator } = await supabase
+                .from("creator_profiles")
+                .select("id, available_balance, cmo_id")
+                .eq("referral_code", normalizedCode)
+                .eq("is_active", true)
+                .maybeSingle();
+
+              if (creator) {
+                creatorId = creator.id;
+                // Use default 12% rate for callback (tier calculation happens in finalize)
+                creatorCommissionRate = 0.12;
+                creatorCommissionAmount = parseFloat(payhereAmount) * creatorCommissionRate;
+
+                // Update creator balance
+                await supabase
+                  .from("creator_profiles")
+                  .update({
+                    available_balance: (creator.available_balance || 0) + creatorCommissionAmount,
+                  })
+                  .eq("id", creatorId);
+              }
+            }
+
+            // Create the attribution record
+            await supabase.from("payment_attributions").insert({
+              order_id: orderId,
+              user_id: fullPaymentRecord.user_id,
+              creator_id: creatorId,
+              enrollment_id: fullPaymentRecord.enrollment_id,
+              amount: parseFloat(payhereAmount),
+              original_amount: parseFloat(payhereAmount),
+              final_amount: parseFloat(payhereAmount),
+              creator_commission_rate: creatorCommissionRate,
+              creator_commission_amount: creatorCommissionAmount,
+              payment_month: paymentMonthStr,
+              tier: custom1,
+              payment_type: "card",
+            });
+
+            console.log("Payment attribution created via callback for order:", orderId);
+          } else {
+            console.log("Attribution already exists for order:", orderId, "- skipping");
+          }
+        }
+        // ==== END BUG FIX ====
+
         // Check if this is an upgrade or new purchase
         if (custom2 && custom2 !== "new") {
           // This is an upgrade - update the enrollment tier

@@ -436,33 +436,33 @@ const PaidSignup = () => {
       }
     }
 
-    if (effectiveRefCreator || effectiveDiscountCode) {
-      try {
-        // Call edge function to handle commission attribution (bypasses RLS)
-        // FIXED: Use paymentData.amount directly as final_amount (already discounted)
-        // Use originalAmount for original_amount tracking
-        const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
-          body: {
-            order_id: paymentData.orderId,
-            enrollment_id: enrollmentData.id,
-            payment_type: 'card',
-            tier: paymentData.tier,
-            original_amount: originalAmount,
-            final_amount: paymentData.amount, // This is already the discounted amount paid
-            ref_creator: effectiveRefCreator,
-            discount_code: effectiveDiscountCode,
-          },
-        });
+    // ALWAYS call finalize-payment-user to track ALL card payments in attribution
+    // The edge function handles null creatorId correctly for direct payments (100% to platform)
+    try {
+      // Call edge function to handle commission attribution (bypasses RLS)
+      // FIXED: Use paymentData.amount directly as final_amount (already discounted)
+      // Use originalAmount for original_amount tracking
+      const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
+        body: {
+          order_id: paymentData.orderId,
+          enrollment_id: enrollmentData.id,
+          payment_type: 'card',
+          tier: paymentData.tier,
+          original_amount: originalAmount,
+          final_amount: paymentData.amount, // This is already the discounted amount paid
+          ref_creator: effectiveRefCreator,
+          discount_code: effectiveDiscountCode,
+        },
+      });
 
-        if (finError) {
-          console.error('Error finalizing payment attribution:', finError);
-        } else {
-          console.log('Payment attribution finalized successfully');
-        }
-      } catch (refError) {
-        console.error('Error processing referral:', refError);
-        // Don't fail the enrollment for referral errors
+      if (finError) {
+        console.error('Error finalizing payment attribution:', finError);
+      } else {
+        console.log('Payment attribution finalized successfully');
       }
+    } catch (refError) {
+      console.error('Error processing payment attribution:', refError);
+      // Don't fail the enrollment for attribution errors
     }
 
     // For A/L students, save subject selection with subject codes
@@ -496,8 +496,7 @@ const PaidSignup = () => {
 
     // Clear payment data and referral info
     localStorage.removeItem('pending_payment');
-    localStorage.removeItem('ref_creator');
-    localStorage.removeItem('discount_code');
+    localStorage.removeItem('refCreator');
 
     setIsLoading(false);
     setStep('success');

@@ -111,7 +111,7 @@ const UpgradeRequests = () => {
     
     if (request.receipt_url) {
       const { data } = await supabase.storage
-        .from('receipts')
+        .from('upgrade-receipts')
         .createSignedUrl(request.receipt_url, 3600);
       
       setReceiptUrl(data?.signedUrl || null);
@@ -150,7 +150,7 @@ const UpgradeRequests = () => {
     
     try {
       const { error } = await supabase.storage
-        .from('receipts')
+        .from('upgrade-receipts')
         .remove([selectedRequest.receipt_url]);
       
       if (error) throw error;
