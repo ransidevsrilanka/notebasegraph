@@ -29,6 +29,7 @@ import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip,
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { TrendIndicator } from '@/components/dashboard/TrendIndicator';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
+import { CommissionCalculator } from '@/components/dashboard/CommissionCalculator';
 import InboxButton from '@/components/inbox/InboxButton';
 
 interface CMOProfile {
@@ -483,8 +484,8 @@ const CMODashboard = () => {
           </div>
         </div>
 
-        {/* Bonus Progress & Goals */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Bonus Progress, Goals & Commission Calculator */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Bonus Progress */}
           <div className="glass-card p-6">
             <h3 className="font-semibold text-foreground mb-4">Annual Bonus Progress</h3>
@@ -530,6 +531,15 @@ const CMODashboard = () => {
               ))}
             </div>
           </div>
+
+          {/* Commission Calculator */}
+          <CommissionCalculator
+            currentCommissionRate={8}
+            bonusRate={13}
+            annualPaidUsers={stats.annualPaidUsers}
+            bonusThreshold={10000}
+            avgOrderValue={3000}
+          />
         </div>
 
         {/* Referral Link */}

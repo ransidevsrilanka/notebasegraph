@@ -31,6 +31,9 @@ import { StatCard } from '@/components/dashboard/StatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
+import { ConversionFunnel } from '@/components/dashboard/ConversionFunnel';
+import { CreatorLeaderboard } from '@/components/dashboard/CreatorLeaderboard';
+import { RevenueForecast } from '@/components/dashboard/RevenueForecast';
 import { format } from 'date-fns';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import AdminSidebar from '@/components/admin/AdminSidebar';
@@ -64,7 +67,17 @@ interface TopCreator {
   display_name: string;
   referral_code: string;
   lifetime_paid_users: number;
+  monthly_paid_users?: number;
   revenue: number;
+}
+
+interface FunnelStats {
+  totalSignups: number;
+  totalPaidUsers: number;
+}
+
+interface MonthlyRevenue {
+  twoMonthsAgo: number;
 }
 
 // Storage Usage Component
@@ -191,6 +204,8 @@ const AdminDashboard = () => {
   const [enrollmentData, setEnrollmentData] = useState<{ name: string; value: number }[]>([]);
   const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [funnelStats, setFunnelStats] = useState<FunnelStats>({ totalSignups: 0, totalPaidUsers: 0 });
+  const [twoMonthsAgoRevenue, setTwoMonthsAgoRevenue] = useState(0);
 
   const fetchStats = async () => {
     try {
@@ -304,11 +319,36 @@ const AdminDashboard = () => {
       setRevenueData(chartData);
       setEnrollmentData(enrollmentChartData);
 
+      // Fetch funnel stats - total signups from user_attributions and enrollments
+      const { count: totalSignups } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true });
+
+      setFunnelStats({
+        totalSignups: totalSignups || 0,
+        totalPaidUsers: activeEnrollments || 0,
+      });
+
+      // Two months ago revenue for forecast
+      const twoMonthsAgo = new Date();
+      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+      twoMonthsAgo.setDate(1);
+      const twoMonthsAgoStr = twoMonthsAgo.toISOString().split('T')[0];
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      oneMonthAgo.setDate(1);
+      const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0];
+      
+      const twoMonthsRev = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= twoMonthsAgoStr && p.payment_month < oneMonthAgoStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      setTwoMonthsAgoRevenue(twoMonthsRev);
+
       const { data: creatorsData } = await supabase
         .from('creator_profiles')
-        .select('id, display_name, referral_code, lifetime_paid_users')
+        .select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users')
         .order('lifetime_paid_users', { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (creatorsData && creatorsData.length > 0) {
         const creatorsWithRevenue = await Promise.all(
@@ -322,7 +362,11 @@ const AdminDashboard = () => {
               (sum, p) => sum + Number(p.final_amount || 0), 0
             );
             
-            return { ...creator, revenue };
+            return { 
+              ...creator, 
+              revenue,
+              monthly_paid_users: creator.monthly_paid_users || 0 
+            };
           })
         );
         setTopCreators(creatorsWithRevenue);
@@ -496,6 +540,21 @@ const AdminDashboard = () => {
               ))}
             </div>
 
+            {/* Conversion Funnel & Revenue Forecast */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ConversionFunnel 
+                totalSignups={funnelStats.totalSignups}
+                totalPaidUsers={funnelStats.totalPaidUsers}
+                totalRevenue={stats.totalRevenue}
+              />
+              <RevenueForecast 
+                thisMonthRevenue={stats.thisMonthRevenue}
+                lastMonthRevenue={stats.lastMonthRevenue}
+                twoMonthsAgoRevenue={twoMonthsAgoRevenue}
+                daysIntoMonth={new Date().getDate()}
+              />
+            </div>
+
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Revenue Chart */}
@@ -567,28 +626,9 @@ const AdminDashboard = () => {
               <StorageUsageCard />
             </div>
 
-            {/* Top Creators */}
+            {/* Creator Leaderboard */}
             {topCreators.length > 0 && (
-              <div className="glass-card p-6">
-                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Users className="w-5 h-5 text-purple-400" />
-                  Top Creators
-                </h3>
-                <div className="space-y-3">
-                  {topCreators.map((creator, index) => (
-                    <div key={creator.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground w-6">#{index + 1}</span>
-                        <div>
-                          <p className="font-medium text-foreground">{creator.display_name || creator.referral_code}</p>
-                          <p className="text-xs text-muted-foreground">{creator.lifetime_paid_users} paid users</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium text-foreground">Rs. {creator.revenue.toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <CreatorLeaderboard creators={topCreators} showMonthly={true} />
             )}
 
             {/* Danger Zone */}
