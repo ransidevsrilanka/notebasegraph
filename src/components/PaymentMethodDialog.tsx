@@ -95,9 +95,8 @@ const PaymentMethodDialog = ({
   };
 
   const handleCardPayment = async () => {
-    onOpenChange(false);
+    // Keep dialog open to show loading state
     setIsLoading(true);
-
     const notifyPaymentFailure = async (reason: string) => {
       try {
         await supabase.functions.invoke('send-telegram-notification', {
@@ -188,7 +187,6 @@ const PaymentMethodDialog = ({
             originalAmount: originalAmount || amount,
             orderId: completedOrderId,
             timestamp: Date.now(),
-            // UNIFIED: Store single creator code (use refCreator key to match PaidSignup)
             refCreator: effectiveCreatorCode || undefined,
             status: 'pending',
           }));
@@ -196,6 +194,16 @@ const PaymentMethodDialog = ({
           toast.info("Processing payment... Please wait while we verify.");
           navigate('/paid-signup');
         } else {
+          // UPGRADE FLOW: Store pending payment for dashboard to finalize
+          localStorage.setItem('pending_upgrade_payment', JSON.stringify({
+            orderId: completedOrderId,
+            enrollmentId: enrollmentId,
+            tier,
+            amount,
+            originalAmount: originalAmount || amount,
+            refCreator: effectiveCreatorCode || undefined,
+            timestamp: Date.now(),
+          }));
           toast.info("Processing payment... Please wait while we verify.");
           window.location.href = `${returnUrl}&orderId=${completedOrderId}`;
         }
@@ -205,6 +213,7 @@ const PaymentMethodDialog = ({
         console.log("Payment dismissed by user");
         toast.info("Payment cancelled");
         setIsLoading(false);
+        onOpenChange(false);
       };
 
       window.payhere.onError = async (error: string) => {
@@ -237,10 +246,17 @@ const PaymentMethodDialog = ({
       };
 
       window.payhere.startPayment(payment);
+      
+      // Close dialog after PayHere popup opens
+      setTimeout(() => {
+        setIsLoading(false);
+        onOpenChange(false);
+      }, 500);
     } catch (error) {
       console.error("Card payment error:", error);
       toast.error("Failed to initiate payment. Please try again.");
       setIsLoading(false);
+      onOpenChange(false);
     }
   };
 
@@ -250,8 +266,22 @@ const PaymentMethodDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(newOpen) => {
+      // Prevent closing while loading
+      if (!isLoading) {
+        onOpenChange(newOpen);
+      }
+    }}>
+      <DialogContent className="sm:max-w-md relative">
+        {/* Loading Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 bg-background/95 flex flex-col items-center justify-center z-50 rounded-lg">
+            <Loader2 className="w-10 h-10 animate-spin text-brand mb-4" />
+            <p className="text-foreground font-medium">Connecting to PayHere...</p>
+            <p className="text-sm text-muted-foreground mt-1">Please wait, payment gateway loading</p>
+          </div>
+        )}
+        
         <DialogHeader>
           <DialogTitle className="font-display text-xl">
             Choose Payment Method
@@ -270,13 +300,9 @@ const PaymentMethodDialog = ({
             className="h-auto py-4 px-6 justify-start gap-4"
             variant="outline"
           >
-            {isLoading ? (
-              <Loader2 className="w-6 h-6 animate-spin" />
-            ) : (
-              <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-brand" />
-              </div>
-            )}
+            <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
+              <CreditCard className="w-6 h-6 text-brand" />
+            </div>
             <div className="text-left">
               <p className="font-semibold text-foreground">Card Payment</p>
               <p className="text-sm text-muted-foreground">

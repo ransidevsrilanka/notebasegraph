@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/storageClient';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,68 @@ import type { Subject } from '@/types/database';
 import { useBranding } from '@/hooks/useBranding';
 import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const { user, enrollment, profile, userSubjects, signOut } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { branding } = useBranding();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Handle pending upgrade payments (card payments that need finalization)
+  useEffect(() => {
+    const handlePendingUpgradePayment = async () => {
+      const paymentStatus = searchParams.get('payment');
+      if (paymentStatus !== 'success' || !user || !enrollment) return;
+      
+      const pendingDataStr = localStorage.getItem('pending_upgrade_payment');
+      if (!pendingDataStr) {
+        // Clean URL and return
+        window.history.replaceState({}, '', '/dashboard');
+        return;
+      }
+
+      try {
+        const pendingData = JSON.parse(pendingDataStr);
+        console.log('Finalizing upgrade payment:', pendingData);
+        
+        // Call finalize-payment-user to create attribution
+        const { data: finalizeResult, error: finalizeError } = await supabase.functions.invoke(
+          'admin-finance/finalize-payment-user',
+          {
+            body: {
+              order_id: pendingData.orderId,
+              enrollment_id: pendingData.enrollmentId || enrollment.id,
+              tier: pendingData.tier,
+              final_amount: pendingData.amount,
+              original_amount: pendingData.originalAmount,
+              ref_creator: pendingData.refCreator,
+              payment_type: 'upgrade',
+            },
+          }
+        );
+
+        if (finalizeError) {
+          console.error('Failed to finalize upgrade payment:', finalizeError);
+          toast.error('Payment recorded but attribution failed. Please contact support.');
+        } else {
+          console.log('Upgrade payment finalized:', finalizeResult);
+          toast.success('Upgrade completed successfully!');
+        }
+      } catch (error) {
+        console.error('Error processing pending upgrade payment:', error);
+        toast.error('Error processing payment. Please contact support.');
+      } finally {
+        localStorage.removeItem('pending_upgrade_payment');
+        window.history.replaceState({}, '', '/dashboard');
+      }
+    };
+
+    handlePendingUpgradePayment();
+  }, [searchParams, user, enrollment]);
 
   useEffect(() => {
     const fetchSubjects = async () => {
