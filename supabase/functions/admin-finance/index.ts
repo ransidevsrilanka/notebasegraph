@@ -671,13 +671,12 @@ serve(async (req) => {
         processed_at: new Date().toISOString(),
       });
 
-      // STEP 4: Only NOW update stats (since attribution was created)
+      // STEP 4: Only NOW update balance (stats handled by trigger on payment_attributions)
       if (creatorId && creatorData) {
-        // Update creator
+        // Update creator balance only - lifetime_paid_users is updated by trigger
         await supabase
           .from("creator_profiles")
           .update({
-            lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
             available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
           })
           .eq("id", creatorId);
@@ -889,12 +888,11 @@ serve(async (req) => {
         });
 
         if (creatorId && creatorData) {
-          // Update creator stats (balance + lifetime count for upgrades)
+          // Update creator balance only - lifetime_paid_users is updated by trigger
           await supabase
             .from("creator_profiles")
             .update({
               available_balance: (creatorData.available_balance || 0) + creatorCommissionAmount,
-              lifetime_paid_users: (creatorData.lifetime_paid_users || 0) + 1,
             })
             .eq("id", creatorId);
 
