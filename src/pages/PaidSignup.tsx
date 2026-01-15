@@ -436,13 +436,21 @@ const PaidSignup = () => {
       }
     }
 
-    // ALWAYS call finalize-payment-user to track ALL card payments in attribution
+    // CRITICAL: Call finalize-payment-user to create payment attribution
+    // This is the ONLY place where attribution is created for card payments
     // The edge function handles null creatorId correctly for direct payments (100% to platform)
     try {
-      // Call edge function to handle commission attribution (bypasses RLS)
-      // FIXED: Use paymentData.amount directly as final_amount (already discounted)
-      // Use originalAmount for original_amount tracking
-      const { error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
+      console.log('Calling finalize-payment-user with:', {
+        order_id: paymentData.orderId,
+        enrollment_id: enrollmentData.id,
+        tier: paymentData.tier,
+        original_amount: originalAmount,
+        final_amount: paymentData.amount,
+        ref_creator: effectiveRefCreator,
+        discount_code: effectiveDiscountCode,
+      });
+
+      const { data: finData, error: finError } = await supabase.functions.invoke("admin-finance/finalize-payment-user", {
         body: {
           order_id: paymentData.orderId,
           enrollment_id: enrollmentData.id,
@@ -456,13 +464,18 @@ const PaidSignup = () => {
       });
 
       if (finError) {
-        console.error('Error finalizing payment attribution:', finError);
+        console.error('CRITICAL: Failed to create payment attribution:', finError);
+        toast.error("Payment recorded but commission tracking failed. Please contact support.");
+      } else if (finData?.success === false) {
+        console.error('CRITICAL: Attribution creation returned error:', finData.error);
+        toast.error("Payment recorded but commission tracking failed. Please contact support.");
       } else {
-        console.log('Payment attribution finalized successfully');
+        console.log('Payment attribution finalized successfully:', finData);
       }
     } catch (refError) {
-      console.error('Error processing payment attribution:', refError);
-      // Don't fail the enrollment for attribution errors
+      console.error('CRITICAL: Exception during payment attribution:', refError);
+      toast.error("Payment recorded but commission tracking failed. Please contact support.");
+      // Don't fail the enrollment - user already paid and has enrollment
     }
 
     // For A/L students, save subject selection with subject codes
