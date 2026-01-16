@@ -51,7 +51,9 @@ import HeadOpsRequests from "./pages/admin/HeadOpsRequests";
 import Messages from "./pages/admin/Messages";
 import CommissionSettings from "./pages/admin/CommissionSettings";
 import Security from "./pages/admin/Security";
+import AIChat from "./pages/AIChat";
 import NotFound from "./pages/NotFound";
+import { ChatButton } from "./components/ai-chat";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -238,8 +240,18 @@ const App = () => (
             <Route path="/awaiting-payment" element={<AwaitingPayment />} />
             <Route path="/bank-signup" element={<BankSignup />} />
             
+            {/* AI Assistant Route */}
+            <Route path="/ai-assistant" element={
+              <ProtectedRoute requireEnrollment>
+                <AIChat />
+              </ProtectedRoute>
+            } />
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
+          
+          {/* Floating AI Chat Button - shown on all protected pages */}
+          <ChatButton />
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
