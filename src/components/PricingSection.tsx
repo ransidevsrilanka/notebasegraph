@@ -64,8 +64,8 @@ const PricingSection = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [selectedTier, setSelectedTier] = useState<TierDisplay | null>(null);
+  // Use single state to avoid race conditions - null means closed, value means open
+  const [dialogTier, setDialogTier] = useState<TierDisplay | null>(null);
   
   // Discount code state - UNIFIED: creator code = discount code
   const [discountCodeInput, setDiscountCodeInput] = useState("");
@@ -188,12 +188,12 @@ const PricingSection = () => {
   };
 
   const handleGetTier = (tier: TierDisplay) => {
-    setSelectedTier(tier);
-    setPaymentDialogOpen(true);
+    // Single state update - dialog opens when dialogTier is set
+    setDialogTier(tier);
   };
 
   const handleBankTransfer = () => {
-    const tier = selectedTier;
+    const tier = dialogTier;
     if (!tier) return;
     
     // Store payment info with UNIFIED creator code
@@ -207,7 +207,7 @@ const PricingSection = () => {
       timestamp: Date.now(),
     }));
     
-    setPaymentDialogOpen(false);
+    setDialogTier(null);
     navigate('/bank-signup');
   };
 
@@ -337,22 +337,26 @@ const PricingSection = () => {
         </div>
       </section>
 
-      <PaymentMethodDialog
-        open={paymentDialogOpen && selectedTier !== null}
-        onOpenChange={(open) => {
-          setPaymentDialogOpen(open);
-          if (!open) setSelectedTier(null);
-        }}
-        tier={selectedTier?.key ?? ''}
-        tierName={selectedTier?.name ?? ''}
-        amount={selectedTier ? getDiscountedPrice(selectedTier.price) : 0}
-        originalAmount={selectedTier?.price ?? 0}
-        creatorCode={appliedCreatorCode?.code}
-        userEmail={user?.email}
-        userName={profile?.full_name || user?.email?.split("@")[0]}
-        isNewUser={!user}
-        onBankTransfer={handleBankTransfer}
-      />
+      {dialogTier && (
+        <PaymentMethodDialog
+          key={dialogTier.key}
+          open={!!dialogTier}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDialogTier(null);
+            }
+          }}
+          tier={dialogTier.key}
+          tierName={dialogTier.name}
+          amount={getDiscountedPrice(dialogTier.price)}
+          originalAmount={dialogTier.price}
+          creatorCode={appliedCreatorCode?.code}
+          userEmail={user?.email}
+          userName={profile?.full_name || user?.email?.split("@")[0]}
+          isNewUser={!user}
+          onBankTransfer={handleBankTransfer}
+        />
+      )}
     </>
   );
 };
