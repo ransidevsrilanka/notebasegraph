@@ -337,22 +337,22 @@ const PricingSection = () => {
         </div>
       </section>
 
-      {selectedTier && (
-        <PaymentMethodDialog
-          open={paymentDialogOpen}
-          onOpenChange={setPaymentDialogOpen}
-          tier={selectedTier.key}
-          tierName={selectedTier.name}
-          amount={getDiscountedPrice(selectedTier.price)}
-          originalAmount={selectedTier.price}
-          // UNIFIED: Pass creator code as single identity
-          creatorCode={appliedCreatorCode?.code}
-          userEmail={user?.email}
-          userName={profile?.full_name || user?.email?.split("@")[0]}
-          isNewUser={!user}
-          onBankTransfer={handleBankTransfer}
-        />
-      )}
+      <PaymentMethodDialog
+        open={paymentDialogOpen && selectedTier !== null}
+        onOpenChange={(open) => {
+          setPaymentDialogOpen(open);
+          if (!open) setSelectedTier(null);
+        }}
+        tier={selectedTier?.key ?? ''}
+        tierName={selectedTier?.name ?? ''}
+        amount={selectedTier ? getDiscountedPrice(selectedTier.price) : 0}
+        originalAmount={selectedTier?.price ?? 0}
+        creatorCode={appliedCreatorCode?.code}
+        userEmail={user?.email}
+        userName={profile?.full_name || user?.email?.split("@")[0]}
+        isNewUser={!user}
+        onBankTransfer={handleBankTransfer}
+      />
     </>
   );
 };
