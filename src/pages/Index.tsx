@@ -1,21 +1,25 @@
-import Navbar from "@/components/Navbar";
-import ParallaxHero from "@/components/ParallaxHero";
-import FeaturesGrid from "@/components/FeaturesGrid";
-import StickyServices from "@/components/StickyServices";
-import WhyChooseUs from "@/components/WhyChooseUs";
-import PricingSection from "@/components/PricingSection";
-import Footer from "@/components/Footer";
+import {
+  NavbarMinimal,
+  HeroSection,
+  ProblemsEliminated,
+  Credibility,
+  ContentPreview,
+  PricingRedesign,
+  ClosingPush,
+  FooterMinimal
+} from "@/components/landing";
 
 const Index = () => {
   return (
-    <main className="min-h-screen bg-background overflow-x-hidden">
-      <Navbar />
-      <ParallaxHero />
-      <FeaturesGrid />
-      <StickyServices />
-      <PricingSection />
-      <WhyChooseUs />
-      <Footer />
+    <main className="min-h-screen bg-background">
+      <NavbarMinimal />
+      <HeroSection />
+      <ProblemsEliminated />
+      <Credibility />
+      <ContentPreview />
+      <PricingRedesign />
+      <ClosingPush />
+      <FooterMinimal />
     </main>
   );
 };
