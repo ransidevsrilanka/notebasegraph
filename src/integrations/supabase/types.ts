@@ -122,6 +122,94 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_chat_messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          enrollment_id: string
+          id: string
+          role: string
+          user_id: string
+          word_count: number | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          enrollment_id: string
+          id?: string
+          role: string
+          user_id: string
+          word_count?: number | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          enrollment_id?: string
+          id?: string
+          role?: string
+          user_id?: string
+          word_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_messages_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_credits: {
+        Row: {
+          created_at: string | null
+          credits_limit: number
+          credits_used: number | null
+          enrollment_id: string
+          id: string
+          is_suspended: boolean | null
+          month_year: string
+          strikes: number | null
+          suspended_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          credits_limit: number
+          credits_used?: number | null
+          enrollment_id: string
+          id?: string
+          is_suspended?: boolean | null
+          month_year: string
+          strikes?: number | null
+          suspended_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          credits_limit?: number
+          credits_used?: number | null
+          enrollment_id?: string
+          id?: string
+          is_suspended?: boolean | null
+          month_year?: string
+          strikes?: number | null
+          suspended_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_credits_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_phases: {
         Row: {
           current_phase: number | null
