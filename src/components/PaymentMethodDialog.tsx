@@ -78,6 +78,10 @@ const PaymentMethodDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Defensive rendering: avoid runtime crashes that would leave only the overlay visible
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const safeTierName = tierName || "Selected tier";
+
   const loadPayHereScript = (): Promise<void> => {
     return new Promise((resolve, reject) => {
       if (window.payhere) {
@@ -266,73 +270,80 @@ const PaymentMethodDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(newOpen) => {
-      // Prevent closing while loading
-      if (!isLoading) {
-        onOpenChange(newOpen);
-      }
-    }}>
-      <DialogContent className="sm:max-w-md relative">
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-background/95 flex flex-col items-center justify-center z-50 rounded-lg">
-            <Loader2 className="w-10 h-10 animate-spin text-brand mb-4" />
-            <p className="text-foreground font-medium">Connecting to PayHere...</p>
-            <p className="text-sm text-muted-foreground mt-1">Please wait, payment gateway loading</p>
-          </div>
-        )}
-        
-        <DialogHeader>
-          <DialogTitle className="font-display text-xl">
-            Choose Payment Method
-          </DialogTitle>
+    <Dialog
+      open={open}
+      onOpenChange={(newOpen) => {
+        // Prevent closing while loading
+        if (!isLoading) {
+          onOpenChange(newOpen);
+        }
+      }}
+    >
+      {open && (
+        <DialogContent className="sm:max-w-md relative">
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-background/95 flex flex-col items-center justify-center z-50 rounded-lg">
+              <Loader2 className="w-10 h-10 animate-spin text-brand mb-4" />
+              <p className="text-foreground font-medium">Connecting to PayHere...</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Please wait, payment gateway loading
+              </p>
+            </div>
+          )}
+
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              Choose Payment Method
+            </DialogTitle>
           <DialogDescription>
             Select how you'd like to pay for{" "}
-            <span className="font-semibold text-foreground">{tierName}</span> -
-            Rs. {amount.toLocaleString()}
+            <span className="font-semibold text-foreground">{safeTierName}</span> -
+            Rs. {safeAmount.toLocaleString()}
           </DialogDescription>
-        </DialogHeader>
+          </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          <Button
-            onClick={handleCardPayment}
-            disabled={isLoading}
-            className="h-auto py-4 px-6 justify-start gap-4"
-            variant="outline"
-          >
-            <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
-              <CreditCard className="w-6 h-6 text-brand" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-foreground">Card Payment</p>
-              <p className="text-sm text-muted-foreground">
-                Pay instantly with Visa, Mastercard, or Amex
-              </p>
-            </div>
-          </Button>
+          <div className="grid gap-4 py-4">
+            <Button
+              onClick={handleCardPayment}
+              disabled={isLoading}
+              className="h-auto py-4 px-6 justify-start gap-4"
+              variant="outline"
+            >
+              <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
+                <CreditCard className="w-6 h-6 text-brand" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-foreground">Card Payment</p>
+                <p className="text-sm text-muted-foreground">
+                  Pay instantly with Visa, Mastercard, or Amex
+                </p>
+              </div>
+            </Button>
 
-          <Button
-            onClick={handleBankTransfer}
-            disabled={isLoading}
-            className="h-auto py-4 px-6 justify-start gap-4"
-            variant="outline"
-          >
-            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-muted-foreground" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-foreground">Bank Transfer</p>
-              <p className="text-sm text-muted-foreground">
-                Manual transfer with receipt upload
-              </p>
-            </div>
-          </Button>
-        </div>
+            <Button
+              onClick={handleBankTransfer}
+              disabled={isLoading}
+              className="h-auto py-4 px-6 justify-start gap-4"
+              variant="outline"
+            >
+              <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-muted-foreground" />
+              </div>
+              <div className="text-left">
+                <p className="font-semibold text-foreground">Bank Transfer</p>
+                <p className="text-sm text-muted-foreground">
+                  Manual transfer with receipt upload
+                </p>
+              </div>
+            </Button>
+          </div>
 
-        <p className="text-xs text-muted-foreground text-center">
-          Card payments are processed securely via PayHere
-        </p>
-      </DialogContent>
+          <p className="text-xs text-muted-foreground text-center">
+            Card payments are processed securely via PayHere
+          </p>
+        </DialogContent>
+      )}
     </Dialog>
   );
 };

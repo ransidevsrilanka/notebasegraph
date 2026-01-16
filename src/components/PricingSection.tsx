@@ -188,7 +188,7 @@ const PricingSection = () => {
   };
 
   const handleGetTier = (tier: TierDisplay) => {
-    // Single state update - dialog opens when dialogTier is set
+    console.log('[pricing] open payment dialog', { tier: tier.key, name: tier.name, price: tier.price });
     setDialogTier(tier);
   };
 
