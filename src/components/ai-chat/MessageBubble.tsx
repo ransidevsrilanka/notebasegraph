@@ -22,54 +22,75 @@ function preprocessLatex(content: string): string {
   let processed = content;
   
   // 1. Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
-  // Using function to avoid $ escaping issues
   processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
   
   // 2. Convert \( ... \) to $ ... $ (standard LaTeX inline)
   processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner}$`);
   
   // 3. Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
-  // Only match [ ... ] that contains LaTeX commands (backslashes)
   processed = processed.replace(
     /\[\s*([^\]]*\\[^\]]*)\s*\]/g, 
     (_, inner) => `$$${inner.trim()}$$`
   );
   
   // 4. Convert inline math: ( ... ) with LaTeX commands → $ ... $
-  // Only convert parentheses that contain LaTeX (backslash commands)
   processed = processed.replace(
     /\(([^)]*\\[^)]*)\)/g,
     (_, inner) => `$${inner.trim()}$`
   );
   
-  // 5. Fix standalone LaTeX commands not wrapped in delimiters
-  // Match patterns like \frac{...}{...} or \infty that appear outside of $ delimiters
-  // We do this by finding sequences of LaTeX commands and wrapping them
+  // 5. Find sequences of LaTeX commands that are NOT wrapped in $ and wrap them
+  // This handles cases where AI outputs raw LaTeX like \sin\theta=\frac{a}{b}
+  // Match a sequence starting with \ and containing LaTeX-like content
+  const latexSequencePattern = /(?<!\$)(\\[a-zA-Z]+(?:\{[^}]*\})*(?:\s*[=+\-*/^_]?\s*\\?[a-zA-Z]*(?:\{[^}]*\})*)+)(?!\$)/g;
+  processed = processed.replace(latexSequencePattern, (match) => {
+    // Don't wrap if it's already inside $ (check for balanced $)
+    if (match.includes('$')) return match;
+    return `$${match}$`;
+  });
   
-  // First, find and wrap \frac{...}{...} patterns that aren't in $ delimiters
+  // 6. Wrap standalone \command{...}{...} patterns (like \frac{a}{b})
   processed = processed.replace(
-    /(?<!\$)\\frac\{([^}]*)\}\{([^}]*)\}(?!\$)/g,
+    /(?<!\$)\\(frac|sqrt|binom|choose)\{([^}]*)\}\{([^}]*)\}(?!\$)/g,
     (match) => `$${match}$`
   );
   
-  // Wrap other common standalone symbols
-  const standaloneSymbols = ['infty', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 
-    'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega', 'to', 'rightarrow', 'leftarrow', 
-    'Rightarrow', 'Leftarrow', 'leq', 'geq', 'neq', 'approx', 'equiv', 'pm', 'mp', 
-    'times', 'div', 'cdot', 'ldots', 'cdots', 'vdots', 'ddots'];
+  // 7. Wrap standalone trig and log functions with arguments
+  processed = processed.replace(
+    /(?<!\$)\\(sin|cos|tan|cot|sec|csc|log|ln|exp|lim|sum|int|prod)\s*([^$\s,;.!?]*(?:\{[^}]*\})?)/g,
+    (match) => `$${match}$`
+  );
   
-  for (const symbol of standaloneSymbols) {
-    // Match \symbol that's not inside $ ... $
-    const regex = new RegExp(`(?<!\\$[^$]*)\\\\${symbol}(?![^$]*\\$)`, 'g');
-    processed = processed.replace(regex, `$\\${symbol}$`);
+  // 8. Wrap standalone Greek letters and symbols
+  const symbols = ['theta', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 
+    'lambda', 'mu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'rho', 'tau', 'eta', 'xi',
+    'infty', 'pm', 'mp', 'times', 'div', 'cdot', 'leq', 'geq', 'neq', 'approx', 'equiv',
+    'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow', 'forall', 'exists', 'partial'];
+  
+  for (const sym of symbols) {
+    const regex = new RegExp(`(?<!\\$|\\\\[a-zA-Z])\\\\${sym}(?!\\$|[a-zA-Z])`, 'g');
+    processed = processed.replace(regex, `$\\${sym}$`);
   }
   
-  // Clean up any double-wrapped $$ ... $$ that should be $ ... $
-  // (in case we wrapped something that was already wrapped)
-  processed = processed.replace(/\$\$\$([^$]+)\$\$\$/g, (_, inner) => `$$${inner}$$`);
+  // 9. Fix unclosed $ by finding orphan $ and closing them
+  // Split by lines and fix each line
+  const lines = processed.split('\n');
+  const fixedLines = lines.map(line => {
+    const dollarCount = (line.match(/(?<!\\)\$/g) || []).length;
+    // If odd number of $, add one at the end
+    if (dollarCount % 2 === 1) {
+      return line + '$';
+    }
+    return line;
+  });
+  processed = fixedLines.join('\n');
   
-  // Fix cases where we have $ $ $ $ (multiple nested)
-  processed = processed.replace(/\$\s*\$([^$]+)\$\s*\$/g, (_, inner) => `$${inner}$`);
+  // 10. Clean up any accidental triple or quadruple $
+  processed = processed.replace(/\${4,}/g, '$$');
+  processed = processed.replace(/\${3}/g, '$$');
+  
+  // 11. Fix $$ $$ that should be $ $
+  processed = processed.replace(/\$\$\s*\$\$/g, '');
   
   return processed;
 }
