@@ -24,7 +24,7 @@ export function ChatButton({ className }: ChatButtonProps) {
       <Button
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg",
+          "fixed bottom-4 right-4 z-50 h-12 w-12 sm:h-14 sm:w-14 rounded-full shadow-lg",
           "bg-brand hover:bg-brand-light transition-all duration-300",
           isOpen && "rotate-90",
           className
@@ -32,9 +32,9 @@ export function ChatButton({ className }: ChatButtonProps) {
         size="icon"
       >
         {isOpen ? (
-          <X className="h-6 w-6 text-white" />
+          <X className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
         ) : (
-          <Sparkles className="h-6 w-6 text-white" />
+          <Sparkles className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
         )}
       </Button>
 
