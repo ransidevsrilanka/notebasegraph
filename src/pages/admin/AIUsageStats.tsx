@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { SidebarProvider } from '@/components/ui/sidebar';
@@ -7,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Sparkles, Users, AlertTriangle, TrendingUp, Ban, CheckCircle } from 'lucide-react';
+import { Sparkles, Users, AlertTriangle, TrendingUp, Ban, CheckCircle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -32,8 +31,10 @@ const AIUsageStats = () => {
   });
 
   // Fetch overall AI usage stats
-  const { data: usageStats, isLoading: statsLoading } = useQuery({
+  const { data: usageStats, isLoading: statsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['ai-usage-stats', currentMonth],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       // Total credits consumed this month
       const { data: monthlyData, error: monthlyError } = await supabase
@@ -58,8 +59,10 @@ const AIUsageStats = () => {
   });
 
   // Fetch top AI users
-  const { data: topUsers, isLoading: topUsersLoading } = useQuery({
+  const { data: topUsers, isLoading: topUsersLoading, refetch: refetchTopUsers } = useQuery({
     queryKey: ['ai-top-users', currentMonth],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ai_credits')
@@ -96,8 +99,10 @@ const AIUsageStats = () => {
   });
 
   // Fetch flagged/suspended users
-  const { data: flaggedUsers, isLoading: flaggedLoading } = useQuery({
+  const { data: flaggedUsers, isLoading: flaggedLoading, refetch: refetchFlagged } = useQuery({
     queryKey: ['ai-flagged-users', currentMonth],
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('ai_credits')
@@ -162,11 +167,27 @@ const AIUsageStats = () => {
         <main className="flex-1 p-6 overflow-auto">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
-            <div>
-              <h1 className="text-2xl font-bold">AI Usage Statistics</h1>
-              <p className="text-muted-foreground">
-                Monitor NotebaseAI usage, credits, and flagged users for {format(new Date(), 'MMMM yyyy')}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">AI Usage Statistics</h1>
+                <p className="text-muted-foreground">
+                  Monitor NotebaseAI usage, credits, and flagged users for {format(new Date(), 'MMMM yyyy')}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  refetchStats();
+                  refetchTopUsers();
+                  refetchFlagged();
+                  toast.success('Stats refreshed');
+                }}
+                disabled={statsLoading || topUsersLoading || flaggedLoading}
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${statsLoading || topUsersLoading || flaggedLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
             </div>
 
             {/* Stats Grid */}

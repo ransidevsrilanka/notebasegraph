@@ -7,9 +7,9 @@ export default function AIChat() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+<div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="border-b border-border bg-card px-4 py-3">
+      <header className="flex-shrink-0 border-b border-border bg-card px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
             <ArrowLeft className="h-5 w-5" />
@@ -22,7 +22,7 @@ export default function AIChat() {
       </header>
 
       {/* Chat Window - Full Page Mode */}
-      <div className="flex-1 max-w-4xl mx-auto w-full">
+      <div className="flex-1 max-w-4xl mx-auto w-full min-h-0">
         <ChatWindow isOpen={true} onClose={() => navigate(-1)} isFullPage={true} />
       </div>
     </div>

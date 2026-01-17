@@ -127,6 +127,16 @@
 }
 
 @layer components {
+  /* KaTeX error styling - show when LaTeX fails to parse */
+  .katex-error {
+    @apply text-destructive bg-destructive/10 px-1.5 py-0.5 rounded text-xs font-mono;
+    border: 1px solid hsl(var(--destructive) / 0.3);
+  }
+  
+  .katex-error::before {
+    content: "⚠ ";
+  }
+
   .glass-card {
     @apply bg-glass/40 backdrop-blur-xl border border-glass-border rounded-2xl;
     box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.3);
