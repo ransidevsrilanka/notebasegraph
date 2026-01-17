@@ -78,6 +78,7 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
       items: [
         { label: 'Enrollments', href: '/admin/enrollments', icon: Users, badge: 0 },
         { label: 'Access Codes', href: '/admin/codes', icon: Key, badge: 0 },
+        { label: 'AI Usage', href: '/admin/ai-usage', icon: Brain, badge: 0 },
         { label: 'Messages', href: '/admin/messages', icon: MessageSquare, badge: 0 },
       ],
     },

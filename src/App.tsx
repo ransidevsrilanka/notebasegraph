@@ -51,6 +51,7 @@ import HeadOpsRequests from "./pages/admin/HeadOpsRequests";
 import Messages from "./pages/admin/Messages";
 import CommissionSettings from "./pages/admin/CommissionSettings";
 import Security from "./pages/admin/Security";
+import AIUsageStats from "./pages/admin/AIUsageStats";
 import AIChat from "./pages/AIChat";
 import NotFound from "./pages/NotFound";
 import { ChatButton } from "./components/ai-chat";
@@ -234,6 +235,11 @@ const App = () => (
             <Route path="/admin/security" element={
               <ProtectedRoute requireAdmin>
                 <Security />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/ai-usage" element={
+              <ProtectedRoute requireAdmin>
+                <AIUsageStats />
               </ProtectedRoute>
             } />
             
