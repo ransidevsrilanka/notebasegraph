@@ -15,82 +15,74 @@ interface MessageBubbleProps {
 }
 
 /**
- * Preprocesses AI content to convert various LaTeX delimiter formats
- * to standard KaTeX-compatible delimiters ($...$ and $$...$$)
+ * Preprocesses AI content to fix malformed LaTeX from AI agents.
+ * Uses a "nuclear" approach: strips broken $ placements and re-wraps properly.
  */
 function preprocessLatex(content: string): string {
+  // Step 1: Convert standard LaTeX delimiters first (before stripping)
   let processed = content;
   
-  // 1. Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
-  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
+  // Convert \[ ... \] to $$BLOCK...BLOCK$$ (use markers to preserve)
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `%%BLOCK%%${inner}%%ENDBLOCK%%`);
   
-  // 2. Convert \( ... \) to $ ... $ (standard LaTeX inline)
-  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner}$`);
+  // Convert \( ... \) to %%INLINE%%...%%ENDINLINE%%
+  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `%%INLINE%%${inner}%%ENDINLINE%%`);
   
-  // 3. Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
-  processed = processed.replace(
-    /\[\s*([^\]]*\\[^\]]*)\s*\]/g, 
-    (_, inner) => `$$${inner.trim()}$$`
-  );
+  // Step 2: Strip ALL existing $ signs (they're likely misplaced by the AI)
+  processed = processed.replace(/\$/g, '');
   
-  // 4. Convert inline math: ( ... ) with LaTeX commands → $ ... $
-  processed = processed.replace(
-    /\(([^)]*\\[^)]*)\)/g,
-    (_, inner) => `$${inner.trim()}$`
-  );
+  // Step 3: Find and wrap LaTeX expressions
+  // Match sequences that contain LaTeX commands (backslash followed by letters)
   
-  // 5. Find sequences of LaTeX commands that are NOT wrapped in $ and wrap them
-  // This handles cases where AI outputs raw LaTeX like \sin\theta=\frac{a}{b}
-  // Match a sequence starting with \ and containing LaTeX-like content
-  const latexSequencePattern = /(?<!\$)(\\[a-zA-Z]+(?:\{[^}]*\})*(?:\s*[=+\-*/^_]?\s*\\?[a-zA-Z]*(?:\{[^}]*\})*)+)(?!\$)/g;
-  processed = processed.replace(latexSequencePattern, (match) => {
-    // Don't wrap if it's already inside $ (check for balanced $)
-    if (match.includes('$')) return match;
-    return `$${match}$`;
+  // Pattern for complex expressions: \command{...} or \command^... or \command_... etc.
+  // This matches things like \frac{a}{b}, \sin\theta, \alpha + \beta, etc.
+  const latexExpressionPattern = /(\\[a-zA-Z]+(?:\s*[\^_]\s*(?:\{[^}]*\}|\d|[a-zA-Z]))?(?:\s*\{[^}]*\})*(?:\s*[=+\-±×÷·*/^_]+\s*(?:\\[a-zA-Z]+(?:\s*[\^_]\s*(?:\{[^}]*\}|\d|[a-zA-Z]))?(?:\s*\{[^}]*\})*|[0-9a-zA-Z]+(?:\s*[\^_]\s*(?:\{[^}]*\}|\d|[a-zA-Z]))?)*)*)/g;
+  
+  processed = processed.replace(latexExpressionPattern, (match) => {
+    // Clean up the match
+    const trimmed = match.trim();
+    if (!trimmed || trimmed.length < 2) return match;
+    return `$${trimmed}$`;
   });
   
-  // 6. Wrap standalone \command{...}{...} patterns (like \frac{a}{b})
-  processed = processed.replace(
-    /(?<!\$)\\(frac|sqrt|binom|choose)\{([^}]*)\}\{([^}]*)\}(?!\$)/g,
-    (match) => `$${match}$`
-  );
-  
-  // 7. Wrap standalone trig and log functions with arguments
-  processed = processed.replace(
-    /(?<!\$)\\(sin|cos|tan|cot|sec|csc|log|ln|exp|lim|sum|int|prod)\s*([^$\s,;.!?]*(?:\{[^}]*\})?)/g,
-    (match) => `$${match}$`
-  );
-  
-  // 8. Wrap standalone Greek letters and symbols
-  const symbols = ['theta', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 
-    'lambda', 'mu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'rho', 'tau', 'eta', 'xi',
+  // Step 4: Wrap any remaining standalone LaTeX commands
+  const standaloneCommands = [
+    'sin', 'cos', 'tan', 'cot', 'sec', 'csc', 'arcsin', 'arccos', 'arctan',
+    'log', 'ln', 'exp', 'lim', 'sum', 'int', 'prod', 'sqrt', 'frac',
+    'theta', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon',
+    'lambda', 'mu', 'nu', 'pi', 'sigma', 'omega', 'phi', 'psi', 'rho', 'tau', 'eta', 'xi',
     'infty', 'pm', 'mp', 'times', 'div', 'cdot', 'leq', 'geq', 'neq', 'approx', 'equiv',
-    'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow', 'forall', 'exists', 'partial'];
+    'rightarrow', 'leftarrow', 'Rightarrow', 'Leftarrow', 'to',
+    'forall', 'exists', 'partial', 'nabla', 'in', 'notin', 'subset', 'cup', 'cap',
+    'qquad', 'quad', 'left', 'right', 'big', 'bigg', 'Big', 'Bigg'
+  ];
   
-  for (const sym of symbols) {
-    const regex = new RegExp(`(?<!\\$|\\\\[a-zA-Z])\\\\${sym}(?!\\$|[a-zA-Z])`, 'g');
-    processed = processed.replace(regex, `$\\${sym}$`);
+  for (const cmd of standaloneCommands) {
+    // Match \command that's not already inside $ and not part of a larger command
+    const regex = new RegExp(`(?<!\\$[^$]*)(?<![a-zA-Z])\\\\${cmd}(?:\\s*\\{[^}]*\\})*(?:\\s*\\{[^}]*\\})*(?![^$]*\\$)(?![a-zA-Z])`, 'g');
+    processed = processed.replace(regex, (match) => `$${match}$`);
   }
   
-  // 9. Fix unclosed $ by finding orphan $ and closing them
-  // Split by lines and fix each line
-  const lines = processed.split('\n');
-  const fixedLines = lines.map(line => {
-    const dollarCount = (line.match(/(?<!\\)\$/g) || []).length;
-    // If odd number of $, add one at the end
-    if (dollarCount % 2 === 1) {
-      return line + '$';
+  // Step 5: Restore block math markers
+  processed = processed.replace(/%%BLOCK%%([\s\S]*?)%%ENDBLOCK%%/g, (_, inner) => `$$${inner}$$`);
+  processed = processed.replace(/%%INLINE%%([\s\S]*?)%%ENDINLINE%%/g, (_, inner) => `$${inner}$`);
+  
+  // Step 6: Clean up - merge adjacent $ $ into single expressions
+  // Replace patterns like $\sin$ $\theta$ with $\sin \theta$
+  processed = processed.replace(/\$\s*\$\s*/g, ' ');
+  
+  // Step 7: Fix any remaining issues
+  // Remove empty math: $$
+  processed = processed.replace(/\$\s*\$/g, '');
+  
+  // Ensure proper spacing around standalone $...$
+  processed = processed.replace(/\$([^$]+)\$/g, (_, inner) => {
+    // Don't double-wrap
+    if (inner.startsWith('$') || inner.endsWith('$')) {
+      return inner;
     }
-    return line;
+    return `$${inner.trim()}$`;
   });
-  processed = fixedLines.join('\n');
-  
-  // 10. Clean up any accidental triple or quadruple $
-  processed = processed.replace(/\${4,}/g, '$$');
-  processed = processed.replace(/\${3}/g, '$$');
-  
-  // 11. Fix $$ $$ that should be $ $
-  processed = processed.replace(/\$\$\s*\$\$/g, '');
   
   return processed;
 }
