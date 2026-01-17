@@ -74,7 +74,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
     return (
       <div className={cn(
         "flex flex-col bg-background border border-border rounded-2xl overflow-hidden shadow-2xl",
-        isFullPage ? "h-full w-full" : "fixed bottom-24 right-6 w-[400px] h-[500px] z-50"
+        isFullPage ? "h-full w-full" : "fixed bottom-20 left-4 right-4 sm:left-auto sm:right-6 sm:w-[380px] h-[70vh] max-h-[500px] z-50"
       )}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
@@ -115,7 +115,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
   return (
     <div className={cn(
       "flex flex-col bg-background border border-border rounded-2xl overflow-hidden shadow-2xl",
-      isFullPage ? "h-full w-full" : "fixed bottom-24 right-6 w-[400px] h-[600px] z-50"
+      isFullPage ? "h-full w-full" : "fixed bottom-20 left-4 right-4 sm:left-auto sm:right-6 sm:w-[380px] h-[75vh] max-h-[600px] z-50"
     )}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">

@@ -16,7 +16,7 @@ interface AICredits {
 
 // Credit limits by tier
 export const TIER_CREDITS: Record<string, number> = {
-  standard: 30000,  // Gold
+  standard: 10000,  // Gold
   lifetime: 100000, // Platinum
   starter: 0,       // Silver - no AI access
 };

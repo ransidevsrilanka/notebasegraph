@@ -20,6 +20,7 @@ import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 import { useAICredits } from '@/hooks/useAICredits';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
   const { user, enrollment, profile, userSubjects, signOut } = useAuth();
@@ -284,7 +285,12 @@ const Dashboard = () => {
             </div>
 
             <div 
-              className="glass-card p-5 cursor-pointer hover:border-emerald-500/30 transition-colors"
+              className={cn(
+                "glass-card p-5 cursor-pointer transition-all duration-300",
+                isAIEligible 
+                  ? "border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:border-emerald-500/60" 
+                  : "hover:border-muted-foreground/30"
+              )}
               onClick={() => isAIEligible ? navigate('/ai-assistant') : navigate('/upgrade')}
             >
               {isAIEligible ? (

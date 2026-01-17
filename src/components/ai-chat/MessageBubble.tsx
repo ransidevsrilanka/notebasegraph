@@ -21,24 +21,48 @@ interface MessageBubbleProps {
 function preprocessLatex(content: string): string {
   let processed = content;
   
-  // Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
-  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, '$$$1$$');
+  // 1. Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$1$$');
   
-  // Convert \( ... \) to $ ... $ (standard LaTeX inline)
-  processed = processed.replace(/\\\((.*?)\\\)/g, '$$$1$');
+  // 2. Convert \( ... \) to $ ... $ (standard LaTeX inline)
+  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$');
   
-  // Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
+  // 3. Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
   // Only match [ ... ] that contains LaTeX commands (backslashes)
   processed = processed.replace(
     /\[\s*([^\]]*\\[^\]]*)\s*\]/g, 
     (_, inner) => `$$${inner.trim()}$$`
   );
   
-  // Convert inline math: ( ... ) with LaTeX commands → $ ... $
+  // 4. Convert inline math: ( ... ) with LaTeX commands → $ ... $
   // Only convert parentheses that contain LaTeX (backslash commands)
   processed = processed.replace(
     /\(([^)]*\\[^)]*)\)/g,
     (_, inner) => `$${inner.trim()}$`
+  );
+  
+  // 5. Wrap standalone LaTeX commands that aren't already in delimiters
+  // Common math commands like \frac{}{}, \lim, \int, etc.
+  const latexCommands = [
+    'frac', 'lim', 'int', 'sum', 'prod', 'sqrt', 'sin', 'cos', 'tan', 'log', 'ln', 'exp',
+    'infty', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'theta', 'lambda',
+    'mu', 'pi', 'sigma', 'omega', 'partial', 'nabla', 'forall', 'exists', 'in', 'notin',
+    'subset', 'subseteq', 'cup', 'cap', 'wedge', 'vee', 'neg', 'Rightarrow', 'Leftarrow',
+    'Longrightarrow', 'cdot', 'times', 'div', 'pm', 'mp', 'leq', 'geq', 'neq', 'approx',
+    'equiv', 'to', 'circ', 'oplus', 'otimes'
+  ].join('|');
+  
+  // Match LaTeX commands with optional braces that are NOT already inside $ delimiters
+  // This regex finds \command or \command{...} patterns
+  processed = processed.replace(
+    new RegExp(`(?<!\\$)\\\\(${latexCommands})(\\{[^}]*\\})*(\\{[^}]*\\})*(?!\\$)`, 'g'),
+    (match) => {
+      // Check if already wrapped in $
+      const beforeMatch = processed.indexOf(match);
+      const before = processed.slice(Math.max(0, beforeMatch - 1), beforeMatch);
+      if (before === '$') return match;
+      return `$${match}$`;
+    }
   );
   
   return processed;
@@ -91,10 +115,10 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
         >
           {isUser ? (
             // User messages - plain text
-            <p className="whitespace-pre-wrap break-words">{content}</p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">{content}</p>
           ) : (
           // Assistant messages - markdown with LaTeX and code
-            <div className="prose prose-invert prose-sm max-w-none">
+            <div className="prose prose-invert prose-xs max-w-none text-[13px] leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[rehypeKatex]}
@@ -151,28 +175,28 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
                   },
                   // Lists
                   ul: ({ children }) => (
-                    <ul className="list-disc list-inside space-y-1 my-2">
+                    <ul className="list-disc list-inside space-y-0.5 my-1.5 text-[13px]">
                       {children}
                     </ul>
                   ),
                   ol: ({ children }) => (
-                    <ol className="list-decimal list-inside space-y-1 my-2">
+                    <ol className="list-decimal list-inside space-y-0.5 my-1.5 text-[13px]">
                       {children}
                     </ol>
                   ),
                   // Paragraphs
                   p: ({ children }) => (
-                    <p className="my-2 first:mt-0 last:mb-0">{children}</p>
+                    <p className="my-1.5 first:mt-0 last:mb-0 text-[13px]">{children}</p>
                   ),
                   // Headings
                   h1: ({ children }) => (
-                    <h1 className="text-lg font-bold mt-4 mb-2">{children}</h1>
+                    <h1 className="text-base font-bold mt-3 mb-1.5">{children}</h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-base font-bold mt-3 mb-2">{children}</h2>
+                    <h2 className="text-sm font-bold mt-2 mb-1">{children}</h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="text-sm font-bold mt-2 mb-1">{children}</h3>
+                    <h3 className="text-xs font-bold mt-2 mb-1">{children}</h3>
                   ),
                   // Tables
                   table: ({ children }) => (
