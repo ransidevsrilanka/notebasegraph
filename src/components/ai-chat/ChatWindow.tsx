@@ -20,7 +20,7 @@ interface ChatWindowProps {
 export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   const { messages, isLoading, sendMessage, clearMessages } = useAIChat();
@@ -33,10 +33,15 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
     remainingCredits 
   } = useAICredits();
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive or loading changes
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
+    }
+  }, [messages, isLoading]);
 
   // Focus textarea when opened
   useEffect(() => {
@@ -161,7 +166,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1" ref={scrollAreaRef}>
         <div className="py-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
@@ -201,7 +206,6 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
                   </div>
                 </div>
               )}
-              <div ref={messagesEndRef} />
             </>
           )}
         </div>
