@@ -19,8 +19,13 @@ interface MessageBubbleProps {
  * Uses a "nuclear" approach: strips broken $ placements and re-wraps properly.
  */
 function preprocessLatex(content: string): string {
+  // Step 0: Normalize troublesome Unicode that breaks KaTeX parsing
+  // (apostrophes, non-breaking hyphens, en/em dashes)
+  let processed = content
+    .replace(/\u2019/g, "'")
+    .replace(/[\u2010\u2011\u2012\u2013\u2014]/g, "-");
+
   // Step 1: Convert standard LaTeX delimiters first (before stripping)
-  let processed = content;
   
   // Convert \[ ... \] to $$BLOCK...BLOCK$$ (use markers to preserve)
   processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `%%BLOCK%%${inner}%%ENDBLOCK%%`);
@@ -140,7 +145,7 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
             <div className="prose prose-invert prose-xs max-w-none text-[13px] leading-relaxed">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
-                rehypePlugins={[rehypeKatex]}
+                rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: "ignore" }]]}
                 components={{
                   // Code blocks with syntax highlighting
                   code({ node, className, children, ...props }) {
