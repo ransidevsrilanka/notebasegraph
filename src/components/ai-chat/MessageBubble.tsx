@@ -14,6 +14,36 @@ interface MessageBubbleProps {
   timestamp?: Date;
 }
 
+/**
+ * Preprocesses AI content to convert various LaTeX delimiter formats
+ * to standard KaTeX-compatible delimiters ($...$ and $$...$$)
+ */
+function preprocessLatex(content: string): string {
+  let processed = content;
+  
+  // Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, '$$$1$$');
+  
+  // Convert \( ... \) to $ ... $ (standard LaTeX inline)
+  processed = processed.replace(/\\\((.*?)\\\)/g, '$$$1$');
+  
+  // Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
+  // Only match [ ... ] that contains LaTeX commands (backslashes)
+  processed = processed.replace(
+    /\[\s*([^\]]*\\[^\]]*)\s*\]/g, 
+    (_, inner) => `$$${inner.trim()}$$`
+  );
+  
+  // Convert inline math: ( ... ) with LaTeX commands → $ ... $
+  // Only convert parentheses that contain LaTeX (backslash commands)
+  processed = processed.replace(
+    /\(([^)]*\\[^)]*)\)/g,
+    (_, inner) => `$${inner.trim()}$`
+  );
+  
+  return processed;
+}
+
 export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -63,7 +93,7 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
             // User messages - plain text
             <p className="whitespace-pre-wrap break-words">{content}</p>
           ) : (
-            // Assistant messages - markdown with LaTeX and code
+          // Assistant messages - markdown with LaTeX and code
             <div className="prose prose-invert prose-sm max-w-none">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
@@ -179,7 +209,7 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
                   ),
                 }}
               >
-                {content}
+                {preprocessLatex(content)}
               </ReactMarkdown>
             </div>
           )}
