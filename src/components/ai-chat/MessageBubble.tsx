@@ -22,10 +22,11 @@ function preprocessLatex(content: string): string {
   let processed = content;
   
   // 1. Convert \[ ... \] to $$ ... $$ (standard LaTeX block)
-  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, '$$$$1$$');
+  // Using function to avoid $ escaping issues
+  processed = processed.replace(/\\\[([\s\S]*?)\\\]/g, (_, inner) => `$$${inner}$$`);
   
   // 2. Convert \( ... \) to $ ... $ (standard LaTeX inline)
-  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$');
+  processed = processed.replace(/\\\(([\s\S]*?)\\\)/g, (_, inner) => `$${inner}$`);
   
   // 3. Convert block math: [ ... ] → $$ ... $$ (Wikipedia-style)
   // Only match [ ... ] that contains LaTeX commands (backslashes)
@@ -41,29 +42,34 @@ function preprocessLatex(content: string): string {
     (_, inner) => `$${inner.trim()}$`
   );
   
-  // 5. Wrap standalone LaTeX commands that aren't already in delimiters
-  // Common math commands like \frac{}{}, \lim, \int, etc.
-  const latexCommands = [
-    'frac', 'lim', 'int', 'sum', 'prod', 'sqrt', 'sin', 'cos', 'tan', 'log', 'ln', 'exp',
-    'infty', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'theta', 'lambda',
-    'mu', 'pi', 'sigma', 'omega', 'partial', 'nabla', 'forall', 'exists', 'in', 'notin',
-    'subset', 'subseteq', 'cup', 'cap', 'wedge', 'vee', 'neg', 'Rightarrow', 'Leftarrow',
-    'Longrightarrow', 'cdot', 'times', 'div', 'pm', 'mp', 'leq', 'geq', 'neq', 'approx',
-    'equiv', 'to', 'circ', 'oplus', 'otimes'
-  ].join('|');
+  // 5. Fix standalone LaTeX commands not wrapped in delimiters
+  // Match patterns like \frac{...}{...} or \infty that appear outside of $ delimiters
+  // We do this by finding sequences of LaTeX commands and wrapping them
   
-  // Match LaTeX commands with optional braces that are NOT already inside $ delimiters
-  // This regex finds \command or \command{...} patterns
+  // First, find and wrap \frac{...}{...} patterns that aren't in $ delimiters
   processed = processed.replace(
-    new RegExp(`(?<!\\$)\\\\(${latexCommands})(\\{[^}]*\\})*(\\{[^}]*\\})*(?!\\$)`, 'g'),
-    (match) => {
-      // Check if already wrapped in $
-      const beforeMatch = processed.indexOf(match);
-      const before = processed.slice(Math.max(0, beforeMatch - 1), beforeMatch);
-      if (before === '$') return match;
-      return `$${match}$`;
-    }
+    /(?<!\$)\\frac\{([^}]*)\}\{([^}]*)\}(?!\$)/g,
+    (match) => `$${match}$`
   );
+  
+  // Wrap other common standalone symbols
+  const standaloneSymbols = ['infty', 'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 
+    'theta', 'lambda', 'mu', 'pi', 'sigma', 'omega', 'to', 'rightarrow', 'leftarrow', 
+    'Rightarrow', 'Leftarrow', 'leq', 'geq', 'neq', 'approx', 'equiv', 'pm', 'mp', 
+    'times', 'div', 'cdot', 'ldots', 'cdots', 'vdots', 'ddots'];
+  
+  for (const symbol of standaloneSymbols) {
+    // Match \symbol that's not inside $ ... $
+    const regex = new RegExp(`(?<!\\$[^$]*)\\\\${symbol}(?![^$]*\\$)`, 'g');
+    processed = processed.replace(regex, `$\\${symbol}$`);
+  }
+  
+  // Clean up any double-wrapped $$ ... $$ that should be $ ... $
+  // (in case we wrapped something that was already wrapped)
+  processed = processed.replace(/\$\$\$([^$]+)\$\$\$/g, (_, inner) => `$$${inner}$$`);
+  
+  // Fix cases where we have $ $ $ $ (multiple nested)
+  processed = processed.replace(/\$\s*\$([^$]+)\$\s*\$/g, (_, inner) => `$${inner}$`);
   
   return processed;
 }
