@@ -5,18 +5,20 @@ import { supabase } from '@/lib/storageClient';
 import { Button } from '@/components/ui/button';
 import {
   BookOpen,
-  Calendar,
   Crown,
   ChevronRight,
   Clock,
   Shield,
   LogOut,
+  Sparkles,
+  ArrowUpRight,
 } from 'lucide-react';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Subject } from '@/types/database';
 import { useBranding } from '@/hooks/useBranding';
 import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
+import { useAICredits } from '@/hooks/useAICredits';
 import { toast } from 'sonner';
 
 const Dashboard = () => {
@@ -24,6 +26,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { branding } = useBranding();
+  const { isEligible: isAIEligible, remainingCredits, isLoading: creditsLoading } = useAICredits();
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -280,16 +283,40 @@ const Dashboard = () => {
               </p>
             </div>
 
-            <div className="glass-card p-5">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                </div>
-              </div>
-              <p className="text-2xl font-display font-bold text-foreground">{daysRemaining !== null ? daysRemaining : '∞'}</p>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
-                {enrollment.tier === 'lifetime' ? 'Lifetime' : 'Days Left'}
-              </p>
+            <div 
+              className="glass-card p-5 cursor-pointer hover:border-emerald-500/30 transition-colors"
+              onClick={() => isAIEligible ? navigate('/ai-assistant') : navigate('/upgrade')}
+            >
+              {isAIEligible ? (
+                <>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-emerald-500" />
+                    </div>
+                  </div>
+                  <p className="text-2xl font-display font-bold text-foreground">
+                    {creditsLoading ? '...' : remainingCredits.toLocaleString()}
+                  </p>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
+                    AI Credits
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <p className="text-lg font-display font-bold text-foreground">Get AI</p>
+                    <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
+                    Upgrade
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="glass-card p-5">

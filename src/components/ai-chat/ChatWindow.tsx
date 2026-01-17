@@ -7,6 +7,7 @@ import { useAIChat } from "@/hooks/useAIChat";
 import { useAICredits } from "@/hooks/useAICredits";
 import { MessageBubble } from "./MessageBubble";
 import { CreditBar } from "./CreditBar";
+import { QuickActions } from "./QuickActions";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 
@@ -163,14 +164,18 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       <ScrollArea className="flex-1">
         <div className="py-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full px-6 py-12 text-center">
+            <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
                 <Sparkles className="h-6 w-6 text-muted-foreground" />
               </div>
               <h4 className="font-medium mb-2">How can I help you today?</h4>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground mb-6">
                 Ask me anything about your studies - O/L, A/L subjects, practice problems, or explanations.
               </p>
+              <QuickActions 
+                onSelect={(template) => setInput(template)} 
+                disabled={isSuspended || (!creditsLoading && remainingCredits <= 0)}
+              />
             </div>
           ) : (
             <>
@@ -213,11 +218,11 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
             placeholder={
               isSuspended 
                 ? "Chat suspended..." 
-                : remainingCredits <= 0 
+                : !creditsLoading && remainingCredits <= 0 
                   ? "No credits remaining..." 
                   : "Ask anything about your studies..."
             }
-            disabled={!canSend && !input.trim()}
+            disabled={isSuspended || (!creditsLoading && remainingCredits <= 0)}
             className="flex-1 min-h-[44px] max-h-[120px] resize-none"
             rows={1}
           />

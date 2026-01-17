@@ -1,7 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAICredits } from "./useAICredits";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 export interface ChatMessage {
   id: string;
@@ -38,6 +40,46 @@ export function useAIChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { refetch: refetchCredits, isEligible, isSuspended, remainingCredits } = useAICredits();
+  const { user, enrollment } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Load conversation history from database
+  const { data: historyData } = useQuery({
+    queryKey: ['ai-chat-history', user?.id, enrollment?.id],
+    queryFn: async () => {
+      if (!user || !enrollment) return [];
+      
+      const { data, error } = await supabase
+        .from('ai_chat_messages')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('enrollment_id', enrollment.id)
+        .order('created_at', { ascending: true })
+        .limit(50);
+      
+      if (error) {
+        console.error('Error loading chat history:', error);
+        return [];
+      }
+      
+      return data || [];
+    },
+    enabled: !!user && !!enrollment,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Initialize messages from history
+  useEffect(() => {
+    if (historyData && historyData.length > 0 && messages.length === 0) {
+      const loadedMessages: ChatMessage[] = historyData.map((m) => ({
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        timestamp: new Date(m.created_at || Date.now()),
+      }));
+      setMessages(loadedMessages);
+    }
+  }, [historyData]);
 
   const sendMessage = useCallback(async (content: string): Promise<boolean> => {
     if (!content.trim()) return false;
@@ -153,9 +195,28 @@ export function useAIChat() {
     }
   }, [messages, isEligible, isSuspended, remainingCredits, refetchCredits]);
 
-  const clearMessages = useCallback(() => {
+  const clearMessages = useCallback(async () => {
+    // Clear local state
     setMessages([]);
-  }, []);
+    
+    // Clear from database
+    if (user && enrollment) {
+      try {
+        await supabase
+          .from('ai_chat_messages')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('enrollment_id', enrollment.id);
+        
+        // Invalidate the query cache
+        queryClient.invalidateQueries({ queryKey: ['ai-chat-history', user.id, enrollment.id] });
+        
+        toast.success("Conversation cleared");
+      } catch (error) {
+        console.error("Error clearing chat history:", error);
+      }
+    }
+  }, [user, enrollment, queryClient]);
 
   return {
     messages,
