@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
+import remarkGfm from "remark-gfm";
 import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Bot, User, Copy, Check } from "lucide-react";
-import { useState, memo } from "react";
+import { useState, memo, useRef, useLayoutEffect } from "react";
 import { Button } from "@/components/ui/button";
 
 interface MessageBubbleProps {
@@ -15,46 +16,9 @@ interface MessageBubbleProps {
 }
 
 /**
- * Fixes malformed markdown tables that AI outputs on a single line.
- * Converts: | H1 | H2 | |---|---| | C1 | C2 | | C3 | C4 |
- * To proper multi-line format with newlines.
+ * Normalize common AI LaTeX delimiters to standard $ / $$ so remark-math picks them up.
  */
-function fixMalformedTables(content: string): string {
-  const singleLineTablePattern =
-    /(\|[^|\n]+(?:\|[^|\n]+)+)\s*(\|[-:\s]+(?:\|[-:\s]+)+\|)\s*(\|[^|\n]+(?:\|[^|\n]+)*\|?)/g;
-
-  return content.replace(
-    singleLineTablePattern,
-    (match, headerPart, separatorPart, bodyPart) => {
-      const header = headerPart.trim();
-      const separator = separatorPart.trim();
-
-      const headerCols = (header.match(/\|/g) || []).length - 1;
-      if (headerCols <= 0) return match;
-
-      const bodyCells = bodyPart
-        .split("|")
-        .filter((cell: string) => cell.trim() !== "");
-      const rows: string[] = [];
-
-      for (let i = 0; i < bodyCells.length; i += headerCols) {
-        const rowCells = bodyCells.slice(i, i + headerCols);
-        if (rowCells.length > 0) {
-          rows.push("| " + rowCells.map((c: string) => c.trim()).join(" | ") + " |");
-        }
-      }
-
-      return `${header}\n${separator}\n${rows.join("\n")}`;
-    }
-  );
-}
-
-/**
- * Minimal normalization so common AI delimiters render in KaTeX.
- * - \( ... \) -> $...$
- * - \[ ... \] -> $$...$$
- */
-function normalizeLatexDelimiters(input: string): string {
+function normalizeLatex(input: string): string {
   return input
     .replace(/\\\[/g, "$$")
     .replace(/\\\]/g, "$$")
@@ -68,6 +32,7 @@ export const MessageBubble = memo(function MessageBubble({
   timestamp,
 }: MessageBubbleProps) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const copyToClipboard = async (code: string) => {
     await navigator.clipboard.writeText(code);
@@ -77,10 +42,23 @@ export const MessageBubble = memo(function MessageBubble({
 
   const isUser = role === "user";
 
+  // Enforce max-width on any child that might have escaped containment
+  useLayoutEffect(() => {
+    if (!contentRef.current) return;
+    const el = contentRef.current;
+    const maxW = el.clientWidth;
+    el.querySelectorAll<HTMLElement>("*").forEach((child) => {
+      if (child.scrollWidth > maxW) {
+        child.style.maxWidth = "100%";
+        child.style.overflowX = "auto";
+      }
+    });
+  }, [content]);
+
   return (
     <div
       className={cn(
-        "flex gap-3 px-4 py-3",
+        "flex gap-3 px-4 py-3 w-full",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
@@ -88,54 +66,51 @@ export const MessageBubble = memo(function MessageBubble({
       <div
         className={cn(
           "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-          isUser
-            ? "bg-brand/20 text-brand"
-            : "bg-emerald-500/20 text-emerald-500"
+          isUser ? "bg-brand/20 text-brand" : "bg-emerald-500/20 text-emerald-500"
         )}
       >
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
 
-      {/* Message Content */}
+      {/* Message Content Wrapper */}
       <div
         className={cn(
-          "flex flex-col min-w-0 w-full max-w-[85%] space-y-1",
+          "flex flex-col min-w-0 max-w-[calc(100%-3rem)] space-y-1",
           isUser ? "items-end" : "items-start"
         )}
       >
+        {/* Bubble */}
         <div
+          ref={contentRef}
           className={cn(
-            "rounded-2xl px-4 py-3 w-full max-w-full min-w-0 overflow-hidden",
+            "rounded-2xl px-4 py-3 max-w-full min-w-0 overflow-hidden break-words",
             isUser
               ? "bg-brand text-brand-foreground rounded-tr-md"
               : "bg-muted text-foreground rounded-tl-md"
           )}
+          style={{ overflowWrap: "anywhere", wordBreak: "break-word" }}
         >
           {isUser ? (
-            // User messages - plain text
-            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed [overflow-wrap:anywhere]">
+            <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
               {content}
             </p>
           ) : (
-            // Assistant messages - markdown with LaTeX and code
-            <div className="prose prose-invert prose-xs max-w-full min-w-0 text-[13px] leading-relaxed overflow-hidden [overflow-wrap:anywhere]">
+            <div className="chat-prose prose prose-invert prose-xs max-w-full min-w-0 text-[13px] leading-relaxed">
               <ReactMarkdown
-                remarkPlugins={[remarkMath]}
-                rehypePlugins={[[rehypeKatex, { 
-                  throwOnError: false, 
-                  strict: "ignore",
-                  trust: false,
-                  macros: {}
-                }]]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[
+                  [
+                    rehypeKatex,
+                    { throwOnError: false, strict: "ignore", trust: false, macros: {} },
+                  ],
+                ]}
                 components={{
-                  // Code blocks with syntax highlighting
-                  code({ node, className, children, ...props }) {
+                  // Code blocks
+                  code({ className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || "");
                     const codeString = String(children).replace(/\n$/, "");
-                    
-                    // Check if it's an inline code or block
                     const isInline = !match && !codeString.includes("\n");
-                    
+
                     if (isInline) {
                       return (
                         <code
@@ -148,8 +123,8 @@ export const MessageBubble = memo(function MessageBubble({
                     }
 
                     return (
-                      <div className="relative group my-3">
-                        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="relative group my-3 max-w-full overflow-x-auto">
+                        <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -171,6 +146,8 @@ export const MessageBubble = memo(function MessageBubble({
                             margin: 0,
                             borderRadius: "0.5rem",
                             fontSize: "0.8125rem",
+                            maxWidth: "100%",
+                            overflowX: "auto",
                           }}
                         >
                           {codeString}
@@ -203,21 +180,23 @@ export const MessageBubble = memo(function MessageBubble({
                   h3: ({ children }) => (
                     <h3 className="text-xs font-bold mt-2 mb-1">{children}</h3>
                   ),
-                  // Tables - contained with horizontal scroll
+                  // Tables - horizontal scroll wrapper
                   table: ({ children }) => (
                     <div className="overflow-x-auto max-w-full my-3">
-                      <table className="border-collapse border border-border text-xs w-max min-w-full">
+                      <table className="border-collapse border border-border text-xs min-w-max">
                         {children}
                       </table>
                     </div>
                   ),
                   th: ({ children }) => (
-                    <th className="border border-border px-3 py-2 bg-muted text-left font-medium">
+                    <th className="border border-border px-3 py-2 bg-muted/50 text-left font-medium whitespace-nowrap">
                       {children}
                     </th>
                   ),
                   td: ({ children }) => (
-                    <td className="border border-border px-3 py-2">{children}</td>
+                    <td className="border border-border px-3 py-2 whitespace-nowrap">
+                      {children}
+                    </td>
                   ),
                   // Blockquotes
                   blockquote: ({ children }) => (
@@ -238,7 +217,7 @@ export const MessageBubble = memo(function MessageBubble({
                   ),
                 }}
               >
-                {fixMalformedTables(normalizeLatexDelimiters(content))}
+                {normalizeLatex(content)}
               </ReactMarkdown>
             </div>
           )}
