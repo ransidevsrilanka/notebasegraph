@@ -35,12 +35,15 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
 
   // Auto-scroll to bottom when new messages arrive or loading changes
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+    // Use requestAnimationFrame to wait for DOM to update before scrolling
+    requestAnimationFrame(() => {
+      if (scrollAreaRef.current) {
+        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        if (scrollContainer) {
+          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        }
       }
-    }
+    });
   }, [messages, isLoading]);
 
   // Focus textarea when opened
