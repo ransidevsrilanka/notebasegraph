@@ -127,55 +127,60 @@
 }
 
 @layer components {
-  /* KaTeX error styling */
+  /* KaTeX error styling - show when LaTeX fails to parse */
   .katex-error {
     @apply text-destructive bg-destructive/10 px-1.5 py-0.5 rounded text-xs font-mono;
     border: 1px solid hsl(var(--destructive) / 0.3);
   }
-
+  
   .katex-error::before {
     content: "⚠ ";
   }
 
-  /* ========== CHAT PROSE - BULLETPROOF CONTAINMENT ========== */
-  .chat-prose,
-  .chat-prose * {
-    max-width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box;
-  }
-
-  .chat-prose {
+  /* Chat message containment - bulletproof overflow handling */
+  .prose {
+    max-width: 100%;
     overflow-wrap: anywhere;
     word-break: break-word;
+    min-width: 0;
   }
 
-  /* KaTeX block math */
-  .chat-prose .katex-display {
+  .prose * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* KaTeX: never expand bubble; scroll inside formula if needed */
+  .prose .katex-display {
+    max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
-    max-width: 100% !important;
-    padding: 0.25rem 0;
+    padding: 0.5rem 0;
   }
 
-  /* KaTeX inline */
-  .chat-prose .katex {
-    max-width: 100% !important;
-    white-space: normal;
+  .prose .katex-display > .katex {
+    max-width: 100%;
   }
 
-  /* Tables */
-  .chat-prose table {
+  .prose .katex {
+    max-width: 100%;
+  }
+
+  /* Markdown tables: always scroll, never widen layout */
+  .prose table {
     display: block;
-    max-width: 100% !important;
+    max-width: 100%;
     overflow-x: auto;
+    border-collapse: collapse;
   }
 
-  /* Code & pre */
-  .chat-prose pre,
-  .chat-prose code {
-    max-width: 100% !important;
+  .prose pre {
     overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .prose code {
+    word-break: break-word;
   }
 
   .glass-card {
