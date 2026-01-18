@@ -137,11 +137,24 @@
     content: "⚠ ";
   }
 
-  /* Chat message KaTeX containment - bulletproof overflow handling */
+  /* Chat message containment - bulletproof overflow handling */
+  .prose {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    min-width: 0;
+  }
+
+  .prose * {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* KaTeX: never expand bubble; scroll inside formula if needed */
   .prose .katex-display {
+    max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
-    max-width: 100%;
     padding: 0.5rem 0;
   }
 
@@ -149,21 +162,16 @@
     max-width: 100%;
   }
 
-  .prose .katex-display .katex-html {
-    max-width: 100%;
-    overflow-x: auto;
-  }
-
-  /* Inline math containment */
   .prose .katex {
     max-width: 100%;
-    overflow-wrap: break-word;
   }
 
-  /* Defensive text wrapping for all prose content */
-  .prose {
-    word-break: break-word;
-    overflow-wrap: anywhere;
+  /* Markdown tables: always scroll, never widen layout */
+  .prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
   }
 
   .prose pre {
@@ -172,7 +180,7 @@
   }
 
   .prose code {
-    word-break: break-all;
+    word-break: break-word;
   }
 
   .glass-card {
