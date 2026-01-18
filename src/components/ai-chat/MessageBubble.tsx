@@ -20,30 +20,53 @@ interface MessageBubbleProps {
  * To proper multi-line format with newlines.
  */
 function fixMalformedTables(content: string): string {
-  const singleLineTablePattern = /(\|[^|\n]+(?:\|[^|\n]+)+)\s*(\|[-:\s]+(?:\|[-:\s]+)+\|)\s*(\|[^|\n]+(?:\|[^|\n]+)*\|?)/g;
-  
-  return content.replace(singleLineTablePattern, (match, headerPart, separatorPart, bodyPart) => {
-    const header = headerPart.trim();
-    const separator = separatorPart.trim();
-    
-    const headerCols = (header.match(/\|/g) || []).length - 1;
-    if (headerCols <= 0) return match;
-    
-    const bodyCells = bodyPart.split('|').filter((cell: string) => cell.trim() !== '');
-    const rows: string[] = [];
-    
-    for (let i = 0; i < bodyCells.length; i += headerCols) {
-      const rowCells = bodyCells.slice(i, i + headerCols);
-      if (rowCells.length > 0) {
-        rows.push('| ' + rowCells.map((c: string) => c.trim()).join(' | ') + ' |');
+  const singleLineTablePattern =
+    /(\|[^|\n]+(?:\|[^|\n]+)+)\s*(\|[-:\s]+(?:\|[-:\s]+)+\|)\s*(\|[^|\n]+(?:\|[^|\n]+)*\|?)/g;
+
+  return content.replace(
+    singleLineTablePattern,
+    (match, headerPart, separatorPart, bodyPart) => {
+      const header = headerPart.trim();
+      const separator = separatorPart.trim();
+
+      const headerCols = (header.match(/\|/g) || []).length - 1;
+      if (headerCols <= 0) return match;
+
+      const bodyCells = bodyPart
+        .split("|")
+        .filter((cell: string) => cell.trim() !== "");
+      const rows: string[] = [];
+
+      for (let i = 0; i < bodyCells.length; i += headerCols) {
+        const rowCells = bodyCells.slice(i, i + headerCols);
+        if (rowCells.length > 0) {
+          rows.push("| " + rowCells.map((c: string) => c.trim()).join(" | ") + " |");
+        }
       }
+
+      return `${header}\n${separator}\n${rows.join("\n")}`;
     }
-    
-    return `${header}\n${separator}\n${rows.join('\n')}`;
-  });
+  );
 }
 
-export const MessageBubble = memo(function MessageBubble({ role, content, timestamp }: MessageBubbleProps) {
+/**
+ * Minimal normalization so common AI delimiters render in KaTeX.
+ * - \( ... \) -> $...$
+ * - \[ ... \] -> $$...$$
+ */
+function normalizeLatexDelimiters(input: string): string {
+  return input
+    .replace(/\\\[/g, "$$")
+    .replace(/\\\]/g, "$$")
+    .replace(/\\\(/g, "$")
+    .replace(/\\\)/g, "$");
+}
+
+export const MessageBubble = memo(function MessageBubble({
+  role,
+  content,
+  timestamp,
+}: MessageBubbleProps) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const copyToClipboard = async (code: string) => {
@@ -76,13 +99,13 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
       {/* Message Content */}
       <div
         className={cn(
-          "max-w-[85%] min-w-0 w-fit space-y-1",
+          "flex flex-col min-w-0 w-full max-w-[85%] space-y-1",
           isUser ? "items-end" : "items-start"
         )}
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3 max-w-full overflow-hidden",
+            "rounded-2xl px-4 py-3 w-full max-w-full min-w-0 overflow-hidden",
             isUser
               ? "bg-brand text-brand-foreground rounded-tr-md"
               : "bg-muted text-foreground rounded-tl-md"
@@ -90,10 +113,12 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
         >
           {isUser ? (
             // User messages - plain text
-            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed [overflow-wrap:anywhere]">{content}</p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed [overflow-wrap:anywhere]">
+              {content}
+            </p>
           ) : (
-          // Assistant messages - markdown with LaTeX and code
-            <div className="prose prose-invert prose-xs max-w-full text-[13px] leading-relaxed overflow-hidden [overflow-wrap:anywhere]">
+            // Assistant messages - markdown with LaTeX and code
+            <div className="prose prose-invert prose-xs max-w-full min-w-0 text-[13px] leading-relaxed overflow-hidden [overflow-wrap:anywhere]">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[[rehypeKatex, { 
@@ -180,8 +205,8 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
                   ),
                   // Tables - contained with horizontal scroll
                   table: ({ children }) => (
-                    <div className="overflow-x-auto max-w-full my-3 -mx-4 px-4">
-                      <table className="border-collapse border border-border text-xs whitespace-nowrap">
+                    <div className="overflow-x-auto max-w-full my-3">
+                      <table className="border-collapse border border-border text-xs w-max min-w-full">
                         {children}
                       </table>
                     </div>
@@ -213,7 +238,7 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
                   ),
                 }}
               >
-                {fixMalformedTables(content)}
+                {fixMalformedTables(normalizeLatexDelimiters(content))}
               </ReactMarkdown>
             </div>
           )}

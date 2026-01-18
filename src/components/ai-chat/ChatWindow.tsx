@@ -33,17 +33,22 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
     remainingCredits 
   } = useAICredits();
 
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    if (!scrollAreaRef.current) return;
+    const viewport = scrollAreaRef.current.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    ) as HTMLElement | null;
+    if (!viewport) return;
+
+    // rAF ensures we scroll after layout/content paint
+    requestAnimationFrame(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+    });
+  };
+
   // Auto-scroll to bottom when new messages arrive or loading changes
   useEffect(() => {
-    // Use requestAnimationFrame to wait for DOM to update before scrolling
-    requestAnimationFrame(() => {
-      if (scrollAreaRef.current) {
-        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (scrollContainer) {
-          scrollContainer.scrollTop = scrollContainer.scrollHeight;
-        }
-      }
-    });
+    scrollToBottom("auto");
   }, [messages, isLoading]);
 
   // Focus textarea when opened
@@ -59,6 +64,10 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
 
     const message = input;
     setInput("");
+
+    // Keep latest message visible immediately
+    scrollToBottom("auto");
+
     await sendMessage(message);
   };
 
