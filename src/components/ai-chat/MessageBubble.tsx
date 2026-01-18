@@ -76,13 +76,13 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
       {/* Message Content */}
       <div
         className={cn(
-          "max-w-[85%] min-w-0 space-y-1",
+          "max-w-[85%] min-w-0 w-fit space-y-1",
           isUser ? "items-end" : "items-start"
         )}
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3 overflow-hidden break-words",
+            "rounded-2xl px-4 py-3 max-w-full overflow-hidden",
             isUser
               ? "bg-brand text-brand-foreground rounded-tr-md"
               : "bg-muted text-foreground rounded-tl-md"
@@ -90,10 +90,10 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
         >
           {isUser ? (
             // User messages - plain text
-            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed">{content}</p>
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed [overflow-wrap:anywhere]">{content}</p>
           ) : (
           // Assistant messages - markdown with LaTeX and code
-            <div className="prose prose-invert prose-xs max-w-none text-[13px] leading-relaxed">
+            <div className="prose prose-invert prose-xs max-w-full text-[13px] leading-relaxed overflow-hidden [overflow-wrap:anywhere]">
               <ReactMarkdown
                 remarkPlugins={[remarkMath]}
                 rehypePlugins={[[rehypeKatex, { 
@@ -178,10 +178,10 @@ export const MessageBubble = memo(function MessageBubble({ role, content, timest
                   h3: ({ children }) => (
                     <h3 className="text-xs font-bold mt-2 mb-1">{children}</h3>
                   ),
-                  // Tables
+                  // Tables - contained with horizontal scroll
                   table: ({ children }) => (
-                    <div className="overflow-x-auto my-3">
-                      <table className="min-w-full border-collapse border border-border">
+                    <div className="overflow-x-auto max-w-full my-3 -mx-4 px-4">
+                      <table className="border-collapse border border-border text-xs whitespace-nowrap">
                         {children}
                       </table>
                     </div>
