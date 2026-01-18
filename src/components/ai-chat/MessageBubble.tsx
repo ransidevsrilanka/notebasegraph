@@ -92,6 +92,40 @@ function preprocessLatex(content: string): string {
   return processed;
 }
 
+/**
+ * Fixes malformed markdown tables that AI outputs on a single line.
+ * Converts: | H1 | H2 | |---|---| | C1 | C2 | | C3 | C4 |
+ * To proper multi-line format with newlines.
+ */
+function fixMalformedTables(content: string): string {
+  // Pattern to detect tables all on one line: | text | text | |---| | text |
+  // Look for separator pattern embedded in the line
+  const singleLineTablePattern = /(\|[^|\n]+(?:\|[^|\n]+)+)\s*(\|[-:\s]+(?:\|[-:\s]+)+\|)\s*(\|[^|\n]+(?:\|[^|\n]+)*\|?)/g;
+  
+  return content.replace(singleLineTablePattern, (match, headerPart, separatorPart, bodyPart) => {
+    // Clean up each part
+    const header = headerPart.trim();
+    const separator = separatorPart.trim();
+    
+    // Split body into rows - count columns from header to know row boundaries
+    const headerCols = (header.match(/\|/g) || []).length - 1;
+    if (headerCols <= 0) return match;
+    
+    // Split body cells and reconstruct rows
+    const bodyCells = bodyPart.split('|').filter((cell: string) => cell.trim() !== '');
+    const rows: string[] = [];
+    
+    for (let i = 0; i < bodyCells.length; i += headerCols) {
+      const rowCells = bodyCells.slice(i, i + headerCols);
+      if (rowCells.length > 0) {
+        rows.push('| ' + rowCells.map((c: string) => c.trim()).join(' | ') + ' |');
+      }
+    }
+    
+    return `${header}\n${separator}\n${rows.join('\n')}`;
+  });
+}
+
 export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -125,13 +159,13 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
       {/* Message Content */}
       <div
         className={cn(
-          "flex-1 max-w-[85%] space-y-1",
+          "max-w-[85%] min-w-0 space-y-1",
           isUser ? "items-end" : "items-start"
         )}
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3",
+            "rounded-2xl px-4 py-3 overflow-hidden break-words",
             isUser
               ? "bg-brand text-brand-foreground rounded-tr-md"
               : "bg-muted text-foreground rounded-tl-md"
@@ -257,7 +291,7 @@ export function MessageBubble({ role, content, timestamp }: MessageBubbleProps) 
                   ),
                 }}
               >
-                {preprocessLatex(content)}
+                {fixMalformedTables(preprocessLatex(content))}
               </ReactMarkdown>
             </div>
           )}
