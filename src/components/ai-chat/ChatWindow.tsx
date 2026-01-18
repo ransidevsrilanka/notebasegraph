@@ -178,8 +178,8 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="py-4">
+      <ScrollArea className="flex-1 overflow-hidden" ref={scrollAreaRef}>
+        <div className="py-4 w-full overflow-hidden">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -189,13 +189,13 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
               <p className="text-sm text-muted-foreground mb-6">
                 Ask me anything about your studies - O/L, A/L subjects, practice problems, or explanations.
               </p>
-              <QuickActions 
-                onSelect={(template) => setInput(template)} 
+              <QuickActions
+                onSelect={(template) => setInput(template)}
                 disabled={isSuspended || (!creditsLoading && remainingCredits <= 0)}
               />
             </div>
           ) : (
-            <>
+            <div className="w-full overflow-hidden">
               {messages.map((message) => (
                 <MessageBubble
                   key={message.id}
@@ -206,7 +206,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
               ))}
               {isLoading && (
                 <div className="flex gap-3 px-4 py-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                     <Loader2 className="h-4 w-4 text-emerald-500 animate-spin" />
                   </div>
                   <div className="bg-muted rounded-2xl rounded-tl-md px-4 py-3">
@@ -218,7 +218,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </ScrollArea>
