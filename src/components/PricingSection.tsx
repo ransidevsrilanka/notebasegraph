@@ -22,42 +22,13 @@ interface TierDisplay extends TierPricing {
   highlighted: boolean;
 }
 
-// Default pricing to show immediately while fetching
-const defaultTiers: TierDisplay[] = [
-  {
-    key: 'starter',
-    name: 'Starter',
-    price: 1500,
-    period: 'year',
-    description: 'Perfect for getting started',
-    features: ['Access to core subjects', 'PDF notes', 'Basic support'],
-    highlighted: false,
-  },
-  {
-    key: 'standard',
-    name: 'Standard',
-    price: 2500,
-    period: 'year',
-    description: 'Most popular choice',
-    features: ['All Starter features', 'Past papers', 'Priority support', 'All subjects'],
-    highlighted: true,
-  },
-  {
-    key: 'lifetime',
-    name: 'Lifetime',
-    price: 5000,
-    period: 'lifetime',
-    description: 'One-time purchase',
-    features: ['All Standard features', 'Lifetime access', 'Future updates', 'Premium support'],
-    highlighted: false,
-  },
-];
 
 // Fixed discount percentage for all creator codes
 const CREATOR_DISCOUNT_PERCENT = 10;
 
 const PricingSection = () => {
-  const [tiers, setTiers] = useState<TierDisplay[]>(defaultTiers);
+  const [tiers, setTiers] = useState<TierDisplay[]>([]);
+  const [isLoadingPricing, setIsLoadingPricing] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const { branding } = useBranding();
   const { user, profile } = useAuth();
@@ -143,6 +114,7 @@ const PricingSection = () => {
 
   const fetchPricing = async () => {
     setLoadingError(null);
+    setIsLoadingPricing(true);
     const { data, error } = await supabase
       .from('site_settings')
       .select('value')
@@ -152,12 +124,14 @@ const PricingSection = () => {
     if (error) {
       console.error('Failed to load pricing:', error);
       setLoadingError(`Database error: ${error.message}`);
+      setIsLoadingPricing(false);
       return;
     }
 
     if (!data) {
       console.error('No pricing data found in site_settings');
       setLoadingError('Pricing not configured. Please add pricing data in admin settings.');
+      setIsLoadingPricing(false);
       return;
     }
 
@@ -170,6 +144,7 @@ const PricingSection = () => {
       highlighted: key === 'standard',
     }));
     setTiers(displayTiers);
+    setIsLoadingPricing(false);
   };
 
   const handleApplyDiscount = () => {
@@ -276,6 +251,22 @@ const PricingSection = () => {
             )}
           </div>
 
+          {isLoadingPricing ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="glass-card p-6 animate-pulse">
+                  <div className="h-6 bg-muted rounded w-24 mx-auto mb-4" />
+                  <div className="h-10 bg-muted rounded w-32 mx-auto mb-4" />
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4].map((j) => (
+                      <div key={j} className="h-4 bg-muted rounded" />
+                    ))}
+                  </div>
+                  <div className="h-10 bg-muted rounded w-full mt-6" />
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {tiers.map((tier) => (
               <div 
@@ -330,6 +321,7 @@ const PricingSection = () => {
               </div>
             ))}
           </div>
+          )}
 
           <p className="text-center text-muted-foreground text-xs mt-8">
             Purchase your access card and use the code to unlock your {branding.siteName}.

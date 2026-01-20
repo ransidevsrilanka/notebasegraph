@@ -357,4 +357,42 @@
   .animate-line-draw {
     animation: line-draw 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
+  /* Rotating border glow animation */
+  @property --border-angle {
+    syntax: "<angle>";
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  @keyframes border-rotate {
+    from { --border-angle: 0deg; }
+    to { --border-angle: 360deg; }
+  }
+
+  .rotating-border-glow {
+    position: relative;
+    background: hsl(var(--card));
+    border: none !important;
+  }
+
+  .rotating-border-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: 2px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from var(--border-angle),
+      transparent 0deg,
+      hsl(142 76% 46%) 60deg,
+      hsl(142 76% 60%) 90deg,
+      transparent 120deg
+    );
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: border-rotate 3s linear infinite;
+    pointer-events: none;
+  }
 }

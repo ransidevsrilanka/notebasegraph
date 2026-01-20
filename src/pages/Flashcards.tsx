@@ -34,7 +34,7 @@ interface FlashcardSet {
 
 const FlashcardsPage = () => {
   const { setId } = useParams();
-  const { user } = useAuth();
+  const { user, isExpired } = useAuth();
   const navigate = useNavigate();
 
   const [set, setSet] = useState<FlashcardSet | null>(null);
@@ -48,6 +48,13 @@ const FlashcardsPage = () => {
   useEffect(() => {
     if (!setId) {
       navigate('/dashboard');
+      return;
+    }
+
+    // Block access if enrollment expired
+    if (isExpired) {
+      toast.error('Your package has expired. Please renew to access flashcards.');
+      navigate('/upgrade');
       return;
     }
 

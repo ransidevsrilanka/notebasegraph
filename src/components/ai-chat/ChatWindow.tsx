@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Loader2, Trash2, Sparkles, X, ArrowUpRight } from "lucide-react";
+import { Send, Loader2, Trash2, Sparkles, X, ArrowUpRight, ArrowDown } from "lucide-react";
 import { useAIChat } from "@/hooks/useAIChat";
 import { useAICredits } from "@/hooks/useAICredits";
 import { MessageBubble } from "./MessageBubble";
@@ -19,6 +19,7 @@ interface ChatWindowProps {
 
 export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowProps) {
   const [input, setInput] = useState("");
+  const [showScrollButton, setShowScrollButton] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -50,6 +51,22 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
   useEffect(() => {
     scrollToBottom("auto");
   }, [messages, isLoading]);
+
+  // Track scroll position to show/hide scroll button
+  useEffect(() => {
+    const viewport = scrollAreaRef.current?.querySelector(
+      "[data-radix-scroll-area-viewport]"
+    ) as HTMLElement | null;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      setShowScrollButton(distanceFromBottom > 100);
+    };
+
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [messages]);
 
   // Focus textarea when opened
   useEffect(() => {
@@ -178,8 +195,9 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1" ref={scrollAreaRef}>
-        <div className="py-4">
+      <div className="relative flex-1">
+        <ScrollArea className="h-full" ref={scrollAreaRef}>
+          <div className="py-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
               <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -221,7 +239,20 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
             </>
           )}
         </div>
-      </ScrollArea>
+        </ScrollArea>
+
+        {/* Scroll to bottom button */}
+        {showScrollButton && (
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute bottom-4 right-4 rounded-full shadow-lg z-10 h-10 w-10"
+            onClick={() => scrollToBottom("smooth")}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-card">

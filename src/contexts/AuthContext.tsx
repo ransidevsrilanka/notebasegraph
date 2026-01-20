@@ -35,6 +35,7 @@ interface AuthContextType {
   isCMO: boolean;
   isCreator: boolean;
   isHeadOps: boolean;
+  isExpired: boolean;
   signUp: (email: string, password: string, accessCode: string, name?: string) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -66,6 +67,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // User has selected and locked subjects
   const hasSelectedSubjects = userSubjects?.is_locked ?? false;
+
+  // Check if enrollment has expired
+  const isExpired = enrollment?.expires_at 
+    ? new Date(enrollment.expires_at) < new Date() 
+    : false;
 
   const fetchUserData = async (userId: string, opts?: { preserveExistingOnError?: boolean }) => {
     const preserve = opts?.preserveExistingOnError ?? false;
@@ -446,6 +452,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isCMO,
         isCreator,
         isHeadOps,
+        isExpired,
         signUp,
         signIn,
         signOut,

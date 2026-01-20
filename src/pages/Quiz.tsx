@@ -36,7 +36,7 @@ interface Quiz {
 
 const QuizPage = () => {
   const { quizId } = useParams();
-  const { user, enrollment } = useAuth();
+  const { user, enrollment, isExpired } = useAuth();
   const navigate = useNavigate();
 
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -52,6 +52,13 @@ const QuizPage = () => {
   useEffect(() => {
     if (!quizId) {
       navigate('/dashboard');
+      return;
+    }
+
+    // Block access if enrollment expired
+    if (isExpired) {
+      toast.error('Your package has expired. Please renew to access quizzes.');
+      navigate('/upgrade');
       return;
     }
 
