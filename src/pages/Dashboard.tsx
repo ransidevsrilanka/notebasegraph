@@ -379,8 +379,8 @@ const Dashboard = () => {
             </div>
           )}
 
-          {/* User Referral Link */}
-          {referralCode && (
+          {/* User Referral Link - Hide for Premium (lifetime) users */}
+          {referralCode && enrollment?.tier !== 'lifetime' && (
             <div className="glass-card p-5 mb-6">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
@@ -388,7 +388,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <h3 className="font-semibold text-foreground">Share & Earn</h3>
-                  <p className="text-xs text-muted-foreground">Refer 5 friends to unlock Gold tier free!</p>
+                  <p className="text-xs text-muted-foreground">Refer 5 friends to unlock Premium tier free!</p>
                 </div>
               </div>
               <div className="flex gap-2">
