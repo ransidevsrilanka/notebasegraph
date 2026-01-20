@@ -45,18 +45,19 @@ const ReferralProgress = () => {
         .select('id, user_id')
         .eq('referral_source', userReferralCode);
 
-      if (!attrError && attributions) {
+      let paidReferralCount = 0;
+      
+      if (!attrError && attributions && attributions.length > 0) {
         // Check how many of these referrals have made a payment
         const referralUserIds = attributions.map(a => a.user_id);
         
-        if (referralUserIds.length > 0) {
-          const { count } = await supabase
-            .from('payment_attributions')
-            .select('*', { count: 'exact', head: true })
-            .in('user_id', referralUserIds);
-          
-          setReferralCount(count || 0);
-        }
+        const { count } = await supabase
+          .from('payment_attributions')
+          .select('*', { count: 'exact', head: true })
+          .in('user_id', referralUserIds);
+        
+        paidReferralCount = count || 0;
+        setReferralCount(paidReferralCount);
       }
 
       // Check for existing reward
@@ -66,7 +67,23 @@ const ReferralProgress = () => {
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (rewardData) {
+      // Auto-create reward entry when threshold is met and no reward exists
+      if (paidReferralCount >= REFERRAL_GOAL && !rewardData) {
+        const { data: newReward } = await supabase
+          .from('referral_rewards')
+          .insert({
+            user_id: user.id,
+            referral_count: paidReferralCount,
+            unlocked_tier: 'lifetime',
+            is_claimed: false,
+          })
+          .select()
+          .single();
+
+        if (newReward) {
+          setReward(newReward);
+        }
+      } else if (rewardData) {
         setReward(rewardData);
       }
 
@@ -81,10 +98,10 @@ const ReferralProgress = () => {
 
     setIsClaiming(true);
     
-    // Upgrade user's enrollment to standard tier
+    // Upgrade user's enrollment to lifetime (Premium) tier
     const { error } = await supabase
       .from('enrollments')
-      .update({ tier: 'standard' })
+      .update({ tier: 'lifetime' })
       .eq('id', enrollment.id);
 
     if (error) {
@@ -99,7 +116,7 @@ const ReferralProgress = () => {
       .update({ is_claimed: true })
       .eq('id', reward.id);
 
-    toast.success('🎉 Congratulations! You\'ve been upgraded to Standard tier!');
+    toast.success('🎉 Congratulations! You\'ve been upgraded to Premium tier!');
     setReward({ ...reward, is_claimed: true });
     setIsClaiming(false);
 
@@ -109,8 +126,9 @@ const ReferralProgress = () => {
 
   if (isLoading) return null;
 
-  // Don't show if user already has standard or lifetime tier
-  if (enrollment?.tier === 'standard' || enrollment?.tier === 'lifetime') {
+  // Don't show for Premium (lifetime) users - they're already at top tier
+  // Show for both Silver (starter) AND Gold (standard) users
+  if (enrollment?.tier === 'lifetime') {
     return null;
   }
 
@@ -136,7 +154,7 @@ const ReferralProgress = () => {
             </h3>
             <p className="text-sm text-muted-foreground">
               {isUnlocked 
-                ? 'You\'ve unlocked Standard tier! Claim it now.' 
+                ? 'You\'ve unlocked Premium tier! Claim it now.' 
                 : `Refer ${REFERRAL_GOAL} friends who purchase any package`
               }
             </p>
@@ -179,7 +197,7 @@ const ReferralProgress = () => {
         {!isUnlocked && (
           <p className="text-xs text-muted-foreground mt-2">
             Share your referral link with friends. When they sign up and purchase any package, 
-            you get credit! After {REFERRAL_GOAL} paid referrals, you'll unlock Standard tier for free.
+            you get credit! After {REFERRAL_GOAL} paid referrals, you'll unlock Premium tier for free.
           </p>
         )}
       </div>
