@@ -507,9 +507,33 @@ const PaidSignup = () => {
       }
     }
 
+    // Handle student-to-student referrals (userReferrer stored in localStorage)
+    const userReferrer = localStorage.getItem('userReferrer');
+    if (userReferrer && userReferrer.startsWith('USR')) {
+      try {
+        // Check if attribution already exists for this user referral
+        const { data: existingUserRef } = await supabase
+          .from('user_attributions')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .eq('referral_source', userReferrer)
+          .maybeSingle();
+
+        if (!existingUserRef) {
+          await supabase.from('user_attributions').insert({
+            user_id: currentUser.id,
+            referral_source: userReferrer, // Store the referrer's code (USRxxxxxxx)
+          });
+        }
+      } catch (userRefError) {
+        console.error('User referral attribution error:', userRefError);
+      }
+    }
+
     // Clear payment data and referral info
     localStorage.removeItem('pending_payment');
     localStorage.removeItem('refCreator');
+    localStorage.removeItem('userReferrer');
 
     setIsLoading(false);
     setStep('success');

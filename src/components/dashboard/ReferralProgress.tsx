@@ -26,11 +26,24 @@ const ReferralProgress = () => {
     if (!user) return;
 
     const fetchReferralData = async () => {
-      // Get count of paid referrals (users who signed up with this user's referral and paid)
+      // First get the user's referral code from profiles
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('referral_code')
+        .eq('user_id', user.id)
+        .single();
+
+      const userReferralCode = profileData?.referral_code;
+      if (!userReferralCode) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Get count of paid referrals (users who signed up with this user's referral code)
       const { data: attributions, error: attrError } = await supabase
         .from('user_attributions')
         .select('id, user_id')
-        .eq('referral_source', user.id);
+        .eq('referral_source', userReferralCode);
 
       if (!attrError && attributions) {
         // Check how many of these referrals have made a payment

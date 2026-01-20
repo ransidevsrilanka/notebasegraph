@@ -1203,6 +1203,65 @@ export type Database = {
           },
         ]
       }
+      pending_payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          discount_code: string | null
+          enrollment_id: string | null
+          id: string
+          order_id: string
+          original_amount: number | null
+          payment_type: string | null
+          processed_at: string | null
+          ref_creator: string | null
+          status: string | null
+          tier: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          discount_code?: string | null
+          enrollment_id?: string | null
+          id?: string
+          order_id: string
+          original_amount?: number | null
+          payment_type?: string | null
+          processed_at?: string | null
+          ref_creator?: string | null
+          status?: string | null
+          tier: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          discount_code?: string | null
+          enrollment_id?: string | null
+          id?: string
+          order_id?: string
+          original_amount?: number | null
+          payment_type?: string | null
+          processed_at?: string | null
+          ref_creator?: string | null
+          status?: string | null
+          tier?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_payments_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_settings: {
         Row: {
           id: string
@@ -1240,6 +1299,7 @@ export type Database = {
           is_locked: boolean | null
           max_devices: number | null
           phone: string | null
+          referral_code: string | null
           updated_at: string
           user_id: string
         }
@@ -1255,6 +1315,7 @@ export type Database = {
           is_locked?: boolean | null
           max_devices?: number | null
           phone?: string | null
+          referral_code?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1270,6 +1331,7 @@ export type Database = {
           is_locked?: boolean | null
           max_devices?: number | null
           phone?: string | null
+          referral_code?: string | null
           updated_at?: string
           user_id?: string
         }
