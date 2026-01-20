@@ -48,7 +48,7 @@ interface Quiz {
 
 const SubjectPage = () => {
   const { subjectId } = useParams();
-  const { enrollment } = useAuth();
+  const { enrollment, isExpired } = useAuth();
   const navigate = useNavigate();
   
   const [subject, setSubject] = useState<Subject | null>(null);
@@ -161,6 +161,8 @@ const SubjectPage = () => {
   };
 
   const canAccess = (minTier: TierType) => {
+    // Block ALL access if enrollment expired
+    if (isExpired) return false;
     const tierIndex = TIER_ORDER.indexOf(minTier);
     return userTierIndex >= tierIndex;
   };

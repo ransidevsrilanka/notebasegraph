@@ -288,7 +288,7 @@ const Dashboard = () => {
               className={cn(
                 "glass-card p-5 cursor-pointer transition-all duration-300",
                 isAIEligible 
-                  ? "border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.25)] hover:border-emerald-500/60" 
+                  ? "rotating-border-glow" 
                   : "hover:border-muted-foreground/30"
               )}
               onClick={() => isAIEligible ? navigate('/ai-assistant') : navigate('/upgrade')}
