@@ -390,7 +390,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      // Use scope: 'local' to only clear local session, avoiding race conditions
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+    
+    // Clear all auth state
     setSession(null);
     setUser(null);
     setProfile(null);
@@ -398,8 +405,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEnrollment(null);
     setUserSubjects(null);
     setPendingJoinRequest(null);
-    // Redirect to auth page after sign out
-    window.location.href = '/auth';
+    setIsHeadOps(false);
+    lastUserIdRef.current = null;
+    
+    // Note: Components calling signOut should handle navigation themselves
+    // This allows for SPA navigation without full page reload
   };
 
   const refreshEnrollment = async () => {

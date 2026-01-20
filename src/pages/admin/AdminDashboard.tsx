@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,7 @@ import { ProgressRing } from '@/components/dashboard/ProgressRing';
 import { ConversionFunnel } from '@/components/dashboard/ConversionFunnel';
 import { CreatorLeaderboard } from '@/components/dashboard/CreatorLeaderboard';
 import { RevenueForecast } from '@/components/dashboard/RevenueForecast';
+import { ReferralNetworkBreakdown } from '@/components/dashboard/ReferralNetworkBreakdown';
 import { format } from 'date-fns';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import AdminSidebar from '@/components/admin/AdminSidebar';
@@ -65,6 +66,14 @@ interface Stats {
   totalUserReferrals: number;
   paidUserReferrals: number;
   userRewardsUnlocked: number;
+  // Creator referral stats
+  creatorSignups: number;
+  creatorConversions: number;
+  creatorRevenue: number;
+  // CMO stats
+  totalCMOs: number;
+  cmoCreators: number;
+  cmoNetworkRevenue: number;
 }
 
 interface TopCreator {
@@ -181,6 +190,12 @@ const StorageUsageCard = () => {
 
 const AdminDashboard = () => {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth', { replace: true });
+  };
   const [stats, setStats] = useState<Stats>({
     totalStudents: 0,
     totalCreators: 0,
@@ -205,6 +220,14 @@ const AdminDashboard = () => {
     totalUserReferrals: 0,
     paidUserReferrals: 0,
     userRewardsUnlocked: 0,
+    // Creator referral stats
+    creatorSignups: 0,
+    creatorConversions: 0,
+    creatorRevenue: 0,
+    // CMO stats
+    totalCMOs: 0,
+    cmoCreators: 0,
+    cmoNetworkRevenue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -366,6 +389,51 @@ const AdminDashboard = () => {
         .select('*', { count: 'exact', head: true })
         .eq('is_claimed', true);
 
+      // Creator referral stats - signups through creator codes
+      const { count: creatorSignups } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true })
+        .not('discount_code_id', 'is', null);
+
+      // Creator conversions and revenue - payments attributed to creators
+      const { data: creatorPaymentsAll } = await supabase
+        .from('payment_attributions')
+        .select('final_amount, creator_id')
+        .not('creator_id', 'is', null);
+
+      const creatorConversions = creatorPaymentsAll?.length || 0;
+      const creatorRevenue = (creatorPaymentsAll || []).reduce(
+        (sum, p) => sum + Number(p.final_amount || 0), 0
+      );
+
+      // CMO stats
+      const { count: totalCMOs } = await supabase
+        .from('cmo_profiles')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: cmoCreators } = await supabase
+        .from('creator_profiles')
+        .select('*', { count: 'exact', head: true })
+        .not('cmo_id', 'is', null);
+
+      // CMO network revenue - revenue from creators under CMOs
+      const { data: cmoCreatorIds } = await supabase
+        .from('creator_profiles')
+        .select('id')
+        .not('cmo_id', 'is', null);
+
+      let cmoNetworkRevenue = 0;
+      if (cmoCreatorIds && cmoCreatorIds.length > 0) {
+        const creatorIdList = cmoCreatorIds.map(c => c.id);
+        const { data: cmoPayments } = await supabase
+          .from('payment_attributions')
+          .select('final_amount')
+          .in('creator_id', creatorIdList);
+        cmoNetworkRevenue = (cmoPayments || []).reduce(
+          (sum, p) => sum + Number(p.final_amount || 0), 0
+        );
+      }
+
       // Two months ago revenue for forecast
       const twoMonthsAgo = new Date();
       twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
@@ -433,6 +501,12 @@ const AdminDashboard = () => {
         totalUserReferrals: totalUserReferrals || 0,
         paidUserReferrals,
         userRewardsUnlocked: userRewardsUnlocked || 0,
+        creatorSignups: creatorSignups || 0,
+        creatorConversions,
+        creatorRevenue,
+        totalCMOs: totalCMOs || 0,
+        cmoCreators: cmoCreators || 0,
+        cmoNetworkRevenue,
       });
 
     } catch (error) {
@@ -572,7 +646,7 @@ const AdminDashboard = () => {
               <Button variant="ghost" size="sm" onClick={fetchStats} disabled={isLoading}>
                 <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="ghost" size="icon" onClick={signOut}>
+              <Button variant="ghost" size="icon" onClick={handleSignOut}>
                 <LogOut className="w-4 h-4" />
               </Button>
             </div>
@@ -672,6 +746,21 @@ const AdminDashboard = () => {
               {/* Storage Usage */}
               <StorageUsageCard />
             </div>
+
+            {/* Referral Network Breakdown */}
+            <ReferralNetworkBreakdown 
+              stats={{
+                userSignups: stats.totalUserReferrals,
+                userConversions: stats.paidUserReferrals,
+                userRewardsClaimed: stats.userRewardsUnlocked,
+                creatorSignups: stats.creatorSignups,
+                creatorConversions: stats.creatorConversions,
+                creatorRevenue: stats.creatorRevenue,
+                totalCMOs: stats.totalCMOs,
+                cmoCreators: stats.cmoCreators,
+                cmoNetworkRevenue: stats.cmoNetworkRevenue,
+              }}
+            />
 
             {/* Creator Leaderboard */}
             {topCreators.length > 0 && (
