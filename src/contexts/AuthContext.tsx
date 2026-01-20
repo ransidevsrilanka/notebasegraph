@@ -21,9 +21,14 @@ export interface UserSubjects {
   updated_at: string;
 }
 
+export interface ProfileWithReferral extends Profile {
+  referral_code?: string | null;
+}
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  // Profile with referral code
   profile: Profile | null;
   roles: AppRole[];
   enrollment: Enrollment | null;

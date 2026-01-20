@@ -25,6 +25,7 @@ import {
   RefreshCw,
   HardDrive,
   Database,
+  Share2,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -60,6 +61,10 @@ interface Stats {
   bankPayments: number;
   currentPhase: number;
   phaseName: string;
+  // Student referral stats
+  totalUserReferrals: number;
+  paidUserReferrals: number;
+  userRewardsUnlocked: number;
 }
 
 interface TopCreator {
@@ -197,6 +202,9 @@ const AdminDashboard = () => {
     bankPayments: 0,
     currentPhase: 1,
     phaseName: 'Phase 1',
+    totalUserReferrals: 0,
+    paidUserReferrals: 0,
+    userRewardsUnlocked: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -329,6 +337,35 @@ const AdminDashboard = () => {
         totalPaidUsers: activeEnrollments || 0,
       });
 
+      // Fetch student-to-student referral stats
+      // User referrals are stored with referral_source starting with 'USR'
+      const { count: totalUserReferrals } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true })
+        .like('referral_source', 'USR%');
+
+      // Count how many user referrals converted to paid
+      const { data: userRefAttributions } = await supabase
+        .from('user_attributions')
+        .select('user_id')
+        .like('referral_source', 'USR%');
+
+      let paidUserReferrals = 0;
+      if (userRefAttributions && userRefAttributions.length > 0) {
+        const userIds = userRefAttributions.map(a => a.user_id);
+        const { count } = await supabase
+          .from('payment_attributions')
+          .select('*', { count: 'exact', head: true })
+          .in('user_id', userIds);
+        paidUserReferrals = count || 0;
+      }
+
+      // Count claimed referral rewards
+      const { count: userRewardsUnlocked } = await supabase
+        .from('referral_rewards')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_claimed', true);
+
       // Two months ago revenue for forecast
       const twoMonthsAgo = new Date();
       twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
@@ -393,6 +430,9 @@ const AdminDashboard = () => {
         bankPayments,
         currentPhase: businessPhase?.current_phase || 1,
         phaseName: businessPhase?.phase_name || 'Phase 1',
+        totalUserReferrals: totalUserReferrals || 0,
+        paidUserReferrals,
+        userRewardsUnlocked: userRewardsUnlocked || 0,
       });
 
     } catch (error) {
@@ -501,6 +541,13 @@ const AdminDashboard = () => {
       icon: Users,
       iconColor: 'blue' as const,
     },
+    { 
+      label: 'Student Referrals', 
+      value: stats.totalUserReferrals, 
+      icon: Share2,
+      iconColor: 'green' as const,
+      subtitle: `${stats.paidUserReferrals} converted, ${stats.userRewardsUnlocked} rewards claimed`,
+    },
   ];
 
   return (
@@ -534,7 +581,7 @@ const AdminDashboard = () => {
           {/* Main Content */}
           <main className="p-6 space-y-6">
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               {statCards.map((card) => (
                 <StatCard key={card.label} {...card} />
               ))}

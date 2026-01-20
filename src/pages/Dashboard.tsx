@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/storageClient';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   BookOpen,
   Crown,
@@ -12,6 +13,9 @@ import {
   LogOut,
   Sparkles,
   ArrowUpRight,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Subject } from '@/types/database';
@@ -31,6 +35,33 @@ const Dashboard = () => {
 
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+
+  // Fetch user's referral code
+  useEffect(() => {
+    const fetchReferralCode = async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('referral_code')
+        .eq('user_id', user.id)
+        .single();
+      if (data?.referral_code) {
+        setReferralCode(data.referral_code);
+      }
+    };
+    fetchReferralCode();
+  }, [user]);
+
+  const copyReferralLink = async () => {
+    if (!referralCode) return;
+    const link = `${window.location.origin}/signup?ref=${referralCode}`;
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    toast.success('Referral link copied!');
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Handle pending upgrade payments (card payments that need finalization)
   useEffect(() => {
@@ -345,6 +376,31 @@ const Dashboard = () => {
                 type="user"
                 createdAt={enrollment.created_at}
               />
+            </div>
+          )}
+
+          {/* User Referral Link */}
+          {referralCode && (
+            <div className="glass-card p-5 mb-6">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
+                  <Share2 className="w-5 h-5 text-brand" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Share & Earn</h3>
+                  <p className="text-xs text-muted-foreground">Refer 5 friends to unlock Gold tier free!</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Input 
+                  value={`${window.location.origin}/signup?ref=${referralCode}`}
+                  readOnly
+                  className="font-mono text-xs bg-secondary/50"
+                />
+                <Button variant="outline" size="icon" onClick={copyReferralLink}>
+                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </div>
             </div>
           )}
 

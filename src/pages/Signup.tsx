@@ -15,9 +15,11 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Get either ref_creator or discount_code - they are the SAME identity
+    // Get either ref_creator or discount_code - they are the SAME identity (creator codes)
     const refCreator = searchParams.get('ref_creator');
     const discountCode = searchParams.get('discount_code');
+    // NEW: Student referral code (starts with USR)
+    const userRef = searchParams.get('ref');
     
     // Unified code: prefer ref_creator, fallback to discount_code
     const creatorCode = (refCreator || discountCode || '').toUpperCase().trim();
@@ -26,11 +28,19 @@ const Signup = () => {
     if (creatorCode) {
       localStorage.setItem('refCreator', creatorCode);
     }
+    
+    // Store student referral code separately (for user-to-user referrals)
+    if (userRef) {
+      localStorage.setItem('userReferrer', userRef.toUpperCase().trim());
+    }
 
     // Redirect to pricing page with unified param
     const params = new URLSearchParams();
     if (creatorCode) {
       params.set('ref_creator', creatorCode);
+    }
+    if (userRef) {
+      params.set('ref', userRef);
     }
 
     const queryString = params.toString();
