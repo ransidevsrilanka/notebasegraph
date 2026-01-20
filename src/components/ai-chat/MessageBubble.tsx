@@ -80,7 +80,7 @@ export const MessageBubble = memo(function MessageBubble({
   return (
     <div
       className={cn(
-        "flex gap-3 px-4 py-3",
+        "flex gap-3 px-4 py-3 w-full overflow-hidden",
         isUser ? "flex-row-reverse" : "flex-row"
       )}
     >
@@ -99,13 +99,14 @@ export const MessageBubble = memo(function MessageBubble({
       {/* Message Content */}
       <div
         className={cn(
-          "flex flex-col min-w-0 w-full max-w-[85%] space-y-1",
+          "flex flex-col min-w-0 space-y-1",
+          "max-w-[calc(100%-3rem)]",
           isUser ? "items-end" : "items-start"
         )}
       >
         <div
           className={cn(
-            "rounded-2xl px-4 py-3 w-full max-w-full min-w-0 overflow-hidden",
+            "rounded-2xl px-4 py-3 max-w-full min-w-0 overflow-x-auto overflow-y-hidden",
             isUser
               ? "bg-brand text-brand-foreground rounded-tr-md"
               : "bg-muted text-foreground rounded-tl-md"

@@ -54,7 +54,10 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
 
   // Track scroll position to show/hide scroll button
   useEffect(() => {
-    const viewport = scrollAreaRef.current?.querySelector(
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea) return;
+
+    const viewport = scrollArea.querySelector(
       "[data-radix-scroll-area-viewport]"
     ) as HTMLElement | null;
     if (!viewport) return;
@@ -64,9 +67,12 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       setShowScrollButton(distanceFromBottom > 100);
     };
 
+    // Initial check
+    handleScroll();
+
     viewport.addEventListener("scroll", handleScroll);
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [messages]);
+  }, [messages.length]);
 
   // Focus textarea when opened
   useEffect(() => {
@@ -195,8 +201,8 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
       )}
 
       {/* Messages */}
-      <div className="relative flex-1">
-        <ScrollArea className="h-full" ref={scrollAreaRef}>
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        <ScrollArea className="absolute inset-0" ref={scrollAreaRef}>
           <div className="py-4">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full px-6 py-8 text-center">
@@ -246,7 +252,7 @@ export function ChatWindow({ isOpen, onClose, isFullPage = false }: ChatWindowPr
           <Button
             variant="secondary"
             size="icon"
-            className="absolute bottom-4 right-4 rounded-full shadow-lg z-10 h-10 w-10"
+            className="absolute bottom-4 right-4 rounded-full shadow-lg z-20 h-10 w-10"
             onClick={() => scrollToBottom("smooth")}
           >
             <ArrowDown className="h-4 w-4" />
