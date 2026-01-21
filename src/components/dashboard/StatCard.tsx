@@ -57,7 +57,7 @@ export const StatCard = ({
 
   return (
     <div className={cn(
-      "glass-card p-5 transition-all hover:border-border/60",
+      "glass-card-premium p-5 transition-all hover:border-white/20",
       className
     )}>
       <div className="flex items-start justify-between mb-3">

@@ -112,7 +112,7 @@ const StickyServices = () => {
               <div className={`${index % 2 === 1 ? 'lg:order-1' : ''}`}>
                 <div className="relative">
                   {/* Main card */}
-                  <div className="relative p-8 md:p-12 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 backdrop-blur-sm overflow-hidden hover-lift hover-glow">
+                  <div className="relative p-8 md:p-12 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 backdrop-blur-sm overflow-hidden hover-lift border-glow">
                     {/* Icon */}
                     <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl md:rounded-2xl bg-brand/10 flex items-center justify-center mx-auto mb-8">
                       <service.icon className="w-10 h-10 md:w-12 md:h-12 text-brand" />
