@@ -201,8 +201,8 @@ const PricingSection = () => {
 
   return (
     <>
-      <section className="py-20 bg-background relative">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-brand/5 rounded-full blur-3xl" />
+      <section className="py-20 bg-background relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] max-w-[500px] h-[80vw] max-h-[500px] bg-brand/5 rounded-full blur-3xl pointer-events-none" />
         
         <div className="container mx-auto px-4 relative z-10">
           <div className="text-center mb-12">

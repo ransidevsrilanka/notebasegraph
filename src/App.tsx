@@ -53,6 +53,7 @@ import CommissionSettings from "./pages/admin/CommissionSettings";
 import Security from "./pages/admin/Security";
 import AIUsageStats from "./pages/admin/AIUsageStats";
 import UserReferrals from "./pages/admin/UserReferrals";
+import SubjectMediumRequests from "./pages/admin/SubjectMediumRequests";
 import AIChat from "./pages/AIChat";
 import NotFound from "./pages/NotFound";
 import { ChatButton } from "./components/ai-chat";
@@ -246,6 +247,11 @@ const App = () => (
             <Route path="/admin/user-referrals" element={
               <ProtectedRoute requireAdmin>
                 <UserReferrals />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/subject-medium" element={
+              <ProtectedRoute requireAdmin>
+                <SubjectMediumRequests />
               </ProtectedRoute>
             } />
             

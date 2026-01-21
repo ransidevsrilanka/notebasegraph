@@ -16,12 +16,14 @@ import {
   Share2,
   Copy,
   Check,
+  Languages,
 } from 'lucide-react';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Subject } from '@/types/database';
 import { useBranding } from '@/hooks/useBranding';
 import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
+import MediumChangeRequestDialog from '@/components/dashboard/MediumChangeRequestDialog';
 import { useAICredits } from '@/hooks/useAICredits';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -37,6 +39,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [showMediumDialog, setShowMediumDialog] = useState(false);
 
   // Fetch user's referral code
   useEffect(() => {
@@ -409,12 +412,25 @@ const Dashboard = () => {
 
           {/* Section Header */}
           <section aria-label="Subjects" className="mb-6">
-            <div>
-              <h2 className="font-display text-xl font-bold text-foreground">Your Subjects</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                {GRADE_LABELS[enrollment.grade]}
-                {!enrollment.grade?.startsWith('ol_') && enrollment.stream && ` • ${STREAM_LABELS[enrollment.stream]}`}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-xl font-bold text-foreground">Your Subjects</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {GRADE_LABELS[enrollment.grade]}
+                  {!enrollment.grade?.startsWith('ol_') && enrollment.stream && ` • ${STREAM_LABELS[enrollment.stream]}`}
+                </p>
+              </div>
+              {userSubjects && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowMediumDialog(true)}
+                  className="gap-2"
+                >
+                  <Languages className="w-4 h-4" />
+                  <span className="hidden sm:inline">Change Medium</span>
+                </Button>
+              )}
             </div>
           </section>
 
@@ -464,6 +480,12 @@ const Dashboard = () => {
           </div>
         </div>
       </footer>
+
+      {/* Medium Change Request Dialog */}
+      <MediumChangeRequestDialog 
+        open={showMediumDialog} 
+        onOpenChange={setShowMediumDialog} 
+      />
     </main>
   );
 };

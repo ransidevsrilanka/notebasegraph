@@ -1045,6 +1045,7 @@ export type Database = {
       }
       payment_attributions: {
         Row: {
+          access_code_id: string | null
           amount: number | null
           created_at: string
           creator_commission_amount: number | null
@@ -1062,6 +1063,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          access_code_id?: string | null
           amount?: number | null
           created_at?: string
           creator_commission_amount?: number | null
@@ -1079,6 +1081,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          access_code_id?: string | null
           amount?: number | null
           created_at?: string
           creator_commission_amount?: number | null
@@ -1096,6 +1099,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "payment_attributions_access_code_id_fkey"
+            columns: ["access_code_id"]
+            isOneToOne: false
+            referencedRelation: "access_codes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "payment_attributions_creator_id_fkey"
             columns: ["creator_id"]
@@ -1586,6 +1596,72 @@ export type Database = {
         }
         Relationships: []
       }
+      subject_medium_requests: {
+        Row: {
+          admin_notes: string | null
+          created_at: string | null
+          enrollment_id: string
+          id: string
+          reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          subject_1_new_medium: string | null
+          subject_2_new_medium: string | null
+          subject_3_new_medium: string | null
+          updated_at: string | null
+          user_id: string
+          user_subjects_id: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string | null
+          enrollment_id: string
+          id?: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subject_1_new_medium?: string | null
+          subject_2_new_medium?: string | null
+          subject_3_new_medium?: string | null
+          updated_at?: string | null
+          user_id: string
+          user_subjects_id?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string | null
+          enrollment_id?: string
+          id?: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          subject_1_new_medium?: string | null
+          subject_2_new_medium?: string | null
+          subject_3_new_medium?: string | null
+          updated_at?: string | null
+          user_id?: string
+          user_subjects_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subject_medium_requests_enrollment_id_fkey"
+            columns: ["enrollment_id"]
+            isOneToOne: false
+            referencedRelation: "enrollments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subject_medium_requests_user_subjects_id_fkey"
+            columns: ["user_subjects_id"]
+            isOneToOne: false
+            referencedRelation: "user_subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           color: string | null
@@ -1867,10 +1943,13 @@ export type Database = {
           locked_at: string | null
           subject_1: string | null
           subject_1_code: string | null
+          subject_1_medium: string | null
           subject_2: string | null
           subject_2_code: string | null
+          subject_2_medium: string | null
           subject_3: string | null
           subject_3_code: string | null
+          subject_3_medium: string | null
           updated_at: string
           user_id: string
         }
@@ -1883,10 +1962,13 @@ export type Database = {
           locked_at?: string | null
           subject_1?: string | null
           subject_1_code?: string | null
+          subject_1_medium?: string | null
           subject_2?: string | null
           subject_2_code?: string | null
+          subject_2_medium?: string | null
           subject_3?: string | null
           subject_3_code?: string | null
+          subject_3_medium?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1899,10 +1981,13 @@ export type Database = {
           locked_at?: string | null
           subject_1?: string | null
           subject_1_code?: string | null
+          subject_1_medium?: string | null
           subject_2?: string | null
           subject_2_code?: string | null
+          subject_2_medium?: string | null
           subject_3?: string | null
           subject_3_code?: string | null
+          subject_3_medium?: string | null
           updated_at?: string
           user_id?: string
         }
