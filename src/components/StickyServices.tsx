@@ -51,7 +51,7 @@ const StickyServices = () => {
   }, []);
 
   return (
-    <section className="relative bg-background">
+    <section className="relative bg-background overflow-hidden">
       {services.map((service, index) => (
         <div 
           key={service.id}
@@ -69,7 +69,7 @@ const StickyServices = () => {
           
           {/* Accent glow */}
           <div 
-            className={`absolute top-1/2 ${index % 2 === 0 ? 'right-0' : 'left-0'} w-[300px] md:w-[500px] h-[300px] md:h-[500px] -translate-y-1/2 rounded-full blur-[150px] md:blur-[200px] pointer-events-none bg-brand/8`}
+            className={`absolute top-1/2 ${index % 2 === 0 ? 'right-0' : 'left-0'} w-[60vw] max-w-[500px] h-[60vw] max-h-[500px] -translate-y-1/2 rounded-full blur-[100px] md:blur-[200px] pointer-events-none bg-brand/8`}
           />
 
           <div 

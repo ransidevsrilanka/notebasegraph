@@ -35,6 +35,9 @@ const NOTIFICATION_TYPES: Record<string, { emoji: string; title: string; priorit
   'premium_unlocked': { emoji: '🎉', title: 'Referral Reward Unlocked', priority: 'low' },
   'commission_issue': { emoji: '💰', title: 'Commission Alert', priority: 'high' },
   
+  // Subject Medium
+  'medium_change_request': { emoji: '📝', title: 'Medium Change Request', priority: 'medium' },
+  
   // Security
   'security_alert': { emoji: '🚨', title: 'Security Alert', priority: 'critical' },
   'suspicious_download': { emoji: '⚠️', title: 'High Download Activity', priority: 'high' },
