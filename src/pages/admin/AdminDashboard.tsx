@@ -679,7 +679,7 @@ const AdminDashboard = () => {
             {/* Charts Row */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Revenue Chart */}
-              <div className="glass-card p-6">
+              <div className="glass-card-premium p-6">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <DollarSign className="w-5 h-5 text-amber-400" />
                   Revenue (Last 6 Months)
@@ -688,7 +688,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* Enrollments Chart */}
-              <div className="glass-card p-6">
+              <div className="glass-card-premium p-6">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Users className="w-5 h-5 text-blue-400" />
                   New Enrollments (Last 6 Months)
@@ -700,7 +700,7 @@ const AdminDashboard = () => {
             {/* Tier & Payment Breakdown */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Tier Distribution */}
-              <div className="glass-card p-6">
+              <div className="glass-card-premium p-6">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Crown className="w-5 h-5 text-gold" />
                   Tier Distribution
@@ -724,7 +724,7 @@ const AdminDashboard = () => {
               </div>
 
               {/* Payment Methods */}
-              <div className="glass-card p-6">
+              <div className="glass-card-premium p-6">
                 <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
                   <Database className="w-5 h-5 text-green-400" />
                   Payment Methods
@@ -768,7 +768,7 @@ const AdminDashboard = () => {
             )}
 
             {/* Danger Zone */}
-            <div className="glass-card p-6 border-destructive/30">
+            <div className="glass-card-premium p-6 border-destructive/30">
               <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
                 <Trash2 className="w-5 h-5" />
                 Danger Zone

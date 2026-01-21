@@ -23,7 +23,7 @@ interface ReferralNetworkBreakdownProps {
 
 export const ReferralNetworkBreakdown = ({ stats }: ReferralNetworkBreakdownProps) => {
   return (
-    <div className="glass-card p-6">
+    <div className="glass-card-premium p-6">
       <h3 className="font-semibold text-foreground mb-6 flex items-center gap-2">
         <Share2 className="w-5 h-5 text-brand" />
         Referral Network Breakdown
@@ -31,7 +31,7 @@ export const ReferralNetworkBreakdown = ({ stats }: ReferralNetworkBreakdownProp
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* User-to-User Referrals */}
-        <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-green-500/10">
               <Users className="w-4 h-4 text-green-400" />
@@ -67,7 +67,7 @@ export const ReferralNetworkBreakdown = ({ stats }: ReferralNetworkBreakdownProp
         </div>
 
         {/* Creator Referrals */}
-        <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-purple-500/10">
               <TrendingUp className="w-4 h-4 text-purple-400" />
@@ -102,7 +102,7 @@ export const ReferralNetworkBreakdown = ({ stats }: ReferralNetworkBreakdownProp
         </div>
 
         {/* CMO Network */}
-        <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
+        <div className="bg-white/5 rounded-lg p-4 border border-white/10">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-2 rounded-lg bg-amber-500/10">
               <Megaphone className="w-4 h-4 text-amber-400" />

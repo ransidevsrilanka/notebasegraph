@@ -79,7 +79,7 @@ const FeaturesGrid = () => {
               style={{ transitionDelay: `${index * 0.15}s` }}
             >
               {/* Card */}
-              <div className="relative h-full p-6 md:p-8 lg:p-10 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 hover:border-brand/40 transition-all duration-500 overflow-hidden hover-lift hover-glow">
+              <div className="relative h-full p-6 md:p-8 lg:p-10 rounded-2xl md:rounded-3xl bg-gradient-to-b from-glass to-vault-dark border border-border/30 hover:border-brand/40 transition-all duration-500 overflow-hidden hover-lift border-glow">
                 {/* Number watermark */}
                 <div className="absolute -right-4 -top-8 font-display text-[120px] md:text-[150px] font-black text-brand/[0.03] leading-none pointer-events-none select-none">
                   {feature.number}

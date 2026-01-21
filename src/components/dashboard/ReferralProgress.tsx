@@ -82,6 +82,27 @@ const ReferralProgress = () => {
 
         if (newReward) {
           setReward(newReward);
+          
+          // Send Telegram notification to CEO about Premium unlock
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('email, full_name')
+            .eq('user_id', user.id)
+            .single();
+          
+          supabase.functions.invoke('send-telegram-notification', {
+            body: {
+              type: 'premium_unlocked',
+              message: `A user has unlocked Premium tier through referrals!`,
+              data: {
+                user_email: userProfile?.email || 'Unknown',
+                user_name: userProfile?.full_name || 'Anonymous',
+                referral_count: paidReferralCount,
+                reward_tier: 'Premium (Lifetime)'
+              },
+              priority: 'medium'
+            }
+          });
         }
       } else if (rewardData) {
         setReward(rewardData);

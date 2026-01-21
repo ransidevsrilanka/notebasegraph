@@ -34,6 +34,7 @@ import {
   CreditCard,
   Brain,
   Layers,
+  Gift,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -89,6 +90,7 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
         { label: 'Reconciliation', href: '/admin/reconciliation', icon: GitCompare, badge: 0 },
         { label: 'Commission Settings', href: '/admin/commission-settings', icon: Target, badge: 0 },
         { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, badge: 0 },
+        { label: 'User Referrals', href: '/admin/user-referrals', icon: Gift, badge: 0 },
       ],
     },
     {
