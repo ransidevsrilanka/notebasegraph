@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface MediumRequest {
@@ -261,13 +262,15 @@ const SubjectMediumRequests = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <AdminSidebar stats={sidebarStats} />
-      
-      <div className="flex-1 p-6 lg:p-8 overflow-auto">
+    <SidebarProvider>
+      <div className="min-h-screen bg-background flex w-full">
+        <AdminSidebar stats={sidebarStats} />
+        
+        <main className="flex-1 p-6 lg:p-8 overflow-auto admin-premium-bg">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
+            <SidebarTrigger className="-ml-2 text-muted-foreground hover:text-foreground" />
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin')}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -387,40 +390,41 @@ const SubjectMediumRequests = () => {
             </TableBody>
           </Table>
         </div>
-      </div>
 
-      {/* Reject Dialog */}
-      <Dialog open={rejectDialog.open} onOpenChange={(open) => setRejectDialog({ ...rejectDialog, open })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reject Request</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              placeholder="Optional notes for rejection..."
-              value={rejectNotes}
-              onChange={(e) => setRejectNotes(e.target.value)}
-              rows={3}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectDialog({ id: '', open: false })}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleReject}
-              disabled={processingId === rejectDialog.id}
-            >
-              {processingId === rejectDialog.id ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              Reject
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Reject Dialog */}
+        <Dialog open={rejectDialog.open} onOpenChange={(open) => setRejectDialog({ ...rejectDialog, open })}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Request</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Textarea
+                placeholder="Optional notes for rejection..."
+                value={rejectNotes}
+                onChange={(e) => setRejectNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setRejectDialog({ id: '', open: false })}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleReject}
+                disabled={processingId === rejectDialog.id}
+              >
+                {processingId === rejectDialog.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                Reject
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        </main>
+      </div>
+    </SidebarProvider>
   );
 };
 

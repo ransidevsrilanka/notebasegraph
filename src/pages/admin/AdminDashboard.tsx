@@ -630,7 +630,7 @@ const AdminDashboard = () => {
         <AdminSidebar stats={stats} />
         <AdminCommandPalette />
         
-        <SidebarInset className="flex-1">
+        <SidebarInset className="flex-1 admin-premium-bg">
           {/* Header */}
           <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-6">
             <SidebarTrigger className="-ml-2" />

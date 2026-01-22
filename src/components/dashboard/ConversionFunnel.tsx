@@ -38,15 +38,15 @@ export const ConversionFunnel = ({ totalSignups, totalPaidUsers, totalRevenue }:
         {stages.map((stage, index) => (
           <div key={stage.label} className="relative">
             <div 
-              className={`${stage.color} rounded-lg p-4 transition-all duration-500`}
-              style={{ width: stage.width }}
+              className={`${stage.color} rounded-lg p-4 transition-all duration-500 overflow-hidden min-w-0`}
+              style={{ width: stage.width, minWidth: '140px' }}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <stage.icon className="w-5 h-5 text-white" />
-                  <span className="text-white font-medium text-sm">{stage.label}</span>
+              <div className="flex items-center justify-between min-w-0 gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-shrink">
+                  <stage.icon className="w-5 h-5 text-white flex-shrink-0" />
+                  <span className="text-white font-medium text-sm truncate">{stage.label}</span>
                 </div>
-                <span className="text-white font-bold text-lg">{stage.value.toLocaleString()}</span>
+                <span className="text-white font-bold text-lg flex-shrink-0">{stage.value.toLocaleString()}</span>
               </div>
             </div>
             {index < stages.length - 1 && (
