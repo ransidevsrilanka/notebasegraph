@@ -164,7 +164,7 @@ const AIUsageStats = () => {
           pendingHeadOpsRequests: sidebarStats?.pendingHeadOpsRequests ?? 0,
         }} />
         
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-6 overflow-auto admin-premium-bg">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">

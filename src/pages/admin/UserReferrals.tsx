@@ -194,10 +194,10 @@ const UserReferrals = () => {
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-screen w-full bg-vault-dark">
+      <div className="flex min-h-screen w-full">
         <AdminSidebar stats={sidebarStats} />
         
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto admin-premium-bg">
           <div className="p-6 md:p-8">
             {/* Header */}
             <div className="flex items-center justify-between mb-8">
