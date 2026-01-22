@@ -143,37 +143,60 @@ const Dashboard = () => {
           userSubjects.subject_3,
         ].filter(Boolean) as string[];
 
+        // Get per-subject medium overrides (if approved)
+        const subjectMediums = [
+          userSubjectsAny.subject_1_medium || enrollment.medium || 'english',
+          userSubjectsAny.subject_2_medium || enrollment.medium || 'english',
+          userSubjectsAny.subject_3_medium || enrollment.medium || 'english',
+        ];
+
         if (selectedSubjectCodes.length === 0 && selectedSubjectNames.length === 0) {
           setSubjects([]);
           setIsLoading(false);
           return;
         }
 
-        // FIXED: Query subjects by subject_code matching
-        // This ensures we find content even if the subject name differs
-        const { data, error } = await supabase
-          .from('subjects')
-          .select('*')
-          .eq('grade', enrollment.grade)
-          .eq('is_active', true)
-          .eq('medium', enrollment.medium || 'english')
-          .in('subject_code', selectedSubjectCodes.length > 0 ? selectedSubjectCodes : selectedSubjectNames)
-          .order('sort_order');
+        // Fetch subjects for each subject/medium combination
+        // This handles the case where different subjects may have different mediums
+        const uniqueMediums = [...new Set(subjectMediums)];
+        const allSubjects: Subject[] = [];
 
-        if (error) {
-          console.error('Error fetching subjects:', error);
+        for (const medium of uniqueMediums) {
+          const { data, error } = await supabase
+            .from('subjects')
+            .select('*')
+            .eq('grade', enrollment.grade)
+            .eq('is_active', true)
+            .eq('medium', medium)
+            .in('subject_code', selectedSubjectCodes.length > 0 ? selectedSubjectCodes : selectedSubjectNames)
+            .order('sort_order');
+
+          if (!error && data) {
+            // Only add subjects that match their assigned medium
+            data.forEach((subject: any) => {
+              const subjectCode = (subject as any).subject_code;
+              const subjectIndex = selectedSubjectCodes.indexOf(subjectCode);
+              if (subjectIndex !== -1 && subjectMediums[subjectIndex] === medium) {
+                // Check if we already have this subject (by code) to avoid duplicates
+                if (!allSubjects.some(s => (s as any).subject_code === subjectCode)) {
+                  allSubjects.push(subject as Subject);
+                }
+              }
+            });
+          }
         }
 
-        if (!error && data && data.length > 0) {
-          setSubjects(data as Subject[]);
+        if (allSubjects.length > 0) {
+          setSubjects(allSubjects);
         } else {
           // Fallback: if no subjects found by code, try by name as last resort
+          const defaultMedium = enrollment.medium || 'english';
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('subjects')
             .select('*')
             .eq('grade', enrollment.grade)
             .eq('is_active', true)
-            .eq('medium', enrollment.medium || 'english')
+            .eq('medium', defaultMedium)
             .order('sort_order');
 
           if (!fallbackError && fallbackData) {
