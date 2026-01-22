@@ -434,43 +434,36 @@ const CreatorDashboard = () => {
     }
 
     const amount = parseFloat(withdrawAmount);
-    const currentBalance = creatorData.available_balance || 0;
     
     if (isNaN(amount) || amount <= 0) {
       toast.error('Please enter a valid amount');
       return;
     }
 
-    // Validate minimum payout
+    // Basic client-side validation (backend will re-validate)
     if (amount < minimumPayout) {
       toast.error(`Minimum withdrawal is LKR ${minimumPayout.toLocaleString()}`);
-      return;
-    }
-
-    if (amount > currentBalance) {
-      toast.error('Insufficient balance');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const feePercent = 3;
-      const feeAmount = amount * (feePercent / 100);
-      const netAmount = amount - feeAmount;
-
-      const { error } = await supabase.from('withdrawal_requests').insert({
-        creator_id: creatorData.id,
-        withdrawal_method_id: selectedMethodId,
-        amount,
-        fee_percent: feePercent,
-        fee_amount: feeAmount,
-        net_amount: netAmount,
+      // Call secure edge function instead of direct database insert
+      const { data, error } = await supabase.functions.invoke('process-withdrawal/request', {
+        body: {
+          withdrawal_method_id: selectedMethodId,
+          amount,
+        },
       });
 
       if (error) throw error;
 
-      toast.success('Withdrawal request submitted!');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to submit withdrawal request');
+      }
+
+      toast.success(`Withdrawal request submitted! Net amount: Rs. ${data.net_amount?.toLocaleString() || amount}`);
       setWithdrawDialogOpen(false);
       setWithdrawAmount('');
       setSelectedMethodId('');

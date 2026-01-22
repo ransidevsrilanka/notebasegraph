@@ -2080,6 +2080,7 @@ export type Database = {
           fee_amount: number
           fee_percent: number
           id: string
+          idempotency_key: string | null
           net_amount: number
           paid_at: string | null
           receipt_url: string | null
@@ -2098,6 +2099,7 @@ export type Database = {
           fee_amount: number
           fee_percent?: number
           id?: string
+          idempotency_key?: string | null
           net_amount: number
           paid_at?: string | null
           receipt_url?: string | null
@@ -2116,6 +2118,7 @@ export type Database = {
           fee_amount?: number
           fee_percent?: number
           id?: string
+          idempotency_key?: string | null
           net_amount?: number
           paid_at?: string | null
           receipt_url?: string | null

@@ -32,9 +32,11 @@ import {
   Upload,
   Download,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { StatCard } from '@/components/dashboard/StatCard';
+import { OTPVerificationDialog } from '@/components/admin/OTPVerificationDialog';
 
 interface WithdrawalRequest {
   id: string;
@@ -90,6 +92,12 @@ const WithdrawalRequests = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // OTP Dialog states
+  const [approveOTPOpen, setApproveOTPOpen] = useState(false);
+  const [markPaidOTPOpen, setMarkPaidOTPOpen] = useState(false);
+  const [rejectOTPOpen, setRejectOTPOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<WithdrawalRequest | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -202,105 +210,132 @@ const WithdrawalRequests = () => {
     }
   };
 
-  const handleApprove = async (request: WithdrawalRequest) => {
+  // Initiate approval with OTP
+  const initiateApprove = (request: WithdrawalRequest) => {
+    setPendingAction(request);
+    setApproveOTPOpen(true);
+  };
+
+  // Execute approval with OTP code
+  const handleApprove = async (otpCode: string) => {
+    if (!pendingAction) return;
+
     setIsProcessing(true);
 
     try {
-      const { error } = await supabase
-        .from('withdrawal_requests')
-        .update({
-          status: 'approved',
-          reviewed_at: new Date().toISOString(),
+      const { data, error } = await supabase.functions.invoke('process-withdrawal/approve', {
+        body: {
+          request_id: pendingAction.id,
+          otp_code: otpCode,
           admin_notes: adminNotes || null,
-        })
-        .eq('id', request.id);
+        },
+      });
 
       if (error) throw error;
 
-      if (request.creator_id) {
-        const { data: creatorData } = await supabase
-          .from('creator_profiles')
-          .select('total_withdrawn, available_balance')
-          .eq('id', request.creator_id)
-          .single();
-
-        if (creatorData) {
-          await supabase
-            .from('creator_profiles')
-            .update({
-              total_withdrawn: (creatorData.total_withdrawn || 0) + request.net_amount,
-              available_balance: Math.max(0, (creatorData.available_balance || 0) - request.amount),
-            })
-            .eq('id', request.creator_id);
-        }
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to approve withdrawal');
       }
 
-      toast.success('Withdrawal approved!');
+      toast.success('Withdrawal approved successfully!');
       setViewDialogOpen(false);
       setAdminNotes('');
+      setPendingAction(null);
       fetchRequests();
     } catch (error: any) {
       console.error('Error approving withdrawal:', error);
-      toast.error(error.message || 'Failed to approve withdrawal');
+      throw new Error(error.message || 'Failed to approve withdrawal');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleReject = async () => {
-    if (!selectedRequest || !rejectionReason) {
-      toast.error('Please select a rejection reason');
-      return;
-    }
-
-    setIsProcessing(true);
-
-    try {
-      const { error } = await supabase
-        .from('withdrawal_requests')
-        .update({
-          status: 'rejected',
-          rejection_reason: rejectionReason,
-          admin_notes: adminNotes || null,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedRequest.id);
-
-      if (error) throw error;
-
-      toast.success('Withdrawal rejected');
-      setRejectDialogOpen(false);
-      setRejectionReason('');
-      setAdminNotes('');
-      setSelectedRequest(null);
-      fetchRequests();
-    } catch (error: any) {
-      console.error('Error rejecting withdrawal:', error);
-      toast.error(error.message || 'Failed to reject withdrawal');
-    } finally {
-      setIsProcessing(false);
-    }
+  // Initiate mark as paid with OTP
+  const initiateMarkPaid = (request: WithdrawalRequest) => {
+    setPendingAction(request);
+    setMarkPaidOTPOpen(true);
   };
 
-  const handleMarkPaid = async (request: WithdrawalRequest) => {
+  // Execute mark as paid with OTP code
+  const handleMarkPaid = async (otpCode: string) => {
+    if (!pendingAction) return;
+
     setIsProcessing(true);
 
     try {
-      const { error } = await supabase
-        .from('withdrawal_requests')
-        .update({
-          status: 'paid',
-          paid_at: new Date().toISOString(),
-        })
-        .eq('id', request.id);
+      const { data, error } = await supabase.functions.invoke('process-withdrawal/mark-paid', {
+        body: {
+          request_id: pendingAction.id,
+          otp_code: otpCode,
+          idempotency_key: `paid_${pendingAction.id}_${Date.now()}`,
+        },
+      });
 
       if (error) throw error;
 
-      toast.success('Marked as paid!');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to mark as paid');
+      }
+
+      toast.success('Marked as paid successfully!');
+      setPendingAction(null);
       fetchRequests();
     } catch (error: any) {
       console.error('Error marking as paid:', error);
-      toast.error(error.message || 'Failed to mark as paid');
+      throw new Error(error.message || 'Failed to mark as paid');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Initiate rejection - first show reason dialog
+  const initiateReject = (request: WithdrawalRequest) => {
+    setSelectedRequest(request);
+    setRejectDialogOpen(true);
+  };
+
+  // After selecting reason, show OTP dialog
+  const proceedToRejectOTP = () => {
+    if (!rejectionReason) {
+      toast.error('Please select a rejection reason');
+      return;
+    }
+    setPendingAction(selectedRequest);
+    setRejectDialogOpen(false);
+    setRejectOTPOpen(true);
+  };
+
+  // Execute rejection with OTP code
+  const handleReject = async (otpCode: string) => {
+    if (!pendingAction) return;
+
+    setIsProcessing(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('process-withdrawal/reject', {
+        body: {
+          request_id: pendingAction.id,
+          otp_code: otpCode,
+          rejection_reason: rejectionReason,
+          admin_notes: adminNotes || null,
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to reject withdrawal');
+      }
+
+      toast.success('Withdrawal rejected');
+      setRejectionReason('');
+      setAdminNotes('');
+      setSelectedRequest(null);
+      setPendingAction(null);
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Error rejecting withdrawal:', error);
+      throw new Error(error.message || 'Failed to reject withdrawal');
     } finally {
       setIsProcessing(false);
     }
@@ -341,7 +376,7 @@ const WithdrawalRequests = () => {
             </Link>
             <div>
               <h1 className="font-display text-xl font-bold text-foreground">Withdrawal Requests</h1>
-              <p className="text-muted-foreground text-sm">Manage creator payouts</p>
+              <p className="text-muted-foreground text-sm">Manage creator payouts (2FA required)</p>
             </div>
           </div>
         </div>
@@ -477,19 +512,20 @@ const WithdrawalRequests = () => {
                         <Button
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-700"
-                          onClick={() => handleApprove(request)}
+                          onClick={() => initiateApprove(request)}
                           disabled={isProcessing}
                         >
-                          <CheckCircle className="w-4 h-4 mr-1" />
+                          {isProcessing ? (
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                          )}
                           Approve
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          onClick={() => {
-                            setSelectedRequest(request);
-                            setRejectDialogOpen(true);
-                          }}
+                          onClick={() => initiateReject(request)}
                           disabled={isProcessing}
                         >
                           <XCircle className="w-4 h-4 mr-1" />
@@ -501,10 +537,14 @@ const WithdrawalRequests = () => {
                       <Button
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700"
-                        onClick={() => handleMarkPaid(request)}
+                        onClick={() => initiateMarkPaid(request)}
                         disabled={isProcessing}
                       >
-                        <CheckCircle className="w-4 h-4 mr-1" />
+                        {isProcessing ? (
+                          <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                        ) : (
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                        )}
                         Mark Paid
                       </Button>
                     )}
@@ -602,7 +642,7 @@ const WithdrawalRequests = () => {
                 {selectedRequest.status === 'pending' && (
                   <Button 
                     className="bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => handleApprove(selectedRequest)}
+                    onClick={() => initiateApprove(selectedRequest)}
                     disabled={isProcessing}
                   >
                     Approve Withdrawal
@@ -614,7 +654,7 @@ const WithdrawalRequests = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog */}
+      {/* Reject Reason Dialog */}
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -658,14 +698,46 @@ const WithdrawalRequests = () => {
             </Button>
             <Button 
               variant="destructive" 
-              onClick={handleReject}
-              disabled={isProcessing || !rejectionReason}
+              onClick={proceedToRejectOTP}
+              disabled={!rejectionReason}
             >
-              Reject Request
+              Continue to Verification
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* OTP Dialogs */}
+      <OTPVerificationDialog
+        open={approveOTPOpen}
+        onOpenChange={setApproveOTPOpen}
+        onVerify={handleApprove}
+        title="Approve Withdrawal"
+        description={`Enter your 2FA code to approve Rs. ${pendingAction?.net_amount?.toLocaleString() || 0} withdrawal for ${pendingAction?.creator?.display_name || 'creator'}.`}
+        actionLabel="Confirm Approval"
+        isLoading={isProcessing}
+      />
+
+      <OTPVerificationDialog
+        open={markPaidOTPOpen}
+        onOpenChange={setMarkPaidOTPOpen}
+        onVerify={handleMarkPaid}
+        title="Mark as Paid"
+        description={`Enter your 2FA code to confirm payment of Rs. ${pendingAction?.net_amount?.toLocaleString() || 0} to ${pendingAction?.creator?.display_name || 'creator'}.`}
+        actionLabel="Confirm Payment"
+        isLoading={isProcessing}
+      />
+
+      <OTPVerificationDialog
+        open={rejectOTPOpen}
+        onOpenChange={setRejectOTPOpen}
+        onVerify={handleReject}
+        title="Reject Withdrawal"
+        description={`Enter your 2FA code to reject this withdrawal request.`}
+        actionLabel="Confirm Rejection"
+        isLoading={isProcessing}
+        variant="destructive"
+      />
     </main>
   );
 };
