@@ -955,33 +955,48 @@ export type Database = {
         Row: {
           body: string
           created_at: string | null
+          filter_grade: string | null
+          filter_medium: string | null
+          filter_stream: string | null
           id: string
           is_read: boolean | null
+          notification_type: string | null
           read_at: string | null
           recipient_id: string
           recipient_type: string
+          recipient_user_id: string | null
           sender_id: string | null
           subject: string
         }
         Insert: {
           body: string
           created_at?: string | null
+          filter_grade?: string | null
+          filter_medium?: string | null
+          filter_stream?: string | null
           id?: string
           is_read?: boolean | null
+          notification_type?: string | null
           read_at?: string | null
           recipient_id: string
           recipient_type: string
+          recipient_user_id?: string | null
           sender_id?: string | null
           subject: string
         }
         Update: {
           body?: string
           created_at?: string | null
+          filter_grade?: string | null
+          filter_medium?: string | null
+          filter_stream?: string | null
           id?: string
           is_read?: boolean | null
+          notification_type?: string | null
           read_at?: string | null
           recipient_id?: string
           recipient_type?: string
+          recipient_user_id?: string | null
           sender_id?: string | null
           subject?: string
         }
@@ -1941,6 +1956,8 @@ export type Database = {
           is_confirmed: boolean | null
           is_locked: boolean | null
           locked_at: string | null
+          max_medium_changes: number | null
+          medium_change_count: number | null
           subject_1: string | null
           subject_1_code: string | null
           subject_1_medium: string | null
@@ -1960,6 +1977,8 @@ export type Database = {
           is_confirmed?: boolean | null
           is_locked?: boolean | null
           locked_at?: string | null
+          max_medium_changes?: number | null
+          medium_change_count?: number | null
           subject_1?: string | null
           subject_1_code?: string | null
           subject_1_medium?: string | null
@@ -1979,6 +1998,8 @@ export type Database = {
           is_confirmed?: boolean | null
           is_locked?: boolean | null
           locked_at?: string | null
+          max_medium_changes?: number | null
+          medium_change_count?: number | null
           subject_1?: string | null
           subject_1_code?: string | null
           subject_1_medium?: string | null
@@ -2382,6 +2403,14 @@ export type Database = {
       }
       get_my_cmo_profile_id: { Args: never; Returns: string }
       get_my_creator_cmo_id: { Args: never; Returns: string }
+      get_my_referral_stats: {
+        Args: never
+        Returns: {
+          paid_referrals: number
+          referral_code: string
+          signups: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
