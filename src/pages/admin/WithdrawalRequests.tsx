@@ -324,7 +324,7 @@ const WithdrawalRequests = () => {
   };
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
       <input
         type="file"
         ref={fileInputRef}

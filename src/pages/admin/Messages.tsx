@@ -210,8 +210,8 @@ const Messages = () => {
   });
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
+      <div className="container mx-auto px-4 py-8 relative z-10">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link to="/admin">
