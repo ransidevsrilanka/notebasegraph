@@ -1,8 +1,21 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Key, ArrowRight, GraduationCap, ChevronDown } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useBranding } from "@/hooks/useBranding";
+
+// Safe rendering function to highlight "base" without using dangerouslySetInnerHTML
+const renderSafeHeading = (text: string) => {
+  // Split by "base" (case insensitive) and wrap matches in styled spans
+  const parts = text.split(/(base)/gi);
+  return parts.map((part, index) => 
+    /base/i.test(part) ? (
+      <span key={index} className="text-brand-gradient">{part}</span>
+    ) : (
+      <span key={index}>{part}</span>
+    )
+  );
+};
 
 const ParallaxHero = () => {
   const [scrollY, setScrollY] = useState(0);
@@ -64,17 +77,13 @@ const ParallaxHero = () => {
             </div>
           </div>
 
-          {/* Main Heading */}
+          {/* Main Heading - Using safe React rendering to prevent XSS */}
           <h1 
             className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black mb-6 md:mb-8 text-foreground tracking-[-0.04em] leading-[0.9] animate-slide-up"
             style={{ animationDelay: '0.1s', transform: `translateY(${scrollY * 0.1}px)` }}
-            dangerouslySetInnerHTML={{ 
-              __html: branding.heading.replace(
-                /(base|base)/gi, 
-                '<span class="text-brand-gradient">$1</span>'
-              ) 
-            }}
-          />
+          >
+            {renderSafeHeading(branding.heading)}
+          </h1>
 
           {/* Subheading */}
           <p 
