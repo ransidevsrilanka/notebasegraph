@@ -234,7 +234,7 @@ const UpgradeRequests = () => {
   };
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
       <Navbar />
       
       <section className="pt-24 pb-12">

@@ -140,9 +140,9 @@ const PricingSettings = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
       {/* Header */}
-      <header className="bg-vault-surface border-b border-border">
+      <header className="bg-vault-surface/80 backdrop-blur-sm border-b border-border relative z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">

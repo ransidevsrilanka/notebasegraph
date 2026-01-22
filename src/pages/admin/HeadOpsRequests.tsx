@@ -189,8 +189,8 @@ const HeadOpsRequests = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
-      <header className="bg-vault-surface border-b border-border">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
+      <header className="bg-vault-surface/80 backdrop-blur-sm border-b border-border relative z-10">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link to="/admin" className="text-muted-foreground hover:text-foreground transition-colors">

@@ -159,9 +159,9 @@ const Security = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
       {/* Header */}
-      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50 relative">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link to="/admin">
