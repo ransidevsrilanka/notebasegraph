@@ -15,8 +15,16 @@ export interface UserSubjects {
   subject_1: string;
   subject_2: string;
   subject_3: string;
+  subject_1_medium?: string | null;
+  subject_2_medium?: string | null;
+  subject_3_medium?: string | null;
+  subject_1_code?: string | null;
+  subject_2_code?: string | null;
+  subject_3_code?: string | null;
   is_locked: boolean;
   locked_at: string | null;
+  medium_change_count?: number;
+  max_medium_changes?: number;
   created_at: string;
   updated_at: string;
 }

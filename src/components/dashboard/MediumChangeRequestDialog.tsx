@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -20,7 +20,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import { Languages, Loader2 } from 'lucide-react';
+import { Languages, Loader2, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface MediumChangeRequestDialogProps {
   open: boolean;
@@ -40,6 +41,15 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
   const [subject2Medium, setSubject2Medium] = useState('');
   const [subject3Medium, setSubject3Medium] = useState('');
   const [reason, setReason] = useState('');
+  const [changeCount, setChangeCount] = useState(0);
+  const [maxChanges, setMaxChanges] = useState(3);
+
+  useEffect(() => {
+    if (userSubjects) {
+      setChangeCount(userSubjects.medium_change_count || 0);
+      setMaxChanges(userSubjects.max_medium_changes || 3);
+    }
+  }, [userSubjects]);
 
   const subjects = [
     { name: userSubjects?.subject_1, medium: subject1Medium, setMedium: setSubject1Medium },
@@ -48,11 +58,17 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
   ].filter(s => s.name);
 
   const hasAnyChange = subject1Medium || subject2Medium || subject3Medium;
+  const remainingChanges = maxChanges - changeCount;
+  const canRequestChange = remainingChanges > 0;
 
   const handleSubmit = async () => {
     if (!user || !enrollment || !userSubjects) return;
     if (!hasAnyChange) {
       toast.error('Please select at least one subject to change medium');
+      return;
+    }
+    if (!canRequestChange) {
+      toast.error('You have used all your medium change requests');
       return;
     }
 
@@ -90,6 +106,7 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
             student_email: user.email,
             changes,
             reason: reason || 'Not specified',
+            remaining_changes: remainingChanges - 1,
           },
         },
       });
@@ -125,11 +142,27 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
           </DialogDescription>
         </DialogHeader>
 
+        {/* Remaining Changes Alert */}
+        <Alert variant={canRequestChange ? "default" : "destructive"}>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            {canRequestChange ? (
+              <>You have <strong>{remainingChanges}</strong> of {maxChanges} medium changes remaining.</>
+            ) : (
+              <>You have used all {maxChanges} medium change requests. Contact support for assistance.</>
+            )}
+          </AlertDescription>
+        </Alert>
+
         <div className="space-y-4 py-4">
           {subjects.map((subject, index) => (
             <div key={index} className="space-y-2">
               <Label className="text-sm font-medium">{subject.name}</Label>
-              <Select value={subject.medium} onValueChange={subject.setMedium}>
+              <Select 
+                value={subject.medium} 
+                onValueChange={subject.setMedium}
+                disabled={!canRequestChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="No change" />
                 </SelectTrigger>
@@ -151,6 +184,7 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
+              disabled={!canRequestChange}
             />
           </div>
         </div>
@@ -162,7 +196,7 @@ const MediumChangeRequestDialog = ({ open, onOpenChange }: MediumChangeRequestDi
           <Button
             variant="brand"
             onClick={handleSubmit}
-            disabled={isSubmitting || !hasAnyChange}
+            disabled={isSubmitting || !hasAnyChange || !canRequestChange}
           >
             {isSubmitting ? (
               <>

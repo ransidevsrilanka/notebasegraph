@@ -56,17 +56,19 @@ interface MediumRequest {
     subject_1: string | null;
     subject_2: string | null;
     subject_3: string | null;
+    medium_change_count?: number;
+    max_medium_changes?: number;
   };
 }
 
 const SubjectMediumRequests = () => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [requests, setRequests] = useState<MediumRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [rejectDialog, setRejectDialog] = useState<{ id: string; open: boolean }>({ id: '', open: false });
+  const [rejectDialog, setRejectDialog] = useState<{ id: string; open: boolean; userId: string }>({ id: '', open: false, userId: '' });
   const [rejectNotes, setRejectNotes] = useState('');
   const [sidebarStats, setSidebarStats] = useState({
     pendingJoinRequests: 0,
@@ -122,10 +124,10 @@ const SubjectMediumRequests = () => {
         .select('user_id, full_name, email')
         .in('user_id', userIds);
 
-      // Fetch user_subjects
+      // Fetch user_subjects including change count
       const { data: subjects } = await supabase
         .from('user_subjects')
-        .select('id, subject_1, subject_2, subject_3')
+        .select('id, subject_1, subject_2, subject_3, medium_change_count, max_medium_changes')
         .in('id', subjectIds);
 
       // Merge data
@@ -144,6 +146,29 @@ const SubjectMediumRequests = () => {
     }
   };
 
+  const sendInboxNotification = async (userId: string, approved: boolean, adminNotes?: string | null, remainingChanges?: number) => {
+    try {
+      const subject = approved 
+        ? '✅ Subject Medium Change Approved!'
+        : '❌ Subject Medium Change Rejected';
+      
+      const body = approved
+        ? `Great news! Your request to change subject mediums has been approved. Your subjects now use the updated medium. Refresh your dashboard to see the changes.\n\nYou have ${remainingChanges ?? 'unknown'} medium change(s) remaining.`
+        : `Your subject medium change request was not approved.${adminNotes ? `\n\nReason: ${adminNotes}` : ''}\n\nIf you have questions, please contact support.`;
+
+      await supabase.from('messages').insert({
+        recipient_id: userId, // Use recipient_id instead of recipient_user_id for compatibility
+        recipient_type: 'student',
+        subject,
+        body,
+        notification_type: approved ? 'medium_approved' : 'medium_rejected',
+        sender_id: user?.id,
+      } as any);
+    } catch (error) {
+      console.error('Error sending inbox notification:', error);
+    }
+  };
+
   const handleApprove = async (request: MediumRequest) => {
     if (!request.user_subjects_id) {
       toast.error('No user subjects linked to this request');
@@ -152,8 +177,8 @@ const SubjectMediumRequests = () => {
 
     setProcessingId(request.id);
     try {
-      // Update user_subjects with new medium values
-      const updates: Record<string, string | null> = {};
+      // Update user_subjects with new medium values and increment change count
+      const updates: Record<string, any> = {};
       if (request.subject_1_new_medium && request.subject_1_new_medium !== 'none') {
         updates.subject_1_medium = request.subject_1_new_medium;
       }
@@ -163,6 +188,11 @@ const SubjectMediumRequests = () => {
       if (request.subject_3_new_medium && request.subject_3_new_medium !== 'none') {
         updates.subject_3_medium = request.subject_3_new_medium;
       }
+
+      // Increment the medium_change_count
+      const currentCount = request.user_subjects?.medium_change_count || 0;
+      const maxChanges = request.user_subjects?.max_medium_changes || 3;
+      updates.medium_change_count = currentCount + 1;
 
       if (Object.keys(updates).length > 0) {
         const { error: updateError } = await supabase
@@ -179,10 +209,15 @@ const SubjectMediumRequests = () => {
         .update({
           status: 'approved',
           reviewed_at: new Date().toISOString(),
+          reviewed_by: user?.id,
         })
         .eq('id', request.id);
 
       if (statusError) throw statusError;
+
+      // Send inbox notification
+      const remainingChanges = maxChanges - (currentCount + 1);
+      await sendInboxNotification(request.user_id, true, null, remainingChanges);
 
       toast.success('Request approved and subject mediums updated');
       fetchRequests();
@@ -204,13 +239,17 @@ const SubjectMediumRequests = () => {
           status: 'rejected',
           admin_notes: rejectNotes || null,
           reviewed_at: new Date().toISOString(),
+          reviewed_by: user?.id,
         })
         .eq('id', rejectDialog.id);
 
       if (error) throw error;
 
+      // Send inbox notification
+      await sendInboxNotification(rejectDialog.userId, false, rejectNotes);
+
       toast.success('Request rejected');
-      setRejectDialog({ id: '', open: false });
+      setRejectDialog({ id: '', open: false, userId: '' });
       setRejectNotes('');
       fetchRequests();
       fetchSidebarStats();
@@ -280,7 +319,7 @@ const SubjectMediumRequests = () => {
                 Subject Medium Requests
               </h1>
               <p className="text-muted-foreground text-sm">
-                Manage student requests to change subject medium
+                Manage student requests to change subject medium (max 3 per student)
               </p>
             </div>
           </div>
@@ -310,6 +349,7 @@ const SubjectMediumRequests = () => {
               <TableRow>
                 <TableHead>Student</TableHead>
                 <TableHead>Requested Changes</TableHead>
+                <TableHead>Changes Used</TableHead>
                 <TableHead>Reason</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
@@ -319,13 +359,13 @@ const SubjectMediumRequests = () => {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               ) : filteredRequests.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No requests found
                   </TableCell>
                 </TableRow>
@@ -346,6 +386,18 @@ const SubjectMediumRequests = () => {
                           </Badge>
                         ))}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant="outline" 
+                        className={`${
+                          (req.user_subjects?.medium_change_count || 0) >= (req.user_subjects?.max_medium_changes || 3)
+                            ? 'border-red-500/50 text-red-500'
+                            : 'border-muted-foreground/50'
+                        }`}
+                      >
+                        {req.user_subjects?.medium_change_count || 0}/{req.user_subjects?.max_medium_changes || 3}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <p className="text-sm text-muted-foreground max-w-[200px] truncate">
@@ -376,7 +428,7 @@ const SubjectMediumRequests = () => {
                             size="sm"
                             variant="outline"
                             className="border-red-500/50 text-red-500 hover:bg-red-500/10"
-                            onClick={() => setRejectDialog({ id: req.id, open: true })}
+                            onClick={() => setRejectDialog({ id: req.id, open: true, userId: req.user_id })}
                             disabled={processingId === req.id}
                           >
                             <X className="w-4 h-4" />
@@ -399,14 +451,14 @@ const SubjectMediumRequests = () => {
             </DialogHeader>
             <div className="py-4">
               <Textarea
-                placeholder="Optional notes for rejection..."
+                placeholder="Reason for rejection (will be sent to student)..."
                 value={rejectNotes}
                 onChange={(e) => setRejectNotes(e.target.value)}
                 rows={3}
               />
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setRejectDialog({ id: '', open: false })}>
+              <Button variant="outline" onClick={() => setRejectDialog({ id: '', open: false, userId: '' })}>
                 Cancel
               </Button>
               <Button
