@@ -90,7 +90,7 @@ const RefundPolicy = () => {
               </p>
               <ol className="list-decimal list-inside text-muted-foreground space-y-2 ml-4">
                 <li>Submit a request within 48 hours of the issue occurring</li>
-                <li>Email ransibeats@gmail.com with your account details, transaction ID, and detailed explanation</li>
+                <li>Email support@notebase.tech with your account details, transaction ID, and detailed explanation</li>
                 <li>Provide any relevant evidence (screenshots, error messages)</li>
                 <li>Allow up to 14 business days for review</li>
               </ol>
@@ -141,8 +141,8 @@ const RefundPolicy = () => {
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 For refund inquiries or questions about this policy, please contact us at{' '}
-                <a href="mailto:ransibeats@gmail.com" className="text-primary hover:underline">
-                  ransibeats@gmail.com
+                <a href="mailto:support@notebase.tech" className="text-primary hover:underline">
+                  support@notebase.tech
                 </a>
               </p>
               <p className="text-muted-foreground leading-relaxed mt-4">

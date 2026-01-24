@@ -158,8 +158,8 @@ const TermsOfService = () => {
               </h2>
               <p className="text-muted-foreground leading-relaxed">
                 For questions about these Terms of Service, please contact us at{' '}
-                <a href="mailto:ransibeats@gmail.com" className="text-primary hover:underline">
-                  support@coursemaster.store
+                <a href="mailto:support@notebase.tech" className="text-primary hover:underline">
+                  support@notebase.tech
                 </a>
               </p>
             </section>

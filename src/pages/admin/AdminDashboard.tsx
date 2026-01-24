@@ -55,6 +55,10 @@ interface Stats {
   totalRevenue: number;
   thisMonthRevenue: number;
   lastMonthRevenue: number;
+  // Weekly revenue for forecast
+  thisWeekRevenue: number;
+  lastWeekRevenue: number;
+  twoWeeksAgoRevenue: number;
   starterCount: number;
   standardCount: number;
   lifetimeCount: number;
@@ -210,6 +214,9 @@ const AdminDashboard = () => {
     totalRevenue: 0,
     thisMonthRevenue: 0,
     lastMonthRevenue: 0,
+    thisWeekRevenue: 0,
+    lastWeekRevenue: 0,
+    twoWeeksAgoRevenue: 0,
     starterCount: 0,
     standardCount: 0,
     lifetimeCount: 0,
@@ -236,7 +243,6 @@ const AdminDashboard = () => {
   const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [funnelStats, setFunnelStats] = useState<FunnelStats>({ totalSignups: 0, totalPaidUsers: 0 });
-  const [twoMonthsAgoRevenue, setTwoMonthsAgoRevenue] = useState(0);
 
   const fetchStats = async () => {
     try {
@@ -434,20 +440,44 @@ const AdminDashboard = () => {
         );
       }
 
-      // Two months ago revenue for forecast
-      const twoMonthsAgo = new Date();
-      twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-      twoMonthsAgo.setDate(1);
-      const twoMonthsAgoStr = twoMonthsAgo.toISOString().split('T')[0];
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      oneMonthAgo.setDate(1);
-      const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0];
+      // Weekly revenue calculations
+      const now = new Date();
+      const dayOfWeek = now.getDay() || 7; // Sunday = 0, convert to 7
       
-      const twoMonthsRev = (allPayments || [])
-        .filter(p => p.payment_month && p.payment_month >= twoMonthsAgoStr && p.payment_month < oneMonthAgoStr)
+      // Start of this week (Monday)
+      const thisWeekStart = new Date(now);
+      thisWeekStart.setDate(now.getDate() - dayOfWeek + 1);
+      thisWeekStart.setHours(0, 0, 0, 0);
+      
+      // Start of last week
+      const lastWeekStart = new Date(thisWeekStart);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      
+      // Start of two weeks ago
+      const twoWeeksAgoStart = new Date(lastWeekStart);
+      twoWeeksAgoStart.setDate(twoWeeksAgoStart.getDate() - 7);
+      
+      const thisWeekStartStr = thisWeekStart.toISOString().split('T')[0];
+      const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
+      const twoWeeksAgoStartStr = twoWeeksAgoStart.toISOString().split('T')[0];
+      
+      // Calculate this week's revenue
+      const thisWeekRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= thisWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
-      setTwoMonthsAgoRevenue(twoMonthsRev);
+      
+      // Calculate last week's revenue
+      const lastWeekRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= lastWeekStartStr && p.payment_month < thisWeekStartStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      
+      // Calculate two weeks ago revenue
+      const twoWeeksAgoRevenue = (allPayments || [])
+        .filter(p => p.payment_month && p.payment_month >= twoWeeksAgoStartStr && p.payment_month < lastWeekStartStr)
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      
+      // Days into current week (Monday = 1, Tuesday = 2, etc.)
+      const daysIntoWeek = dayOfWeek;
 
       const { data: creatorsData } = await supabase
         .from('creator_profiles')
@@ -491,6 +521,9 @@ const AdminDashboard = () => {
         totalRevenue,
         thisMonthRevenue,
         lastMonthRevenue,
+        thisWeekRevenue,
+        lastWeekRevenue,
+        twoWeeksAgoRevenue,
         starterCount,
         standardCount,
         lifetimeCount,
@@ -669,10 +702,10 @@ const AdminDashboard = () => {
                 totalRevenue={stats.totalRevenue}
               />
               <RevenueForecast 
-                thisMonthRevenue={stats.thisMonthRevenue}
-                lastMonthRevenue={stats.lastMonthRevenue}
-                twoMonthsAgoRevenue={twoMonthsAgoRevenue}
-                daysIntoMonth={new Date().getDate()}
+                thisWeekRevenue={stats.thisWeekRevenue}
+                lastWeekRevenue={stats.lastWeekRevenue}
+                twoWeeksAgoRevenue={stats.twoWeeksAgoRevenue}
+                daysIntoWeek={new Date().getDay() || 7}
               />
             </div>
 

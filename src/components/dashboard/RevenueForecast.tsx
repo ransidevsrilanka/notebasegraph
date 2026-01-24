@@ -1,76 +1,71 @@
 import { TrendingUp, ArrowUpRight, ArrowDownRight, Calculator } from 'lucide-react';
 
 interface RevenueForecastProps {
-  thisMonthRevenue: number;
-  lastMonthRevenue: number;
-  twoMonthsAgoRevenue: number;
-  daysIntoMonth: number;
+  thisWeekRevenue: number;
+  lastWeekRevenue: number;
+  twoWeeksAgoRevenue: number;
+  daysIntoWeek: number; // 1-7 (Sunday = 0 counted as 7)
 }
 
 export const RevenueForecast = ({ 
-  thisMonthRevenue, 
-  lastMonthRevenue, 
-  twoMonthsAgoRevenue,
-  daysIntoMonth 
+  thisWeekRevenue, 
+  lastWeekRevenue, 
+  twoWeeksAgoRevenue,
+  daysIntoWeek 
 }: RevenueForecastProps) => {
-  // Calculate monthly growth trend (average of last 2 months)
-  const growth1 = lastMonthRevenue > 0 && twoMonthsAgoRevenue > 0 
-    ? ((lastMonthRevenue - twoMonthsAgoRevenue) / twoMonthsAgoRevenue) 
-    : 0;
-  const growth2 = thisMonthRevenue > 0 && lastMonthRevenue > 0 
-    ? ((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) 
+  // Calculate weekly growth trend (last week vs two weeks ago)
+  const growth1 = lastWeekRevenue > 0 && twoWeeksAgoRevenue > 0 
+    ? ((lastWeekRevenue - twoWeeksAgoRevenue) / twoWeeksAgoRevenue) 
     : 0;
   
-  const avgGrowthRate = (growth1 + growth2) / 2;
+  // Project this week based on days passed (7 days in a week)
+  const effectiveDays = daysIntoWeek > 0 ? daysIntoWeek : 1;
+  const projectedThisWeek = effectiveDays > 0 
+    ? Math.round((thisWeekRevenue / effectiveDays) * 7)
+    : thisWeekRevenue;
   
-  // Project this month based on days passed
-  const totalDaysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-  const projectedThisMonth = daysIntoMonth > 0 
-    ? Math.round((thisMonthRevenue / daysIntoMonth) * totalDaysInMonth)
-    : thisMonthRevenue;
-  
-  // Forecast next month
-  const forecastNextMonth = Math.round(projectedThisMonth * (1 + avgGrowthRate));
-  
-  // Trend percentage
-  const trendPercent = lastMonthRevenue > 0 
-    ? Math.round(((projectedThisMonth - lastMonthRevenue) / lastMonthRevenue) * 100)
+  // Trend percentage vs last week
+  const trendPercent = lastWeekRevenue > 0 
+    ? Math.round(((projectedThisWeek - lastWeekRevenue) / lastWeekRevenue) * 100)
     : 0;
   
   const isPositiveTrend = trendPercent >= 0;
+
+  // Forecast next week based on average growth
+  const forecastNextWeek = Math.round(projectedThisWeek * (1 + growth1));
 
   return (
     <div className="glass-card p-6">
       <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
         <Calculator className="w-5 h-5 text-purple-400" />
-        Revenue Forecast
+        Revenue Forecast (Weekly)
       </h3>
       
       <div className="grid grid-cols-2 gap-4">
-        {/* This Month Projected */}
+        {/* This Week Projected */}
         <div className="p-4 rounded-xl bg-brand/10 border border-brand/30">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-muted-foreground">This Month (Projected)</span>
+            <span className="text-xs text-muted-foreground">This Week (Projected)</span>
             <div className={`flex items-center gap-1 text-xs ${isPositiveTrend ? 'text-green-500' : 'text-red-500'}`}>
               {isPositiveTrend ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
               {Math.abs(trendPercent)}%
             </div>
           </div>
-          <p className="text-2xl font-bold text-foreground">Rs. {projectedThisMonth.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-foreground">Rs. {projectedThisWeek.toLocaleString()}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Current: Rs. {thisMonthRevenue.toLocaleString()} ({daysIntoMonth}/{totalDaysInMonth} days)
+            Current: Rs. {thisWeekRevenue.toLocaleString()} ({daysIntoWeek}/7 days)
           </p>
         </div>
 
-        {/* Next Month Forecast */}
+        {/* Next Week Forecast */}
         <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-muted-foreground">Next Month (Forecast)</span>
+            <span className="text-xs text-muted-foreground">Next Week (Forecast)</span>
             <TrendingUp className="w-4 h-4 text-purple-400" />
           </div>
-          <p className="text-2xl font-bold text-foreground">Rs. {forecastNextMonth.toLocaleString()}</p>
+          <p className="text-2xl font-bold text-foreground">Rs. {forecastNextWeek.toLocaleString()}</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Based on {(avgGrowthRate * 100).toFixed(1)}% avg growth
+            Based on {(growth1 * 100).toFixed(1)}% weekly trend
           </p>
         </div>
       </div>
@@ -78,19 +73,19 @@ export const RevenueForecast = ({
       {/* Growth Trend Visual */}
       <div className="mt-4 p-3 rounded-lg bg-muted/30">
         <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-          <span>Growth Trend (3 months)</span>
+          <span>Growth Trend (3 weeks)</span>
           <span className={isPositiveTrend ? 'text-green-500' : 'text-red-500'}>
-            {isPositiveTrend ? '↗' : '↘'} {avgGrowthRate > 0 ? '+' : ''}{(avgGrowthRate * 100).toFixed(1)}% avg
+            {isPositiveTrend ? '↗' : '↘'} {growth1 > 0 ? '+' : ''}{(growth1 * 100).toFixed(1)}% WoW
           </span>
         </div>
         <div className="flex items-end gap-2 h-12">
           <div 
             className="flex-1 bg-muted-foreground/30 rounded-t"
-            style={{ height: `${Math.min((twoMonthsAgoRevenue / Math.max(projectedThisMonth, 1)) * 100, 100)}%` }}
+            style={{ height: `${Math.min((twoWeeksAgoRevenue / Math.max(projectedThisWeek, 1)) * 100, 100)}%` }}
           />
           <div 
             className="flex-1 bg-muted-foreground/50 rounded-t"
-            style={{ height: `${Math.min((lastMonthRevenue / Math.max(projectedThisMonth, 1)) * 100, 100)}%` }}
+            style={{ height: `${Math.min((lastWeekRevenue / Math.max(projectedThisWeek, 1)) * 100, 100)}%` }}
           />
           <div 
             className="flex-1 bg-brand rounded-t"
@@ -98,9 +93,9 @@ export const RevenueForecast = ({
           />
         </div>
         <div className="flex justify-between text-xs text-muted-foreground mt-1">
-          <span>2 mo ago</span>
-          <span>Last</span>
-          <span>This</span>
+          <span>2 wks ago</span>
+          <span>Last wk</span>
+          <span>This wk</span>
         </div>
       </div>
     </div>

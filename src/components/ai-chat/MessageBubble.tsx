@@ -16,37 +16,55 @@ interface MessageBubbleProps {
 
 /**
  * Fixes malformed markdown tables that AI outputs on a single line.
- * Converts: | H1 | H2 | |---|---| | C1 | C2 | | C3 | C4 |
- * To proper multi-line format with newlines.
+ * Handles multiple formats:
+ * 1. Tables entirely on one line with separator included
+ * 2. Tables with collapsed rows
  */
 function fixMalformedTables(content: string): string {
-  const singleLineTablePattern =
-    /(\|[^|\n]+(?:\|[^|\n]+)+)\s*(\|[-:\s]+(?:\|[-:\s]+)+\|)\s*(\|[^|\n]+(?:\|[^|\n]+)*\|?)/g;
+  const lines = content.split('\n');
+  const processedLines: string[] = [];
 
-  return content.replace(
-    singleLineTablePattern,
-    (match, headerPart, separatorPart, bodyPart) => {
-      const header = headerPart.trim();
-      const separator = separatorPart.trim();
+  for (const line of lines) {
+    const pipeCount = (line.match(/\|/g) || []).length;
+    
+    // Check if this line contains a collapsed table (many pipes + separator pattern)
+    if (pipeCount > 6 && /\|[-:\s]+\|/.test(line)) {
+      // Try to expand the collapsed table
+      // Split by separator pattern |---|---|
+      const separatorMatch = line.match(/(\|[-:\s]+(?:\|[-:\s]+)+\|)/);
+      if (separatorMatch) {
+        const sepIndex = line.indexOf(separatorMatch[0]);
+        const headerPart = line.slice(0, sepIndex).trim();
+        const separator = separatorMatch[0];
+        const bodyPart = line.slice(sepIndex + separator.length).trim();
 
-      const headerCols = (header.match(/\|/g) || []).length - 1;
-      if (headerCols <= 0) return match;
+        // Count columns from separator
+        const numCols = (separator.match(/\|/g) || []).length - 1;
+        
+        if (numCols > 0 && headerPart && bodyPart) {
+          // Split body into cells and reconstruct rows
+          const bodyCells = bodyPart.split('|').filter((c: string) => c.trim() !== '');
+          const rows: string[] = [];
+          
+          for (let i = 0; i < bodyCells.length; i += numCols) {
+            const rowCells = bodyCells.slice(i, i + numCols);
+            if (rowCells.length > 0) {
+              rows.push('| ' + rowCells.map((c: string) => c.trim()).join(' | ') + ' |');
+            }
+          }
 
-      const bodyCells = bodyPart
-        .split("|")
-        .filter((cell: string) => cell.trim() !== "");
-      const rows: string[] = [];
-
-      for (let i = 0; i < bodyCells.length; i += headerCols) {
-        const rowCells = bodyCells.slice(i, i + headerCols);
-        if (rowCells.length > 0) {
-          rows.push("| " + rowCells.map((c: string) => c.trim()).join(" | ") + " |");
+          processedLines.push(headerPart);
+          processedLines.push(separator);
+          processedLines.push(...rows);
+          continue;
         }
       }
-
-      return `${header}\n${separator}\n${rows.join("\n")}`;
     }
-  );
+    
+    processedLines.push(line);
+  }
+
+  return processedLines.join('\n');
 }
 
 /**

@@ -320,20 +320,20 @@ const PaymentMethodDialog = ({
           </p>
         </div>
 
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-3 py-4">
           <Button
             onClick={handleCardPayment}
             disabled={isLoading}
-            className="h-auto py-4 px-6 justify-start gap-4"
+            className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
             variant="outline"
           >
-            <div className="w-12 h-12 rounded-xl bg-brand/10 flex items-center justify-center">
-              <CreditCard className="w-6 h-6 text-brand" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand/10 flex-shrink-0 flex items-center justify-center">
+              <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-brand" />
             </div>
-            <div className="text-left">
-              <p className="font-semibold text-foreground">Card Payment</p>
-              <p className="text-sm text-muted-foreground">
-                Pay instantly with Visa, Mastercard, or Amex
+            <div className="text-left min-w-0 flex-1">
+              <p className="font-semibold text-foreground text-sm sm:text-base">Card Payment</p>
+              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                Pay with Visa, Mastercard, or Amex
               </p>
             </div>
           </Button>
@@ -341,16 +341,16 @@ const PaymentMethodDialog = ({
           <Button
             onClick={handleBankTransfer}
             disabled={isLoading}
-            className="h-auto py-4 px-6 justify-start gap-4"
+            className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
             variant="outline"
           >
-            <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-muted-foreground" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-secondary flex-shrink-0 flex items-center justify-center">
+              <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
             </div>
-            <div className="text-left">
-              <p className="font-semibold text-foreground">Bank Transfer</p>
-              <p className="text-sm text-muted-foreground">
-                Manual transfer with receipt upload
+            <div className="text-left min-w-0 flex-1">
+              <p className="font-semibold text-foreground text-sm sm:text-base">Bank Transfer</p>
+              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                Manual transfer with receipt
               </p>
             </div>
           </Button>
