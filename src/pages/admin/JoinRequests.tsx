@@ -309,26 +309,28 @@ const JoinRequests = () => {
                     </p>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
                     {request.receipt_url && (
                       <Button
                         variant="outline"
                         size="sm"
+                        className="text-xs px-2 py-1.5 h-auto"
                         onClick={() => openReceiptUrl(request.receipt_url!, request.user_id)}
                       >
-                        <Download className="w-4 h-4 mr-1" />
+                        <Download className="w-3 h-3 mr-1" />
                         Receipt
                       </Button>
                     )}
                     <Button
                       variant="outline"
                       size="sm"
+                      className="text-xs px-2 py-1.5 h-auto"
                       onClick={() => {
                         setSelectedRequest(request);
                         setViewDialogOpen(true);
                       }}
                     >
-                      <Eye className="w-4 h-4 mr-1" />
+                      <Eye className="w-3 h-3 mr-1" />
                       View
                     </Button>
                     {request.status === 'pending' && (
@@ -336,22 +338,24 @@ const JoinRequests = () => {
                         <Button
                           variant="brand"
                           size="sm"
+                          className="text-xs px-2 py-1.5 h-auto"
                           onClick={() => handleApprove(request)}
                           disabled={isProcessing}
                         >
-                          <CheckCircle className="w-4 h-4 mr-1" />
+                          <CheckCircle className="w-3 h-3 mr-1" />
                           Approve
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
+                          className="text-xs px-2 py-1.5 h-auto"
                           onClick={() => {
                             setSelectedRequest(request);
                             setRejectDialogOpen(true);
                           }}
                           disabled={isProcessing}
                         >
-                          <XCircle className="w-4 h-4 mr-1" />
+                          <XCircle className="w-3 h-3 mr-1" />
                           Reject
                         </Button>
                       </>

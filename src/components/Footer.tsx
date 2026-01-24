@@ -50,9 +50,9 @@ const Footer = () => {
                 {branding.tagline}
               </p>
               <div className="flex flex-col gap-3">
-                <a href="mailto:ransibeats@gmail.com" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand transition-colors text-sm">
+                <a href="mailto:support@notebase.tech" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand transition-colors text-sm">
                   <Mail className="w-4 h-4" />
-                  ransibeats@gmail.com
+                  support@notebase.tech
                 </a>
                 <div className="inline-flex items-center gap-2 text-muted-foreground text-sm">
                   <MapPin className="w-4 h-4" />

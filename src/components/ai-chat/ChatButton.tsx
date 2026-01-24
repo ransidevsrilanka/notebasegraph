@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sparkles, X } from "lucide-react";
 import { ChatWindow } from "./ChatWindow";
@@ -12,6 +13,12 @@ interface ChatButtonProps {
 export function ChatButton({ className }: ChatButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { user, enrollment } = useAuth();
+  const location = useLocation();
+
+  // Hide on AI assistant full page to avoid overlapping send button
+  if (location.pathname === '/ai-assistant') {
+    return null;
+  }
 
   // Only show for logged-in users with enrollment
   if (!user || !enrollment) {

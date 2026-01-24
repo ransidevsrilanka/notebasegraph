@@ -209,8 +209,8 @@ const Access = () => {
       console.error('Error creating profile:', profileError);
     }
 
-    // Update access code
-    await supabase
+    // Update access code with error handling
+    const { error: codeUpdateError } = await supabase
       .from('access_codes')
       .update({
         status: 'used' as const,
@@ -220,6 +220,11 @@ const Access = () => {
         activations_used: 1,
       })
       .eq('id', validatedCode.id);
+
+    if (codeUpdateError) {
+      console.error('Failed to update access code status:', codeUpdateError);
+      // Continue anyway - enrollment is more important
+    }
 
     // Calculate expiry
     const expiresAt = validatedCode.duration_days > 0
@@ -239,6 +244,27 @@ const Access = () => {
         expires_at: expiresAt,
         is_active: true,
       }]);
+
+    // Send Telegram notification for new access code signup
+    try {
+      await supabase.functions.invoke('send-telegram-notification', {
+        body: {
+          type: 'new_access_code_signup',
+          message: `New student signed up using access code`,
+          data: {
+            email: email,
+            name: name,
+            code: accessCode,
+            tier: TIER_LABELS[validatedCode.tier as keyof typeof TIER_LABELS],
+            grade: GRADE_LABELS[validatedCode.grade as keyof typeof GRADE_LABELS],
+          },
+          priority: 'low'
+        }
+      });
+    } catch (notifyError) {
+      console.error('Failed to send Telegram notification:', notifyError);
+      // Don't fail the signup if notification fails
+    }
 
     setIsLoading(false);
     setStep('success');

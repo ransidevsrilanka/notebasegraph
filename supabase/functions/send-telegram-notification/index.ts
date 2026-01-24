@@ -38,6 +38,9 @@ const NOTIFICATION_TYPES: Record<string, { emoji: string; title: string; priorit
   // Subject Medium
   'medium_change_request': { emoji: '📝', title: 'Medium Change Request', priority: 'medium' },
   
+  // Access Code Signups
+  'new_access_code_signup': { emoji: '🎓', title: 'New Student Signup (Access Code)', priority: 'low' },
+  
   // Security
   'security_alert': { emoji: '🚨', title: 'Security Alert', priority: 'critical' },
   'suspicious_download': { emoji: '⚠️', title: 'High Download Activity', priority: 'high' },

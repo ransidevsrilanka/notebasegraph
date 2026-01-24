@@ -149,10 +149,10 @@ const PrivacyPolicy = () => {
               <p className="text-muted-foreground leading-relaxed">
                 If you have questions about this Privacy Policy, contact us at{' '}
                 <a
-                  href="mailto:ransibeats@gmail.com"
+                  href="mailto:support@notebase.tech"
                   className="text-primary hover:underline"
                 >
-                  ransibeats@gmail.com
+                  support@notebase.tech
                 </a>
               </p>
             </section>
