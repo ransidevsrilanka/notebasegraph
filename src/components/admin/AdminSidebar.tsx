@@ -36,6 +36,7 @@ import {
   Layers,
   Gift,
   Languages,
+  Printer,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -44,6 +45,7 @@ interface AdminSidebarProps {
     pendingUpgrades: number;
     pendingWithdrawals: number;
     pendingHeadOpsRequests: number;
+    pendingPrintRequests: number;
   };
 }
 
@@ -65,6 +67,7 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
         { label: 'Upgrade Requests', href: '/admin/upgrades', icon: Crown, badge: stats.pendingUpgrades },
         { label: 'Withdrawals', href: '/admin/withdrawals', icon: Wallet, badge: stats.pendingWithdrawals },
         { label: 'Head Ops Requests', href: '/admin/headops-requests', icon: FileCheck, badge: stats.pendingHeadOpsRequests },
+        { label: 'Print Requests', href: '/admin/print-requests', icon: Printer, badge: stats.pendingPrintRequests },
       ],
     },
     {

@@ -75,6 +75,7 @@ const SubjectMediumRequests = () => {
     pendingWithdrawals: 0,
     pendingUpgrades: 0,
     pendingHeadOpsRequests: 0,
+    pendingPrintRequests: 0,
   });
 
   useEffect(() => {
@@ -83,17 +84,19 @@ const SubjectMediumRequests = () => {
   }, []);
 
   const fetchSidebarStats = async () => {
-    const [joins, withdrawals, upgrades, headOps] = await Promise.all([
+    const [joins, withdrawals, upgrades, headOps, prints] = await Promise.all([
       supabase.from('join_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('withdrawal_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('upgrade_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('head_ops_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('print_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
     setSidebarStats({
       pendingJoinRequests: joins.count || 0,
       pendingWithdrawals: withdrawals.count || 0,
       pendingUpgrades: upgrades.count || 0,
       pendingHeadOpsRequests: headOps.count || 0,
+      pendingPrintRequests: prints.count || 0,
     });
   };
 
