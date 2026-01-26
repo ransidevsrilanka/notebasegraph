@@ -600,97 +600,154 @@ const BankSignup = () => {
               </div>
             )}
 
-            {/* Step 3: Subject Selection (A/L only) */}
+            {/* Step 3: Subject Selection (A/L only) - Enhanced UI */}
             {step === 'subjects' && isALevel && (
-              <div className="glass-card p-6">
-                <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center mb-4">
-                  <BookOpen className="w-6 h-6 text-brand" />
-                </div>
-                <h1 className="font-display text-xl font-bold text-foreground mb-1">
-                  Select Your Subjects
-                </h1>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Choose 3 subjects for your {STREAM_LABELS[selectedStream as keyof typeof STREAM_LABELS]} stream.
-                </p>
-
-                {isLoadingSubjects ? (
-                  <div className="text-center py-8">
-                    <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
+              <div className="glass-card p-6 relative overflow-hidden">
+                {/* Decorative gradient orbs */}
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-brand/20 rounded-full blur-3xl" />
+                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
+                
+                <div className="relative z-10">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/30 to-brand/10 flex items-center justify-center mb-4 border border-brand/20">
+                    <BookOpen className="w-6 h-6 text-brand" />
                   </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Mandatory subjects */}
-                    {mandatorySubjects.length > 0 && (
-                      <div>
-                        <h3 className="text-sm font-medium text-muted-foreground mb-2">
-                          Compulsory Subjects
-                        </h3>
-                        <div className="space-y-2">
-                          {mandatorySubjects.map((subject) => (
-                            <div
-                              key={subject}
-                              className="flex items-center gap-3 p-3 rounded-lg bg-brand/10 border border-brand/30"
-                            >
-                              <Checkbox checked disabled />
-                              <span className="text-sm text-foreground">{subject}</span>
-                              <span className="ml-auto text-xs text-brand">Required</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  <h1 className="font-display text-xl font-bold text-foreground mb-1">
+                    Select Your Subjects
+                  </h1>
+                  <p className="text-muted-foreground text-sm mb-6">
+                    Choose 3 subjects for your {STREAM_LABELS[selectedStream as keyof typeof STREAM_LABELS]} stream.
+                  </p>
 
-                    {/* Optional subjects by basket */}
-                    {Object.entries(subjectsByBasket)
-                      .filter(([basket]) => basket !== 'mandatory')
-                      .map(([basket, subjects]) => (
-                        <div key={basket}>
-                          <h3 className="text-sm font-medium text-muted-foreground mb-2">
-                            {BASKET_LABELS[basket] || basket} (Choose 1)
+                  {isLoadingSubjects ? (
+                    <div className="text-center py-8">
+                      <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto" />
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Mandatory subjects with enhanced styling */}
+                      {mandatorySubjects.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand" />
+                            Compulsory Subjects
                           </h3>
                           <div className="space-y-2">
-                            {subjects.filter(s => !s.is_mandatory).map((subject) => (
+                            {mandatorySubjects.map((subject) => (
                               <div
-                                key={subject.subject_name}
-                                onClick={() => toggleSubject(subject.subject_name)}
-                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
-                                  selectedSubjects.includes(subject.subject_name)
-                                    ? 'bg-brand/10 border border-brand/30'
-                                    : 'bg-secondary/50 border border-transparent hover:border-border'
-                                }`}
+                                key={subject}
+                                className="relative overflow-hidden rounded-xl p-4 border-2 border-brand bg-brand/10 shadow-lg shadow-brand/10"
                               >
-                                <Checkbox
-                                  checked={selectedSubjects.includes(subject.subject_name)}
-                                  disabled={subject.is_mandatory}
-                                />
-                                <span className="text-sm text-foreground">{subject.subject_name}</span>
+                                <div className="absolute top-3 right-3">
+                                  <div className="w-6 h-6 rounded-full bg-brand flex items-center justify-center animate-in zoom-in duration-200">
+                                    <CheckCircle2 className="w-4 h-4 text-white" />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-brand/20 flex items-center justify-center">
+                                    <GraduationCap className="w-5 h-5 text-brand" />
+                                  </div>
+                                  <div>
+                                    <span className="text-sm font-medium text-foreground">{subject}</span>
+                                    <p className="text-xs text-brand">Required for your stream</p>
+                                  </div>
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
-                      ))}
+                      )}
 
-                    {/* Selection summary */}
-                    <div className="p-3 bg-secondary/50 rounded-lg">
-                      <p className="text-sm text-muted-foreground">
-                        Selected: <span className="text-foreground font-medium">{selectedSubjects.length}/3</span>
-                      </p>
-                      {!subjectValidation.valid && subjectValidation.errors.map((err, i) => (
-                        <p key={i} className="text-xs text-destructive mt-1">{err}</p>
-                      ))}
+                      {/* Optional subjects by basket with enhanced styling */}
+                      {Object.entries(subjectsByBasket)
+                        .filter(([basket]) => basket !== 'mandatory')
+                        .map(([basket, subjects]) => (
+                          <div key={basket}>
+                            <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                              {BASKET_LABELS[basket] || basket}
+                              <span className="text-xs text-muted-foreground/70">(Choose 1)</span>
+                            </h3>
+                            <div className="grid gap-2">
+                              {subjects.filter(s => !s.is_mandatory).map((subject) => {
+                                const isSelected = selectedSubjects.includes(subject.subject_name);
+                                return (
+                                  <div
+                                    key={subject.subject_name}
+                                    onClick={() => toggleSubject(subject.subject_name)}
+                                    className={`
+                                      relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+                                      ${isSelected 
+                                        ? 'border-brand bg-brand/10 shadow-lg shadow-brand/20' 
+                                        : 'border-border bg-card/50 hover:border-brand/50 hover:bg-card'
+                                      }
+                                    `}
+                                  >
+                                    {isSelected && (
+                                      <div className="absolute top-3 right-3">
+                                        <div className="w-6 h-6 rounded-full bg-brand flex items-center justify-center animate-in zoom-in duration-200">
+                                          <CheckCircle2 className="w-4 h-4 text-white" />
+                                        </div>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-3">
+                                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${
+                                        isSelected ? 'bg-brand/20' : 'bg-secondary'
+                                      }`}>
+                                        <BookOpen className={`w-5 h-5 ${isSelected ? 'text-brand' : 'text-muted-foreground'}`} />
+                                      </div>
+                                      <span className={`text-sm font-medium ${isSelected ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                        {subject.subject_name}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+
+                      {/* Enhanced selection summary */}
+                      <div className={`p-4 rounded-xl border-2 transition-colors ${
+                        selectedSubjects.length === 3 && subjectValidation.valid
+                          ? 'border-green-500/30 bg-green-500/10'
+                          : 'border-border bg-secondary/50'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-muted-foreground">
+                            Selected Subjects
+                          </p>
+                          <span className={`text-sm font-bold ${
+                            selectedSubjects.length === 3 ? 'text-green-500' : 'text-foreground'
+                          }`}>
+                            {selectedSubjects.length}/3
+                          </span>
+                        </div>
+                        {selectedSubjects.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {selectedSubjects.map(s => (
+                              <span key={s} className="text-xs px-2 py-1 rounded-full bg-brand/20 text-brand">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {!subjectValidation.valid && subjectValidation.errors.map((err, i) => (
+                          <p key={i} className="text-xs text-destructive mt-2">{err}</p>
+                        ))}
+                      </div>
+
+                      <Button 
+                        variant="brand" 
+                        className="w-full" 
+                        onClick={handleFinalSubmit}
+                        disabled={isLoading || selectedSubjects.length !== 3 || !subjectValidation.valid}
+                      >
+                        {isLoading ? "Submitting..." : "Continue to Payment"}
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                      </Button>
                     </div>
-
-                    <Button 
-                      variant="brand" 
-                      className="w-full" 
-                      onClick={handleFinalSubmit}
-                      disabled={isLoading || selectedSubjects.length !== 3 || !subjectValidation.valid}
-                    >
-                      {isLoading ? "Submitting..." : "Continue to Payment"}
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </div>

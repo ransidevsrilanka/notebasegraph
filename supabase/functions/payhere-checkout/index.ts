@@ -25,10 +25,11 @@ interface CheckoutRequest {
   address: string;
   city: string;
   country: string;
-  custom_1?: string; // tier type
-  custom_2?: string; // enrollment_id or 'new'
+  custom_1?: string; // tier type or 'print_request'
+  custom_2?: string; // enrollment_id or 'new' or print_request_id
   ref_creator?: string; // referral code
   discount_code?: string; // discount code
+  print_request_id?: string; // For print request payments
 }
 
 // PayHere status code to failure reason mapping
@@ -282,7 +283,42 @@ serve(async (req) => {
 
       const hash = generateHash(merchantId, body.order_id, body.amount, body.currency, merchantSecret);
 
-      // Create a pending payment record
+      // Check if this is a print request payment
+      if (body.print_request_id) {
+        // For print requests, store the ID in custom_2 with prefix
+        console.log("Print request payment:", body.print_request_id);
+        
+        // Create a pending payment record for print request
+        const { error: paymentError } = await supabase
+          .from("payments")
+          .insert({
+            order_id: body.order_id,
+            amount: body.amount,
+            currency: body.currency,
+            tier: "print_request",
+            status: "pending",
+            payment_method: "card",
+          });
+
+        if (paymentError) {
+          console.error("Failed to create payment record:", paymentError);
+        }
+
+        return new Response(
+          JSON.stringify({
+            merchant_id: merchantId,
+            hash: hash,
+            sandbox: isSandbox,
+            custom_2: `print_${body.print_request_id}`,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Create a pending payment record for regular payments
       const { error: paymentError } = await supabase
         .from("payments")
         .insert({
@@ -493,6 +529,55 @@ serve(async (req) => {
 
       // Send notifications based on payment status
       if (statusCode === "2") {
+        // Check if this is a print request payment
+        if (custom2?.startsWith('print_')) {
+          const printRequestId = custom2.replace('print_', '');
+          console.log("Processing print request payment:", printRequestId);
+          
+          // Update print_request payment_status
+          const { error: printUpdateError } = await supabase
+            .from('print_requests')
+            .update({ 
+              payment_status: 'paid',
+              status: 'confirmed',
+              order_id: orderId 
+            })
+            .eq('id', printRequestId);
+
+          if (printUpdateError) {
+            console.error("Failed to update print request:", printUpdateError);
+          } else {
+            // Get print request details for notification
+            const { data: printRequest } = await supabase
+              .from('print_requests')
+              .select('user_id, request_number, full_name, total_amount')
+              .eq('id', printRequestId)
+              .maybeSingle();
+
+            if (printRequest) {
+              // Send inbox notification
+              await supabase.from('messages').insert({
+                recipient_id: printRequest.user_id,
+                recipient_type: 'student',
+                recipient_user_id: printRequest.user_id,
+                subject: `Payment Confirmed - ${printRequest.request_number}`,
+                body: `Your payment of Rs. ${printRequest.total_amount} has been received! Your print order (${printRequest.request_number}) is now being processed.`,
+                is_read: false,
+              });
+
+              // Send Telegram notification
+              await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+                orderId,
+                amount: printRequest.total_amount,
+                tier: 'print_request',
+                userEmail: printRequest.full_name,
+              });
+            }
+          }
+
+          return new Response("OK", { status: 200 });
+        }
+
         // Payment successful - send success notification
         await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
           orderId,
@@ -503,10 +588,6 @@ serve(async (req) => {
         });
 
         console.log("Payment successful for order:", orderId);
-
-        // NOTE: Payment attribution is handled by finalize-payment-user called from the frontend
-        // after user account and enrollment are created. This callback only updates payment status.
-        // The frontend call has access to user_id and enrollment_id which are needed for attribution.
 
         // Check if this is an upgrade or new purchase
         if (custom2 && custom2 !== "new") {
