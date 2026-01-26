@@ -291,6 +291,28 @@ const BankSignup = () => {
       console.error('Join request error:', joinError);
       return;
     }
+    
+    // Send Telegram notification for new join request
+    try {
+      await supabase.functions.invoke('send-telegram-notification', {
+        body: {
+          type: 'join_request',
+          message: `New Join Request: ${referenceNumber}`,
+          data: {
+            reference: referenceNumber,
+            tier: bankData.tier,
+            grade: selectedGrade,
+            stream: selectedStream || 'N/A',
+            medium: selectedMedium,
+            amount: bankData.amount,
+            creator_code: creatorCode || 'Direct'
+          },
+          priority: 'medium'
+        }
+      });
+    } catch (telegramError) {
+      console.error('Failed to send Telegram notification:', telegramError);
+    }
 
     // Create user attribution immediately (referral association)
     // This ensures the referrer sees the user in their dashboard right away

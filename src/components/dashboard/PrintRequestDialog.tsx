@@ -89,7 +89,6 @@ interface PrintRequestDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type PrintType = 'notes_only' | 'model_papers_only' | 'both';
 type PaymentMethod = 'card' | 'bank_transfer' | 'cod';
 type ViewMode = 'orders' | 'new_request';
 
@@ -128,9 +127,6 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   // Settings
   const [settings, setSettings] = useState<PrintSettings | null>(null);
   const [bankSettings, setBankSettings] = useState<BankSettings | null>(null);
-  
-  // Step 1: Content Type
-  const [printType, setPrintType] = useState<PrintType>('notes_only');
   
   // Step 2: Subject & Topics
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -249,23 +245,27 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       userSubjects.subject_3,
     ].filter(Boolean) : [];
     
-    if (subjectNames.length === 0) {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id, name')
-        .eq('grade', enrollment.grade)
-        .eq('is_active', true);
-      
-      if (data) setSubjects(data);
-    } else {
-      const { data } = await supabase
-        .from('subjects')
-        .select('id, name')
-        .eq('grade', enrollment.grade)
-        .eq('is_active', true)
-        .in('name', subjectNames);
-      
-      if (data) setSubjects(data);
+    // Build query with grade AND medium filter to avoid duplicates
+    let query = supabase
+      .from('subjects')
+      .select('id, name')
+      .eq('grade', enrollment.grade)
+      .eq('medium', enrollment.medium)
+      .eq('is_active', true);
+    
+    if (subjectNames.length > 0) {
+      query = query.in('name', subjectNames);
+    }
+    
+    const { data } = await query;
+    
+    // Additional deduplication by name (safety net)
+    if (data) {
+      const uniqueSubjects = data.filter(
+        (subject, index, self) =>
+          index === self.findIndex(s => s.name === subject.name)
+      );
+      setSubjects(uniqueSubjects);
     }
   };
   
@@ -292,12 +292,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   const calculateTotal = () => {
     if (!settings) return 0;
     
-    let pricePerPage = settings.notes_price_per_page;
-    if (printType === 'model_papers_only') {
-      pricePerPage = settings.model_paper_price_per_page;
-    } else if (printType === 'both') {
-      pricePerPage = (settings.notes_price_per_page + settings.model_paper_price_per_page) / 2;
-    }
+    // Only model papers - always use model paper pricing
+    const pricePerPage = settings.model_paper_price_per_page;
     
     const itemsTotal = estimatedPages * pricePerPage;
     const deliveryFee = settings.base_delivery_fee;
@@ -306,45 +302,17 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     return itemsTotal + deliveryFee + codFee;
   };
   
-  const handleReceiptUpload = async (file: File): Promise<string | null> => {
-    if (!user) return null;
-    
-    setIsUploading(true);
-    
-    try {
-      const fileExt = file.name.split('.').pop();
-      const timestamp = Date.now();
-      const filePath = `${user.id}/print_${timestamp}.${fileExt}`;
-      
-      const { error } = await supabase.storage
-        .from('print-receipts')
-        .upload(filePath, file, {
-          upsert: false,
-          contentType: file.type || undefined,
-          cacheControl: '3600',
-        });
-      
-      if (error) {
-        console.error('Storage upload error:', {
-          error,
-          bucket: 'print-receipts',
-          path: filePath,
-          userId: user.id,
-        });
-        toast.error('Failed to upload receipt');
-        setIsUploading(false);
-        return null;
-      }
-      
-      setIsUploading(false);
-      return filePath;
-      
-    } catch (err: any) {
-      console.error('Receipt upload error:', err);
-      toast.error(err?.message || 'Failed to upload receipt');
-      setIsUploading(false);
-      return null;
-    }
+  // Helper to convert file to base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        resolve(result.split(',')[1]); // Remove data:type;base64, prefix
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   };
   
   const initiateCardPayment = async (printRequestId: string) => {
@@ -407,23 +375,21 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   const handleSubmit = async () => {
     if (!user || !enrollment) return;
     
+    // Validate file type for bank transfer
+    if (paymentMethod === 'bank_transfer' && receiptFile) {
+      const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
+      if (!ALLOWED_TYPES.includes(receiptFile.type)) {
+        toast.error('Only PNG, JPG, or PDF files are allowed');
+        return;
+      }
+    }
+    
     setIsLoading(true);
     
     const requestNumber = referenceNumber || generateReferenceNumber();
     const subjectName = subjects.find(s => s.id === selectedSubject)?.name || '';
     
-    let receiptUrl: string | null = null;
-    
-    // Handle bank transfer receipt upload
-    if (paymentMethod === 'bank_transfer' && receiptFile) {
-      receiptUrl = await handleReceiptUpload(receiptFile);
-      if (!receiptUrl) {
-        setIsLoading(false);
-        return;
-      }
-    }
-    
-    // Create print request record
+    // Create print request record (no storage - receipts go to Telegram)
     const { data: printRequest, error } = await supabase
       .from('print_requests')
       .insert({
@@ -433,7 +399,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         address,
         phone,
         city,
-        print_type: printType,
+        print_type: 'model_papers_only',
         subject_id: selectedSubject,
         subject_name: subjectName,
         topic_ids: allTopics ? [] : selectedTopics,
@@ -444,7 +410,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         payment_method: paymentMethod,
         payment_status: paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending',
         status: paymentMethod === 'cod' ? 'confirmed' : 'pending',
-        receipt_url: receiptUrl,
+        receipt_url: paymentMethod === 'bank_transfer' ? 'sent_to_telegram' : null,
       })
       .select()
       .single();
@@ -454,6 +420,53 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       console.error(error);
       setIsLoading(false);
       return;
+    }
+    
+    // Send Telegram notification for all print requests
+    try {
+      if (paymentMethod === 'bank_transfer' && receiptFile) {
+        // Send receipt as document to Telegram
+        const base64 = await fileToBase64(receiptFile);
+        const fileExt = receiptFile.name.split('.').pop() || 'jpg';
+        
+        await supabase.functions.invoke('send-telegram-document', {
+          body: {
+            type: 'print_request',
+            message: `Print Request Received\nRequest: ${requestNumber}\nCustomer: ${fullName}\nSubject: ${subjectName}\nTotal: Rs. ${calculateTotal()}`,
+            file_base64: base64,
+            file_name: `print_${requestNumber}.${fileExt}`,
+            file_type: receiptFile.type,
+            data: {
+              request_number: requestNumber,
+              customer: fullName,
+              phone: phone,
+              subject: subjectName,
+              payment_method: 'Bank Transfer',
+              total: calculateTotal()
+            }
+          }
+        });
+      } else {
+        // Send text notification for COD/card
+        await supabase.functions.invoke('send-telegram-notification', {
+          body: {
+            type: 'new_print_request',
+            message: `New Print Request: ${requestNumber}`,
+            data: {
+              request_number: requestNumber,
+              customer: fullName,
+              phone: phone,
+              subject: subjectName,
+              payment_method: paymentMethod === 'cod' ? 'Cash on Delivery' : 'Card',
+              total: calculateTotal()
+            },
+            priority: 'medium'
+          }
+        });
+      }
+    } catch (telegramError) {
+      console.error('Failed to send Telegram notification:', telegramError);
+      // Don't fail the request for Telegram errors
     }
     
     // Handle different payment methods
@@ -482,7 +495,6 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   
   const resetForm = () => {
     setStep(1);
-    setPrintType('notes_only');
     setSelectedSubject('');
     setSelectedTopics([]);
     setAllTopics(false);
@@ -496,10 +508,9 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   
   const canProceed = () => {
     switch (step) {
-      case 1: return true;
-      case 2: return selectedSubject && (allTopics || selectedTopics.length > 0);
-      case 3: return fullName && address && phone;
-      case 4: 
+      case 1: return selectedSubject && (allTopics || selectedTopics.length > 0);
+      case 2: return fullName && address && phone;
+      case 3: 
         if (paymentMethod === 'bank_transfer') return receiptFile !== null;
         if (paymentMethod === 'cod') return codConfirmed;
         return true;
@@ -622,9 +633,9 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         {/* New Request Form */}
         {viewMode === 'new_request' && (
           <>
-            {/* Step Indicator */}
+            {/* Step Indicator - Now 4 steps instead of 5 */}
             <div className="flex items-center justify-center gap-2 py-4">
-              {[1, 2, 3, 4, 5].map((s) => (
+              {[1, 2, 3, 4].map((s) => (
                 <div key={s} className="flex items-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                     step === s
@@ -635,48 +646,15 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                   }`}>
                     {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
                   </div>
-                  {s < 5 && <div className={`w-6 h-0.5 ${step > s ? 'bg-green-500' : 'bg-secondary'}`} />}
+                  {s < 4 && <div className={`w-6 h-0.5 ${step > s ? 'bg-green-500' : 'bg-secondary'}`} />}
                 </div>
               ))}
             </div>
             
-            {/* Step 1: Content Type */}
+            {/* Step 1: Subject & Topics (was Step 2) */}
             {step === 1 && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">What would you like printed?</h3>
-                <RadioGroup value={printType} onValueChange={(v) => setPrintType(v as PrintType)}>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/50 cursor-pointer" onClick={() => setPrintType('notes_only')}>
-                    <RadioGroupItem value="notes_only" id="notes_only" />
-                    <FileText className="w-5 h-5 text-brand" />
-                    <div>
-                      <Label htmlFor="notes_only" className="cursor-pointer font-medium">Notes Only</Label>
-                      <p className="text-xs text-muted-foreground">Study notes and summaries</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/50 cursor-pointer" onClick={() => setPrintType('model_papers_only')}>
-                    <RadioGroupItem value="model_papers_only" id="model_papers_only" />
-                    <Scroll className="w-5 h-5 text-orange-500" />
-                    <div>
-                      <Label htmlFor="model_papers_only" className="cursor-pointer font-medium">Model Papers Only</Label>
-                      <p className="text-xs text-muted-foreground">Past papers and practice exams</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/50 cursor-pointer" onClick={() => setPrintType('both')}>
-                    <RadioGroupItem value="both" id="both" />
-                    <Printer className="w-5 h-5 text-purple-500" />
-                    <div>
-                      <Label htmlFor="both" className="cursor-pointer font-medium">Both</Label>
-                      <p className="text-xs text-muted-foreground">Notes and model papers together</p>
-                    </div>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-            
-            {/* Step 2: Subject & Topics */}
-            {step === 2 && (
-              <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Select Subject & Topics</h3>
+                <h3 className="font-semibold text-foreground">Select Subject & Model Papers</h3>
                 
                 <div className="space-y-2">
                   <Label>Subject</Label>
@@ -745,8 +723,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
               </div>
             )}
             
-            {/* Step 3: Delivery Info */}
-            {step === 3 && (
+            {/* Step 2: Delivery Info */}
+            {step === 2 && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-foreground">Delivery Information</h3>
                 
@@ -805,8 +783,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
               </div>
             )}
             
-            {/* Step 4: Payment Method */}
-            {step === 4 && (
+            {/* Step 3: Payment Method */}
+            {step === 3 && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-foreground">Payment Method</h3>
                 
@@ -1004,15 +982,15 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
               </div>
             )}
             
-            {/* Step 5: Confirmation */}
-            {step === 5 && (
+            {/* Step 4: Confirmation */}
+            {step === 4 && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-foreground">Order Summary</h3>
                 
                 <div className="space-y-3 p-4 bg-secondary/50 rounded-lg">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Content Type</span>
-                    <span className="text-foreground font-medium capitalize">{printType.replace(/_/g, ' ')}</span>
+                    <span className="text-foreground font-medium">Model Papers</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subject</span>
@@ -1066,7 +1044,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                   Back
                 </Button>
               )}
-              {step < 5 ? (
+              {step < 4 ? (
                 <Button
                   variant="brand"
                   onClick={() => setStep(step + 1)}

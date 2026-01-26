@@ -483,41 +483,16 @@ const Enrollments = () => {
             throw new Error('Invalid OTP code');
           }
           
-          // Delete all user_subjects first
-          const { error: subjectsError } = await supabase
-            .from('user_subjects')
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+          // Use admin-purge-data edge function for complete data deletion
+          const { data, error } = await supabase.functions.invoke('admin-purge-data');
           
-          if (subjectsError) {
-            console.error('Error deleting user_subjects:', subjectsError);
-          }
-          
-          // Delete all enrollments
-          const { error: enrollmentsError } = await supabase
-            .from('enrollments')
-            .delete()
-            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
-          
-          if (enrollmentsError) {
+          if (error) {
+            console.error('Purge error:', error);
             setIsDeleting(false);
-            throw new Error('Failed to delete enrollments');
+            throw new Error(error.message || 'Failed to purge data');
           }
           
-          // Send Telegram notification
-          await supabase.functions.invoke('send-telegram-notification', {
-            body: {
-              type: 'admin_action',
-              message: 'All enrollments deleted',
-              data: {
-                action: 'DELETE_ALL_ENROLLMENTS',
-                count: enrollments.length,
-              },
-              priority: 'high'
-            }
-          });
-          
-          toast.success('All enrollments deleted successfully');
+          toast.success(data?.message || 'All user data deleted successfully');
           setDeleteConfirmText('');
           setIsDeleting(false);
           fetchEnrollments();

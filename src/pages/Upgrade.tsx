@@ -184,6 +184,13 @@ const UpgradePage = () => {
   const submitUpgradeWithReceipt = async (file: File) => {
     if (!user || !enrollment || !requestedTier) return;
 
+    // Validate file type
+    const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error('Only PNG, JPG, or PDF files are allowed');
+      return;
+    }
+
     try {
       setIsUploading(true);
 
@@ -207,32 +214,41 @@ const UpgradePage = () => {
         request = data;
       }
 
-      // 2) Upload receipt file with unique timestamp to avoid UPDATE RLS issues
-      // Using unique paths avoids needing UPDATE policy on storage.objects
-      const fileExt = file.name.split('.').pop();
-      const timestamp = Date.now();
-      const filePath = `${user.id}/${request.id}_${timestamp}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage.from('upgrade-receipts').upload(filePath, file, {
-        upsert: false, // Don't use upsert to avoid UPDATE policy requirement
-        contentType: file.type || undefined,
-        cacheControl: '3600',
+      // 2) Convert file to base64 and send directly to Telegram
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // Remove data:type;base64, prefix
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
-      if (uploadError) {
-        // Log detailed error for debugging
-        console.error('Storage upload error:', {
-          error: uploadError,
-          bucket: 'upgrade-receipts',
-          path: filePath,
-          userId: user.id,
-        });
-        throw uploadError;
-      }
 
-      // 3) Persist receipt and keep status = pending.
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      
+      // Send receipt to Telegram
+      await supabase.functions.invoke('send-telegram-document', {
+        body: {
+          type: 'upgrade_request',
+          message: `Upgrade Request Received\nUser: ${user.email}\nReference: ${request.reference_number}\nAmount: Rs. ${amount}`,
+          file_base64: base64,
+          file_name: `upgrade_${request.reference_number}.${fileExt}`,
+          file_type: file.type,
+          data: {
+            user_email: user.email,
+            current_tier: enrollment.tier,
+            requested_tier: requestedTier,
+            amount: amount,
+            reference: request.reference_number
+          }
+        }
+      });
+
+      // 3) Update request status (no storage needed, receipt sent to Telegram)
       const { data: updated, error: updateError } = await supabase
         .from('upgrade_requests')
-        .update({ receipt_url: filePath })
+        .update({ receipt_url: 'sent_to_telegram' })
         .eq('id', request.id)
         .select()
         .single();
