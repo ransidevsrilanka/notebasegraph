@@ -25,11 +25,14 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
-  Search
+  Search,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Enrollment, Profile } from '@/types/database';
+import { OTPVerificationDialog } from '@/components/admin/OTPVerificationDialog';
 
 interface UserSubjectsData {
   id: string;
@@ -56,6 +59,12 @@ const Enrollments = () => {
     open: false,
     enrollment: null,
   });
+  
+  // Delete all state
+  const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [showOTPDialog, setShowOTPDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchEnrollments = async () => {
     setIsLoading(true);
@@ -212,6 +221,15 @@ const Enrollments = () => {
               </div>
               <Button variant="ghost" size="sm" onClick={fetchEnrollments}>
                 <RefreshCw className="w-4 h-4" />
+              </Button>
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={() => setShowDeleteAllDialog(true)}
+                className="gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete All
               </Button>
             </div>
           </div>
@@ -407,6 +425,109 @@ const Enrollments = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Delete All Confirmation Dialog */}
+      <AlertDialog open={showDeleteAllDialog} onOpenChange={setShowDeleteAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Delete All Enrollments
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete ALL enrollments and related user_subjects records.
+              This action cannot be undone.
+              <br /><br />
+              Type <strong>DELETE ALL</strong> to confirm:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder="Type DELETE ALL"
+            className="font-mono"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setDeleteConfirmText('');
+              setShowDeleteAllDialog(false);
+            }}>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmText !== 'DELETE ALL'}
+              onClick={() => {
+                setShowDeleteAllDialog(false);
+                setShowOTPDialog(true);
+              }}
+            >
+              Continue
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* OTP Verification for Delete All */}
+      <OTPVerificationDialog
+        open={showOTPDialog}
+        onOpenChange={setShowOTPDialog}
+        onVerify={async (code) => {
+          setIsDeleting(true);
+          
+          // Verify OTP
+          const { data: otpData, error: otpError } = await supabase.functions.invoke('admin-finance/verify-refund-otp', {
+            body: { otp_code: code }
+          });
+          
+          if (otpError || !otpData?.valid) {
+            setIsDeleting(false);
+            throw new Error('Invalid OTP code');
+          }
+          
+          // Delete all user_subjects first
+          const { error: subjectsError } = await supabase
+            .from('user_subjects')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+          
+          if (subjectsError) {
+            console.error('Error deleting user_subjects:', subjectsError);
+          }
+          
+          // Delete all enrollments
+          const { error: enrollmentsError } = await supabase
+            .from('enrollments')
+            .delete()
+            .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+          
+          if (enrollmentsError) {
+            setIsDeleting(false);
+            throw new Error('Failed to delete enrollments');
+          }
+          
+          // Send Telegram notification
+          await supabase.functions.invoke('send-telegram-notification', {
+            body: {
+              type: 'admin_action',
+              message: 'All enrollments deleted',
+              data: {
+                action: 'DELETE_ALL_ENROLLMENTS',
+                count: enrollments.length,
+              },
+              priority: 'high'
+            }
+          });
+          
+          toast.success('All enrollments deleted successfully');
+          setDeleteConfirmText('');
+          setIsDeleting(false);
+          fetchEnrollments();
+        }}
+        title="Confirm Delete All"
+        description="Enter the 2FA code to delete all enrollments. This action is irreversible."
+        actionLabel="Delete All"
+        variant="destructive"
+        isLoading={isDeleting}
+      />
     </main>
   );
 };

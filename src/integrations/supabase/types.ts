@@ -1012,6 +1012,7 @@ export type Database = {
           file_url: string | null
           id: string
           is_active: boolean | null
+          is_model_paper: boolean | null
           min_tier: string | null
           title: string
           topic_id: string | null
@@ -1027,6 +1028,7 @@ export type Database = {
           file_url?: string | null
           id?: string
           is_active?: boolean | null
+          is_model_paper?: boolean | null
           min_tier?: string | null
           title: string
           topic_id?: string | null
@@ -1042,6 +1044,7 @@ export type Database = {
           file_url?: string | null
           id?: string
           is_active?: boolean | null
+          is_model_paper?: boolean | null
           min_tier?: string | null
           title?: string
           topic_id?: string | null
@@ -1308,6 +1311,184 @@ export type Database = {
           setting_value?: Json
           updated_at?: string | null
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      print_request_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_type: string
+          note_id: string | null
+          page_count: number | null
+          price_per_page: number | null
+          request_id: string
+          subtotal: number | null
+          title: string
+          topic_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_type: string
+          note_id?: string | null
+          page_count?: number | null
+          price_per_page?: number | null
+          request_id: string
+          subtotal?: number | null
+          title: string
+          topic_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_type?: string
+          note_id?: string | null
+          page_count?: number | null
+          price_per_page?: number | null
+          request_id?: string
+          subtotal?: number | null
+          title?: string
+          topic_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "print_request_items_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "print_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_request_items_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      print_requests: {
+        Row: {
+          address: string
+          admin_notes: string | null
+          city: string | null
+          created_at: string | null
+          delivered_at: string | null
+          delivery_fee: number | null
+          estimated_pages: number | null
+          estimated_price: number | null
+          full_name: string
+          id: string
+          order_id: string | null
+          payment_method: string
+          payment_status: string | null
+          phone: string
+          print_type: string
+          request_number: string
+          shipped_at: string | null
+          status: string | null
+          subject_id: string | null
+          subject_name: string
+          topic_ids: string[] | null
+          total_amount: number | null
+          tracking_number: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          address: string
+          admin_notes?: string | null
+          city?: string | null
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_fee?: number | null
+          estimated_pages?: number | null
+          estimated_price?: number | null
+          full_name: string
+          id?: string
+          order_id?: string | null
+          payment_method: string
+          payment_status?: string | null
+          phone: string
+          print_type: string
+          request_number: string
+          shipped_at?: string | null
+          status?: string | null
+          subject_id?: string | null
+          subject_name: string
+          topic_ids?: string[] | null
+          total_amount?: number | null
+          tracking_number?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          address?: string
+          admin_notes?: string | null
+          city?: string | null
+          created_at?: string | null
+          delivered_at?: string | null
+          delivery_fee?: number | null
+          estimated_pages?: number | null
+          estimated_price?: number | null
+          full_name?: string
+          id?: string
+          order_id?: string | null
+          payment_method?: string
+          payment_status?: string | null
+          phone?: string
+          print_type?: string
+          request_number?: string
+          shipped_at?: string | null
+          status?: string | null
+          subject_id?: string | null
+          subject_name?: string
+          topic_ids?: string[] | null
+          total_amount?: number | null
+          tracking_number?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      print_settings: {
+        Row: {
+          base_delivery_fee: number | null
+          cod_extra_fee: number | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          model_paper_price_per_page: number | null
+          notes_price_per_page: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          base_delivery_fee?: number | null
+          cod_extra_fee?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_paper_price_per_page?: number | null
+          notes_price_per_page?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          base_delivery_fee?: number | null
+          cod_extra_fee?: number | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          model_paper_price_per_page?: number | null
+          notes_price_per_page?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
