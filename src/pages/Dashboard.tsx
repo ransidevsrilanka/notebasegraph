@@ -17,6 +17,7 @@ import {
   Copy,
   Check,
   Languages,
+  Printer,
 } from 'lucide-react';
 import { GRADE_LABELS, STREAM_LABELS, MEDIUM_LABELS, TIER_LABELS } from '@/types/database';
 import type { Subject } from '@/types/database';
@@ -24,6 +25,7 @@ import { useBranding } from '@/hooks/useBranding';
 import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 import MediumChangeRequestDialog from '@/components/dashboard/MediumChangeRequestDialog';
+import PrintRequestDialog from '@/components/dashboard/PrintRequestDialog';
 import { useAICredits } from '@/hooks/useAICredits';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -40,6 +42,7 @@ const Dashboard = () => {
   const [copied, setCopied] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [showMediumDialog, setShowMediumDialog] = useState(false);
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
 
   // Fetch user's referral code
   useEffect(() => {
@@ -391,6 +394,20 @@ const Dashboard = () => {
               <p className="text-2xl font-display font-bold text-foreground">{MEDIUM_LABELS[enrollment.medium] || 'English'}</p>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Medium</p>
             </div>
+
+            {/* Print Request Card */}
+            <div 
+              className="glass-card p-5 cursor-pointer hover:border-orange-500/30 transition-all col-span-2 lg:col-span-1"
+              onClick={() => setShowPrintDialog(true)}
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
+                  <Printer className="w-4 h-4 text-orange-500" />
+                </div>
+              </div>
+              <p className="text-lg font-display font-bold text-foreground">Request Printouts</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Notes & Papers</p>
+            </div>
           </section>
 
           {/* Subscription Status */}
@@ -508,6 +525,12 @@ const Dashboard = () => {
       <MediumChangeRequestDialog 
         open={showMediumDialog} 
         onOpenChange={setShowMediumDialog} 
+      />
+
+      {/* Print Request Dialog */}
+      <PrintRequestDialog
+        open={showPrintDialog}
+        onOpenChange={setShowPrintDialog}
       />
     </main>
   );

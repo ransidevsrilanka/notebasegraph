@@ -323,6 +323,24 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 onDragStart={(e) => e.preventDefault()}
               />
             </div>
+            
+            {/* App Download Banner */}
+            <div className="mt-4 p-4 bg-gradient-to-r from-brand/10 to-primary/10 rounded-lg border border-brand/20 max-w-md mx-auto">
+              <div className="flex items-center gap-4 justify-center">
+                <img 
+                  src="/google-play-badge.png" 
+                  alt="Get it on Google Play"
+                  className="h-10 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => window.open('https://play.google.com/store/apps/details?id=com.notebase.app', '_blank')}
+                />
+                <div className="text-left">
+                  <p className="font-medium text-foreground text-sm">📱 View Offline</p>
+                  <p className="text-xs text-muted-foreground">
+                    Download on our app
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

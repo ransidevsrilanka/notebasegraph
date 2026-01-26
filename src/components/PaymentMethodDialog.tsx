@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Building2, CreditCard, Loader2, X } from "lucide-react";
+import { Building2, CreditCard, Loader2, X, CheckCircle2, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface PaymentMethodDialogProps {
   open: boolean;
@@ -70,6 +71,10 @@ const PaymentMethodDialog = ({
 }: PaymentMethodDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { enrollment } = useAuth();
+
+  // Check if user already has an active enrollment
+  const hasActiveEnrollment = !!enrollment && enrollment.is_active;
 
   // Defensive rendering: avoid runtime crashes that would leave only the overlay visible
   const safeAmount = Number.isFinite(amount) ? amount : 0;
@@ -311,54 +316,79 @@ const PaymentMethodDialog = ({
 
         <div className="space-y-1.5 text-center sm:text-left">
           <h2 className="font-display text-xl font-semibold leading-none tracking-tight">
-            Choose Payment Method
+            {hasActiveEnrollment ? "You're Already Enrolled!" : "Choose Payment Method"}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Select how you'd like to pay for{" "}
-            <span className="font-semibold text-foreground">{safeTierName}</span> -
-            Rs. {safeAmount.toLocaleString()}
+            {hasActiveEnrollment ? (
+              `You have an active subscription. Visit your dashboard to continue learning.`
+            ) : (
+              <>
+                Select how you'd like to pay for{" "}
+                <span className="font-semibold text-foreground">{safeTierName}</span> -
+                Rs. {safeAmount.toLocaleString()}
+              </>
+            )}
           </p>
         </div>
 
-        <div className="grid gap-3 py-4">
-          <Button
-            onClick={handleCardPayment}
-            disabled={isLoading}
-            className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
-            variant="outline"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand/10 flex-shrink-0 flex items-center justify-center">
-              <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-brand" />
-            </div>
-            <div className="text-left min-w-0 flex-1">
-              <p className="font-semibold text-foreground text-sm sm:text-base">Card Payment</p>
-              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-                Pay with Visa, Mastercard, or Amex
-              </p>
-            </div>
-          </Button>
+        {hasActiveEnrollment ? (
+          <div className="py-6 flex flex-col items-center">
+            <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
+            <Button
+              onClick={() => {
+                onOpenChange(false);
+                navigate('/dashboard');
+              }}
+              variant="brand"
+              className="w-full"
+            >
+              Back to Dashboard
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-3 py-4">
+              <Button
+                onClick={handleCardPayment}
+                disabled={isLoading}
+                className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
+                variant="outline"
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand/10 flex-shrink-0 flex items-center justify-center">
+                  <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-brand" />
+                </div>
+                <div className="text-left min-w-0 flex-1">
+                  <p className="font-semibold text-foreground text-sm sm:text-base">Card Payment</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                    Pay with Visa, Mastercard, or Amex
+                  </p>
+                </div>
+              </Button>
 
-          <Button
-            onClick={handleBankTransfer}
-            disabled={isLoading}
-            className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
-            variant="outline"
-          >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-secondary flex-shrink-0 flex items-center justify-center">
-              <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
+              <Button
+                onClick={handleBankTransfer}
+                disabled={isLoading}
+                className="h-auto py-3 sm:py-4 px-3 sm:px-6 justify-start gap-3 sm:gap-4 flex-row items-center"
+                variant="outline"
+              >
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-secondary flex-shrink-0 flex items-center justify-center">
+                  <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-muted-foreground" />
+                </div>
+                <div className="text-left min-w-0 flex-1">
+                  <p className="font-semibold text-foreground text-sm sm:text-base">Bank Transfer</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
+                    Manual transfer with receipt
+                  </p>
+                </div>
+              </Button>
             </div>
-            <div className="text-left min-w-0 flex-1">
-              <p className="font-semibold text-foreground text-sm sm:text-base">Bank Transfer</p>
-              <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-                Manual transfer with receipt
-              </p>
-            </div>
-          </Button>
-        </div>
 
-        <p className="text-xs text-muted-foreground text-center">
-          Card payments are processed securely via PayHere
-        </p>
+            <p className="text-xs text-muted-foreground text-center">
+              Card payments are processed securely via PayHere
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
