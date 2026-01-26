@@ -40,9 +40,9 @@ import {
   XCircle,
   Plus,
   Upload,
-  Eye,
   Copy,
   AlertCircle,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -111,6 +111,9 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   cancelled: <XCircle className="w-3 h-3" />,
 };
 
+const ACTIVE_STATUSES = ['pending', 'confirmed', 'processing', 'shipped'];
+const COMPLETED_STATUSES = ['delivered', 'cancelled'];
+
 const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => {
   const { user, profile, enrollment, userSubjects } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>('orders');
@@ -120,6 +123,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   // Existing orders
   const [existingOrders, setExistingOrders] = useState<PrintOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
   
   // Settings
   const [settings, setSettings] = useState<PrintSettings | null>(null);
@@ -155,6 +159,11 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   // Pricing
   const [estimatedPages, setEstimatedPages] = useState(50);
   
+  // Filter orders
+  const activeOrders = existingOrders.filter(o => ACTIVE_STATUSES.includes(o.status));
+  const completedOrders = existingOrders.filter(o => COMPLETED_STATUSES.includes(o.status));
+  const displayedOrders = showHistory ? completedOrders : activeOrders;
+  
   // Load orders, settings and subjects on mount
   useEffect(() => {
     if (open && user) {
@@ -185,7 +194,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(50);
     
     if (!error && data) {
       setExistingOrders(data as PrintOrder[]);
@@ -297,25 +306,101 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     return itemsTotal + deliveryFee + codFee;
   };
   
-  const handleReceiptUpload = async (file: File) => {
+  const handleReceiptUpload = async (file: File): Promise<string | null> => {
     if (!user) return null;
     
     setIsUploading(true);
-    const fileExt = file.name.split('.').pop();
-    const fileName = `print-receipts/${user.id}/${Date.now()}.${fileExt}`;
     
-    const { error } = await supabase.storage
-      .from('receipts')
-      .upload(fileName, file);
-    
-    setIsUploading(false);
-    
-    if (error) {
-      toast.error('Failed to upload receipt');
+    try {
+      const fileExt = file.name.split('.').pop();
+      const timestamp = Date.now();
+      const filePath = `${user.id}/print_${timestamp}.${fileExt}`;
+      
+      const { error } = await supabase.storage
+        .from('print-receipts')
+        .upload(filePath, file, {
+          upsert: false,
+          contentType: file.type || undefined,
+          cacheControl: '3600',
+        });
+      
+      if (error) {
+        console.error('Storage upload error:', {
+          error,
+          bucket: 'print-receipts',
+          path: filePath,
+          userId: user.id,
+        });
+        toast.error('Failed to upload receipt');
+        setIsUploading(false);
+        return null;
+      }
+      
+      setIsUploading(false);
+      return filePath;
+      
+    } catch (err: any) {
+      console.error('Receipt upload error:', err);
+      toast.error(err?.message || 'Failed to upload receipt');
+      setIsUploading(false);
       return null;
     }
+  };
+  
+  const initiateCardPayment = async (printRequestId: string) => {
+    if (!user || !enrollment) return;
     
-    return fileName;
+    try {
+      const { data, error } = await supabase.functions.invoke('payhere-checkout', {
+        body: {
+          order_id: `PR-${printRequestId.substring(0, 8)}`,
+          items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,
+          amount: calculateTotal(),
+          currency: 'LKR',
+          first_name: fullName.split(' ')[0] || 'Customer',
+          last_name: fullName.split(' ').slice(1).join(' ') || '',
+          email: user.email || '',
+          phone: phone,
+          address: address,
+          city: city || 'Colombo',
+          country: 'Sri Lanka',
+          print_request_id: printRequestId,
+        }
+      });
+      
+      if (error) {
+        console.error('PayHere checkout error:', error);
+        toast.error('Failed to initiate payment');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Create PayHere form and submit
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = data.sandbox 
+        ? 'https://sandbox.payhere.lk/pay/checkout' 
+        : 'https://www.payhere.lk/pay/checkout';
+      
+      // Add all PayHere fields
+      Object.entries(data).forEach(([key, value]) => {
+        if (key !== 'sandbox') {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = key;
+          input.value = String(value);
+          form.appendChild(input);
+        }
+      });
+      
+      document.body.appendChild(form);
+      form.submit();
+      
+    } catch (err: any) {
+      console.error('Card payment error:', err);
+      toast.error('Failed to process payment');
+      setIsLoading(false);
+    }
   };
   
   const handleSubmit = async () => {
@@ -331,9 +416,14 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     // Handle bank transfer receipt upload
     if (paymentMethod === 'bank_transfer' && receiptFile) {
       receiptUrl = await handleReceiptUpload(receiptFile);
+      if (!receiptUrl) {
+        setIsLoading(false);
+        return;
+      }
     }
     
-    const { error } = await supabase
+    // Create print request record
+    const { data: printRequest, error } = await supabase
       .from('print_requests')
       .insert({
         user_id: user.id,
@@ -352,20 +442,35 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         total_amount: calculateTotal(),
         payment_method: paymentMethod,
         payment_status: paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending',
+        status: paymentMethod === 'cod' ? 'confirmed' : 'pending',
         receipt_url: receiptUrl,
-      });
+      })
+      .select()
+      .single();
     
     if (error) {
       toast.error('Failed to submit request');
       console.error(error);
-    } else {
-      toast.success('Print request submitted! We\'ll contact you soon.');
+      setIsLoading(false);
+      return;
+    }
+    
+    // Handle different payment methods
+    if (paymentMethod === 'card') {
+      await initiateCardPayment(printRequest.id);
+    } else if (paymentMethod === 'bank_transfer') {
+      toast.success('Print request submitted! Please wait for verification.');
       resetForm();
       loadExistingOrders();
       setViewMode('orders');
+      setIsLoading(false);
+    } else if (paymentMethod === 'cod') {
+      toast.success('Print request submitted! Payment will be collected upon delivery.');
+      resetForm();
+      loadExistingOrders();
+      setViewMode('orders');
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
   
   const startNewRequest = () => {
@@ -430,49 +535,84 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                 <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                 Loading orders...
               </div>
-            ) : existingOrders.length === 0 ? (
-              <div className="text-center py-8">
-                <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground mb-4">No print orders yet</p>
-                <Button variant="brand" onClick={startNewRequest}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Request Printouts
-                </Button>
-              </div>
             ) : (
               <>
-                <div className="space-y-3">
-                  {existingOrders.map((order) => (
-                    <div key={order.id} className="p-4 border border-border rounded-lg space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono text-sm font-medium">{order.request_number}</span>
-                        <Badge className={`text-xs ${STATUS_COLORS[order.status]}`}>
-                          {STATUS_ICONS[order.status]}
-                          <span className="ml-1 capitalize">{order.status}</span>
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{order.subject_name}</span>
-                        <span className="text-foreground font-medium">Rs. {order.total_amount?.toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="capitalize">{order.print_type.replace(/_/g, ' ')}</span>
-                        <span>{new Date(order.created_at).toLocaleDateString()}</span>
-                      </div>
-                      {order.tracking_number && (
-                        <div className="flex items-center gap-2 mt-2 p-2 bg-green-500/10 rounded text-sm">
-                          <Truck className="w-4 h-4 text-green-500" />
-                          <span className="text-green-500">Tracking: {order.tracking_number}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                {/* Toggle between Active and History */}
+                <div className="flex items-center gap-2 p-1 bg-secondary/50 rounded-lg">
+                  <button
+                    onClick={() => setShowHistory(false)}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                      !showHistory 
+                        ? 'bg-background text-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Active ({activeOrders.length})
+                  </button>
+                  <button
+                    onClick={() => setShowHistory(true)}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-1 ${
+                      showHistory 
+                        ? 'bg-background text-foreground shadow-sm' 
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <History className="w-3 h-3" />
+                    History ({completedOrders.length})
+                  </button>
                 </div>
                 
-                <Button variant="brand" onClick={startNewRequest} className="w-full">
-                  <Plus className="w-4 h-4 mr-2" />
-                  New Request
-                </Button>
+                {displayedOrders.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground mb-4">
+                      {showHistory ? 'No completed orders yet' : 'No active orders'}
+                    </p>
+                    {!showHistory && (
+                      <Button variant="brand" onClick={startNewRequest}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Request Printouts
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                      {displayedOrders.map((order) => (
+                        <div key={order.id} className="p-4 border border-border rounded-lg space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono text-sm font-medium">{order.request_number}</span>
+                            <Badge className={`text-xs ${STATUS_COLORS[order.status]}`}>
+                              {STATUS_ICONS[order.status]}
+                              <span className="ml-1 capitalize">{order.status}</span>
+                            </Badge>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">{order.subject_name}</span>
+                            <span className="text-foreground font-medium">Rs. {order.total_amount?.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span className="capitalize">{order.print_type.replace(/_/g, ' ')}</span>
+                            <span>{new Date(order.created_at).toLocaleDateString()}</span>
+                          </div>
+                          {order.tracking_number && (
+                            <div className="flex items-center gap-2 mt-2 p-2 bg-green-500/10 rounded text-sm">
+                              <Truck className="w-4 h-4 text-green-500" />
+                              <span className="text-green-500">Tracking: {order.tracking_number}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {!showHistory && (
+                      <Button variant="brand" onClick={startNewRequest} className="w-full">
+                        <Plus className="w-4 h-4 mr-2" />
+                        New Request
+                      </Button>
+                    )}
+                  </>
+                )}
               </>
             )}
           </div>
@@ -823,8 +963,15 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                 {paymentMethod === 'card' && (
                   <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
                     <div className="flex items-center gap-2 text-blue-400">
-                      <AlertCircle className="w-4 h-4" />
-                      <span className="text-sm font-medium">Card payment will be processed on the next step</span>
+                      <CreditCard className="w-5 h-5" />
+                      <span className="text-sm font-medium">Secure Card Payment via PayHere</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      You will be redirected to PayHere's secure payment page after confirming your order.
+                    </p>
+                    <div className="flex justify-between p-3 bg-brand/10 rounded-lg mt-3">
+                      <span className="font-medium">Amount to Pay</span>
+                      <span className="font-bold text-brand">Rs. {calculateTotal().toLocaleString()}</span>
                     </div>
                   </div>
                 )}
@@ -935,7 +1082,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                   disabled={isLoading || isUploading}
                   className="flex-1"
                 >
-                  {isLoading ? 'Submitting...' : 'Submit Request'}
+                  {isLoading ? 'Processing...' : paymentMethod === 'card' ? 'Pay Now' : 'Submit Request'}
                   <CheckCircle2 className="w-4 h-4 ml-2" />
                 </Button>
               )}
