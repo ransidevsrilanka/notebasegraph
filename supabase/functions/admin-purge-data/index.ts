@@ -60,16 +60,42 @@ serve(async (req) => {
   });
 
   try {
-    // Get admin and CMO user IDs to preserve
+    // Get admin, CMO, and Head Ops user IDs to preserve
     const { data: adminRoles } = await supabase
       .from("user_roles")
       .select("user_id")
-      .in("role", ["super_admin", "content_admin", "support_admin", "admin", "cmo"]);
+      .in("role", ["super_admin", "content_admin", "support_admin", "admin", "cmo", "head_ops"]);
     
     const preservedUserIds = adminRoles?.map(r => r.user_id) || [];
     console.log("Preserving user IDs:", preservedUserIds);
 
     // Delete in correct order to respect foreign keys
+    // 0. print_requests and print_request_items first
+    const { error: ePrintItems } = await supabase.from("print_request_items").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (ePrintItems) console.error("print_request_items delete error:", ePrintItems);
+    
+    const { error: ePrint } = await supabase.from("print_requests").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (ePrint) console.error("print_requests delete error:", ePrint);
+    
+    // 0.5 messages (inbox)
+    const { error: eMessages } = await supabase.from("messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eMessages) console.error("messages delete error:", eMessages);
+    
+    // 0.6 head_ops_requests
+    const { error: eHeadOps } = await supabase.from("head_ops_requests").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eHeadOps) console.error("head_ops_requests delete error:", eHeadOps);
+    
+    // 0.7 ai_chat_messages and ai_credits
+    const { error: eAIChat } = await supabase.from("ai_chat_messages").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eAIChat) console.error("ai_chat_messages delete error:", eAIChat);
+    
+    const { error: eAICredits } = await supabase.from("ai_credits").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eAICredits) console.error("ai_credits delete error:", eAICredits);
+    
+    // 0.8 pending_payments
+    const { error: ePending } = await supabase.from("pending_payments").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (ePending) console.error("pending_payments delete error:", ePending);
+
     // 1. payment_attributions
     const { error: e1 } = await supabase.from("payment_attributions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (e1) console.error("payment_attributions delete error:", e1);
@@ -134,9 +160,20 @@ serve(async (req) => {
     const { error: e16 } = await supabase.from("user_sessions").delete().neq("id", "00000000-0000-0000-0000-000000000000");
     if (e16) console.error("user_sessions delete error:", e16);
 
-    // 17. user_roles - only student, creator, user roles
+    // 17. user_roles - only student, creator, user roles (preserve admin, cmo, head_ops)
     const { error: e17 } = await supabase.from("user_roles").delete().in("role", ["student", "creator", "user"]);
     if (e17) console.error("user_roles delete error:", e17);
+    
+    // 17.5 quiz_attempts and flashcard_progress
+    const { error: eQuiz } = await supabase.from("quiz_attempts").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eQuiz) console.error("quiz_attempts delete error:", eQuiz);
+    
+    const { error: eFlash } = await supabase.from("flashcard_progress").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eFlash) console.error("flashcard_progress delete error:", eFlash);
+    
+    // 17.6 referral_rewards
+    const { error: eRewards } = await supabase.from("referral_rewards").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    if (eRewards) console.error("referral_rewards delete error:", eRewards);
 
     // 18. profiles - exclude admin/cmo users
     if (preservedUserIds.length > 0) {

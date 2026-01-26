@@ -107,6 +107,13 @@ const AwaitingPayment = () => {
     const file = e.target.files?.[0];
     if (!file || !user || !joinRequest) return;
 
+    // Validate file type
+    const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'application/pdf'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      toast.error('Only PNG, JPG, or PDF files are allowed');
+      return;
+    }
+
     if (file.size > 25 * 1024 * 1024) {
       toast.error('File size must be less than 25MB');
       return;
@@ -115,32 +122,50 @@ const AwaitingPayment = () => {
     setIsUploading(true);
 
     try {
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/${joinRequest.id}.${fileExt}`;
+      // Convert file to base64 and send directly to Telegram
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // Remove data:type;base64, prefix
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from('join-receipts')
-        .upload(filePath, file, {
-          upsert: true,
-          contentType: file.type || undefined,
-          cacheControl: '3600',
-        });
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      
+      // Send receipt to Telegram
+      await supabase.functions.invoke('send-telegram-document', {
+        body: {
+          type: 'join_request',
+          message: `Join Request Receipt\nReference: ${joinRequest.reference_number}\nUser: ${user.email}\nAmount: Rs. ${joinRequest.amount}\nTier: ${joinRequest.tier}`,
+          file_base64: base64,
+          file_name: `join_${joinRequest.reference_number}.${fileExt}`,
+          file_type: file.type,
+          data: {
+            reference: joinRequest.reference_number,
+            user_email: user.email,
+            tier: joinRequest.tier,
+            amount: joinRequest.amount
+          }
+        }
+      });
 
-      if (uploadError) throw uploadError;
-
+      // Update join request to mark receipt as sent
       const { error: updateError } = await supabase
         .from('join_requests')
-        .update({ receipt_url: filePath })
+        .update({ receipt_url: 'sent_to_telegram' })
         .eq('id', joinRequest.id);
 
       if (updateError) throw updateError;
 
-      setJoinRequest({ ...joinRequest, receipt_url: filePath });
+      setJoinRequest({ ...joinRequest, receipt_url: 'sent_to_telegram' });
       setReceiptInputKey(k => k + 1);
-      toast.success('Receipt uploaded successfully');
+      toast.success('Receipt submitted successfully');
     } catch (err: any) {
       console.error('Upload error:', err);
-      toast.error(err?.message || 'Failed to upload receipt');
+      toast.error(err?.message || 'Failed to submit receipt');
     } finally {
       setIsUploading(false);
     }
