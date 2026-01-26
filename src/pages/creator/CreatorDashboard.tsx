@@ -688,46 +688,58 @@ const CreatorDashboard = () => {
           </div>
         )}
 
-        {/* Stats Cards */}
+        {/* Stats Cards - Enhanced with gradients */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <Users className="w-6 h-6 text-blue-500" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-blue-500/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                  <Users className="w-6 h-6 text-blue-500" />
+                </div>
               </div>
+              <p className="text-2xl font-bold text-foreground">{totalReferred}</p>
+              <p className="text-muted-foreground text-sm">Total Users Referred</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{totalReferred}</p>
-            <p className="text-muted-foreground text-sm">Total Users Referred</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-green-500" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-green-500/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/30 to-green-500/10 flex items-center justify-center border border-green-500/20">
+                  <TrendingUp className="w-6 h-6 text-green-500" />
+                </div>
               </div>
+              <p className="text-2xl font-bold text-foreground">{monthlyPaidUsers}</p>
+              <p className="text-muted-foreground text-sm">Paid Users This Month</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{monthlyPaidUsers}</p>
-            <p className="text-muted-foreground text-sm">Paid Users This Month</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-                <Award className="w-6 h-6 text-purple-500" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-purple-500/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                  <Award className="w-6 h-6 text-purple-500" />
+                </div>
               </div>
+              <p className="text-2xl font-bold text-foreground">{lifetimePaidUsers}</p>
+              <p className="text-muted-foreground text-sm">Lifetime Paid Users</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{lifetimePaidUsers}</p>
-            <p className="text-muted-foreground text-sm">Lifetime Paid Users</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
-                <Wallet className="w-6 h-6 text-brand" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-brand/30 transition-colors">
+            <div className="absolute inset-0 bg-gradient-to-br from-brand/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/30 to-brand/10 flex items-center justify-center border border-brand/20">
+                  <Wallet className="w-6 h-6 text-brand" />
+                </div>
               </div>
+              <p className="text-2xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
+              <p className="text-muted-foreground text-sm">Available Balance</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
-            <p className="text-muted-foreground text-sm">Available Balance</p>
           </div>
         </div>
 

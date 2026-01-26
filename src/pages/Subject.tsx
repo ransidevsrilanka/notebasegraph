@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import Navbar from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft,
   BookOpen, 
@@ -13,6 +12,7 @@ import {
   Eye,
   Lock,
   ChevronRight,
+  ChevronDown,
   Sparkles,
   Brain,
   HelpCircle,
@@ -23,6 +23,7 @@ import type { Subject, Topic, Note, TierType } from '@/types/database';
 import { toast } from 'sonner';
 import { usePDFViewer } from '@/hooks/usePDFViewer';
 import { PDFViewer, PDFAccessDenied } from '@/components/PDFViewer';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const TIER_ORDER: TierType[] = ['starter', 'standard', 'lifetime'];
 
@@ -57,9 +58,9 @@ const SubjectPage = () => {
   const [flashcardSets, setFlashcardSets] = useState<FlashcardSet[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, { notes: boolean; flashcards: boolean; quizzes: boolean }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [showViewer, setShowViewer] = useState(false);
-  const [activeTab, setActiveTab] = useState('notes');
 
   const pdfViewer = usePDFViewer();
   const userTierIndex = enrollment ? TIER_ORDER.indexOf(enrollment.tier) : -1;
@@ -157,7 +158,24 @@ const SubjectPage = () => {
     } else {
       setExpandedTopic(topicId);
       fetchNotes(topicId);
+      // Initialize section expansion state
+      if (!expandedSections[topicId]) {
+        setExpandedSections(prev => ({
+          ...prev,
+          [topicId]: { notes: true, flashcards: true, quizzes: true }
+        }));
+      }
     }
+  };
+
+  const toggleSection = (topicId: string, section: 'notes' | 'flashcards' | 'quizzes') => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [topicId]: {
+        ...prev[topicId],
+        [section]: !prev[topicId]?.[section]
+      }
+    }));
   };
 
   const canAccess = (minTier: TierType) => {
@@ -202,10 +220,9 @@ const SubjectPage = () => {
     navigate(`/flashcards/${set.id}`);
   };
 
-  const getTopicName = (topicId: string) => {
-    const topic = topics.find(t => t.id === topicId);
-    return topic?.name || 'Unknown Topic';
-  };
+  // Get flashcards and quizzes for a specific topic
+  const getTopicFlashcards = (topicId: string) => flashcardSets.filter(fc => fc.topic_id === topicId);
+  const getTopicQuizzes = (topicId: string) => quizzes.filter(q => q.topic_id === topicId);
 
   if (isLoading || !subject) {
     return (
@@ -262,278 +279,273 @@ const SubjectPage = () => {
             </div>
           </div>
 
-          {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="grid w-full max-w-md grid-cols-3">
-              <TabsTrigger value="notes" className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Notes
-              </TabsTrigger>
-              <TabsTrigger value="flashcards" className="flex items-center gap-2">
-                <Brain className="w-4 h-4" />
-                Flashcards
-              </TabsTrigger>
-              <TabsTrigger value="quizzes" className="flex items-center gap-2">
-                <HelpCircle className="w-4 h-4" />
-                Quizzes
-              </TabsTrigger>
-            </TabsList>
+          {/* Topics with integrated content */}
+          {topics.length === 0 ? (
+            <div className="glass-card p-12 text-center">
+              <FolderOpen className="w-12 h-12 text-primary mx-auto mb-4" />
+              <h3 className="font-display text-xl font-semibold text-foreground mb-2">
+                No Topics Yet
+              </h3>
+              <p className="text-muted-foreground">
+                Topics for this subject are being prepared. Check back soon!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {topics.map((topic) => {
+                const topicFlashcards = getTopicFlashcards(topic.id);
+                const topicQuizzes = getTopicQuizzes(topic.id);
+                const sectionState = expandedSections[topic.id] || { notes: true, flashcards: true, quizzes: true };
 
-            {/* Notes Tab */}
-            <TabsContent value="notes" className="mt-6">
-              {topics.length === 0 ? (
-                <div className="glass-card p-12 text-center">
-                  <FolderOpen className="w-12 h-12 text-primary mx-auto mb-4" />
-                  <h3 className="font-display text-xl font-semibold text-foreground mb-2">
-                    No Topics Yet
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Topics for this subject are being prepared. Check back soon!
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {topics.map((topic) => (
-                    <div key={topic.id} className="glass-card overflow-hidden">
-                      <button
-                        onClick={() => toggleTopic(topic.id)}
-                        className="w-full p-5 flex items-center justify-between hover:bg-secondary/30 transition-colors"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <FolderOpen className="w-5 h-5 text-primary" />
-                          </div>
-                          <div className="text-left">
-                            <h3 className="font-display font-semibold text-foreground">
-                              {topic.name}
-                            </h3>
-                            {topic.description && (
-                              <p className="text-muted-foreground text-sm">{topic.description}</p>
-                            )}
-                          </div>
+                return (
+                  <div key={topic.id} className="glass-card overflow-hidden">
+                    <button
+                      onClick={() => toggleTopic(topic.id)}
+                      className="w-full p-5 flex items-center justify-between hover:bg-secondary/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <FolderOpen className="w-5 h-5 text-primary" />
                         </div>
-                        <ChevronRight 
-                          className={`w-5 h-5 text-muted-foreground transition-transform ${
-                            expandedTopic === topic.id ? 'rotate-90' : ''
-                          }`} 
-                        />
-                      </button>
+                        <div className="text-left">
+                          <h3 className="font-display font-semibold text-foreground">
+                            {topic.name}
+                          </h3>
+                          {topic.description && (
+                            <p className="text-muted-foreground text-sm">{topic.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <ChevronRight 
+                        className={`w-5 h-5 text-muted-foreground transition-transform ${
+                          expandedTopic === topic.id ? 'rotate-90' : ''
+                        }`} 
+                      />
+                    </button>
 
-                      {expandedTopic === topic.id && (
-                        <div className="border-t border-border">
-                          {!notes[topic.id] ? (
-                            <div className="p-4 text-center text-muted-foreground text-sm">
-                              Loading notes...
+                    {expandedTopic === topic.id && (
+                      <div className="border-t border-border">
+                        {/* Notes Section */}
+                        <Collapsible open={sectionState.notes} onOpenChange={() => toggleSection(topic.id, 'notes')}>
+                          <CollapsibleTrigger className="w-full p-4 flex items-center justify-between bg-secondary/20 hover:bg-secondary/30 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-blue-500" />
+                              <span className="font-medium text-foreground text-sm">Notes</span>
+                              <span className="text-xs text-muted-foreground">
+                                ({notes[topic.id]?.length || 0})
+                              </span>
                             </div>
-                          ) : notes[topic.id].length === 0 ? (
-                            <div className="p-4 text-center text-muted-foreground text-sm">
-                              No notes available yet
-                            </div>
-                          ) : (
-                            <div className="divide-y divide-border">
-                              {notes[topic.id].map((note) => {
-                                const hasAccess = canAccess(note.min_tier);
-                                
-                                return (
-                                  <div 
-                                    key={note.id} 
-                                    className={`p-4 flex items-center justify-between ${
-                                      hasAccess ? 'hover:bg-secondary/20' : 'opacity-60'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                        hasAccess ? 'bg-primary/10' : 'bg-muted'
-                                      }`}>
-                                        {hasAccess ? (
-                                          <FileText className="w-4 h-4 text-primary" />
-                                        ) : (
-                                          <Lock className="w-4 h-4 text-muted-foreground" />
-                                        )}
+                            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${sectionState.notes ? 'rotate-180' : ''}`} />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            {!notes[topic.id] ? (
+                              <div className="p-4 text-center text-muted-foreground text-sm">
+                                Loading notes...
+                              </div>
+                            ) : notes[topic.id].length === 0 ? (
+                              <div className="p-4 text-center text-muted-foreground text-sm">
+                                No notes available yet
+                              </div>
+                            ) : (
+                              <div className="divide-y divide-border">
+                                {notes[topic.id].map((note) => {
+                                  const hasAccess = canAccess(note.min_tier);
+                                  
+                                  return (
+                                    <div 
+                                      key={note.id} 
+                                      className={`p-4 flex items-center justify-between ${
+                                        hasAccess ? 'hover:bg-secondary/20' : 'opacity-60'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                          hasAccess ? 'bg-blue-500/10' : 'bg-muted'
+                                        }`}>
+                                          {hasAccess ? (
+                                            <FileText className="w-4 h-4 text-blue-500" />
+                                          ) : (
+                                            <Lock className="w-4 h-4 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                        <div>
+                                          <p className="text-foreground font-medium text-sm">
+                                            {note.title}
+                                          </p>
+                                          <p className="text-muted-foreground text-xs">
+                                            {TIER_LABELS[note.min_tier]} tier
+                                            {note.file_size && ` • ${(note.file_size / 1024 / 1024).toFixed(2)} MB`}
+                                          </p>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <p className="text-foreground font-medium text-sm">
-                                          {note.title}
-                                        </p>
-                                        <p className="text-muted-foreground text-xs">
-                                          {TIER_LABELS[note.min_tier]} tier
-                                          {note.file_size && ` • ${(note.file_size / 1024 / 1024).toFixed(2)} MB`}
-                                        </p>
-                                      </div>
+                                      
+                                      {hasAccess ? (
+                                        <Button
+                                          variant="default"
+                                          size="sm"
+                                          onClick={() => handleViewNote(note)}
+                                        >
+                                          <Eye className="w-4 h-4 mr-1" />
+                                          View
+                                        </Button>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                                          Locked
+                                        </span>
+                                      )}
                                     </div>
-                                    
-                                    {hasAccess ? (
-                                      <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={() => handleViewNote(note)}
-                                      >
-                                        <Eye className="w-4 h-4 mr-1" />
-                                        View
-                                      </Button>
-                                    ) : (
-                                      <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
-                                        Locked
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Flashcards Tab */}
-            <TabsContent value="flashcards" className="mt-6">
-              {flashcardSets.length === 0 ? (
-                <div className="glass-card p-12 text-center">
-                  <Brain className="w-12 h-12 text-primary mx-auto mb-4" />
-                  <h3 className="font-display text-xl font-semibold text-foreground mb-2">
-                    No Flashcard Sets Yet
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Flashcard sets for this subject are being prepared. Check back soon!
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {flashcardSets.map((set) => {
-                    const hasAccess = canAccess(set.min_tier);
-                    
-                    return (
-                      <div 
-                        key={set.id} 
-                        className={`glass-card p-5 ${hasAccess ? '' : 'opacity-60'}`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            hasAccess ? 'bg-primary/10' : 'bg-muted'
-                          }`}>
-                            {hasAccess ? (
-                              <Brain className="w-5 h-5 text-primary" />
-                            ) : (
-                              <Lock className="w-5 h-5 text-muted-foreground" />
+                                  );
+                                })}
+                              </div>
                             )}
-                          </div>
-                          <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-secondary">
-                            {set.card_count} cards
-                          </span>
-                        </div>
-                        <h3 className="font-display font-semibold text-foreground mb-1">
-                          {set.title}
-                        </h3>
-                        <p className="text-muted-foreground text-sm mb-2">
-                          {getTopicName(set.topic_id)}
-                        </p>
-                        {set.description && (
-                          <p className="text-muted-foreground text-xs mb-4 line-clamp-2">
-                            {set.description}
-                          </p>
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            {TIER_LABELS[set.min_tier]} tier
-                          </span>
-                          {hasAccess ? (
-                            <Button size="sm" onClick={() => handleStudyFlashcards(set)}>
-                              <Play className="w-4 h-4 mr-1" />
-                              Study
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
-                              Locked
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </TabsContent>
+                          </CollapsibleContent>
+                        </Collapsible>
 
-            {/* Quizzes Tab */}
-            <TabsContent value="quizzes" className="mt-6">
-              {quizzes.length === 0 ? (
-                <div className="glass-card p-12 text-center">
-                  <HelpCircle className="w-12 h-12 text-primary mx-auto mb-4" />
-                  <h3 className="font-display text-xl font-semibold text-foreground mb-2">
-                    No Quizzes Yet
-                  </h3>
-                  <p className="text-muted-foreground">
-                    Quizzes for this subject are being prepared. Check back soon!
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {quizzes.map((quiz) => {
-                    const hasAccess = canAccess(quiz.min_tier);
-                    
-                    return (
-                      <div 
-                        key={quiz.id} 
-                        className={`glass-card p-5 ${hasAccess ? '' : 'opacity-60'}`}
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            hasAccess ? 'bg-primary/10' : 'bg-muted'
-                          }`}>
-                            {hasAccess ? (
-                              <HelpCircle className="w-5 h-5 text-primary" />
-                            ) : (
-                              <Lock className="w-5 h-5 text-muted-foreground" />
-                            )}
-                          </div>
-                          <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-secondary">
-                            {quiz.question_ids?.length || 0} questions
-                          </span>
-                        </div>
-                        <h3 className="font-display font-semibold text-foreground mb-1">
-                          {quiz.title}
-                        </h3>
-                        <p className="text-muted-foreground text-sm mb-2">
-                          {getTopicName(quiz.topic_id)}
-                        </p>
-                        {quiz.description && (
-                          <p className="text-muted-foreground text-xs mb-4 line-clamp-2">
-                            {quiz.description}
-                          </p>
+                        {/* Flashcards Section */}
+                        {topicFlashcards.length > 0 && (
+                          <Collapsible open={sectionState.flashcards} onOpenChange={() => toggleSection(topic.id, 'flashcards')}>
+                            <CollapsibleTrigger className="w-full p-4 flex items-center justify-between bg-purple-500/5 hover:bg-purple-500/10 transition-colors border-t border-border">
+                              <div className="flex items-center gap-2">
+                                <Brain className="w-4 h-4 text-purple-500" />
+                                <span className="font-medium text-foreground text-sm">Flashcards</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({topicFlashcards.length} sets)
+                                </span>
+                              </div>
+                              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${sectionState.flashcards ? 'rotate-180' : ''}`} />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="divide-y divide-border">
+                                {topicFlashcards.map((set) => {
+                                  const hasAccess = canAccess(set.min_tier);
+                                  
+                                  return (
+                                    <div 
+                                      key={set.id} 
+                                      className={`p-4 flex items-center justify-between ${
+                                        hasAccess ? 'hover:bg-secondary/20' : 'opacity-60'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                          hasAccess ? 'bg-purple-500/10' : 'bg-muted'
+                                        }`}>
+                                          {hasAccess ? (
+                                            <Brain className="w-4 h-4 text-purple-500" />
+                                          ) : (
+                                            <Lock className="w-4 h-4 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                        <div>
+                                          <p className="text-foreground font-medium text-sm">
+                                            {set.title}
+                                          </p>
+                                          <p className="text-muted-foreground text-xs">
+                                            {set.card_count} cards • {TIER_LABELS[set.min_tier]} tier
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      {hasAccess ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleStudyFlashcards(set)}
+                                          className="border-purple-500/30 text-purple-500 hover:bg-purple-500/10"
+                                        >
+                                          <Play className="w-4 h-4 mr-1" />
+                                          Study
+                                        </Button>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                                          Locked
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
                         )}
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-                          {quiz.time_limit_minutes && (
-                            <span>{quiz.time_limit_minutes} min</span>
-                          )}
-                          <span>•</span>
-                          <span>Pass: {quiz.pass_percentage}%</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-muted-foreground">
-                            {TIER_LABELS[quiz.min_tier]} tier
-                          </span>
-                          {hasAccess ? (
-                            <Button size="sm" onClick={() => handleStartQuiz(quiz)}>
-                              <Play className="w-4 h-4 mr-1" />
-                              Start Quiz
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
-                              Locked
-                            </span>
-                          )}
-                        </div>
+
+                        {/* Quizzes Section */}
+                        {topicQuizzes.length > 0 && (
+                          <Collapsible open={sectionState.quizzes} onOpenChange={() => toggleSection(topic.id, 'quizzes')}>
+                            <CollapsibleTrigger className="w-full p-4 flex items-center justify-between bg-green-500/5 hover:bg-green-500/10 transition-colors border-t border-border">
+                              <div className="flex items-center gap-2">
+                                <HelpCircle className="w-4 h-4 text-green-500" />
+                                <span className="font-medium text-foreground text-sm">Quizzes</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({topicQuizzes.length})
+                                </span>
+                              </div>
+                              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${sectionState.quizzes ? 'rotate-180' : ''}`} />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="divide-y divide-border">
+                                {topicQuizzes.map((quiz) => {
+                                  const hasAccess = canAccess(quiz.min_tier);
+                                  
+                                  return (
+                                    <div 
+                                      key={quiz.id} 
+                                      className={`p-4 flex items-center justify-between ${
+                                        hasAccess ? 'hover:bg-secondary/20' : 'opacity-60'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                                          hasAccess ? 'bg-green-500/10' : 'bg-muted'
+                                        }`}>
+                                          {hasAccess ? (
+                                            <HelpCircle className="w-4 h-4 text-green-500" />
+                                          ) : (
+                                            <Lock className="w-4 h-4 text-muted-foreground" />
+                                          )}
+                                        </div>
+                                        <div>
+                                          <p className="text-foreground font-medium text-sm">
+                                            {quiz.title}
+                                          </p>
+                                          <p className="text-muted-foreground text-xs">
+                                            {quiz.question_ids?.length || 0} questions
+                                            {quiz.time_limit_minutes && ` • ${quiz.time_limit_minutes} min`}
+                                            {` • Pass: ${quiz.pass_percentage}%`}
+                                            {` • ${TIER_LABELS[quiz.min_tier]} tier`}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      
+                                      {hasAccess ? (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleStartQuiz(quiz)}
+                                          className="border-green-500/30 text-green-500 hover:bg-green-500/10"
+                                        >
+                                          <Play className="w-4 h-4 mr-1" />
+                                          Start
+                                        </Button>
+                                      ) : (
+                                        <span className="text-xs text-muted-foreground px-2 py-1 rounded bg-muted">
+                                          Locked
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 

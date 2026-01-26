@@ -134,6 +134,7 @@ const ContentManagement = () => {
   const [noteFile, setNoteFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [noteUploadRequested, setNoteUploadRequested] = useState(false);
+  const [isModelPaper, setIsModelPaper] = useState(false);
   const [subjectSearch, setSubjectSearch] = useState('');
 
   // Question Bank state
@@ -456,6 +457,7 @@ const ContentManagement = () => {
           file_size: noteFile.size,
           min_tier: noteMinTier,
           is_active: true,
+          is_model_paper: isModelPaper,
         });
 
       if (insertError) throw insertError;
@@ -465,6 +467,7 @@ const ContentManagement = () => {
       setNoteDescription('');
       setNoteFile(null);
       setNoteMinTier('starter');
+      setIsModelPaper(false);
       fetchNotes(selectedTopic.id);
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -1456,6 +1459,21 @@ const ContentManagement = () => {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+          </div>
+          
+          {/* Model Paper Toggle */}
+          <div className="flex items-center gap-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/30">
+            <input
+              type="checkbox"
+              id="is-model-paper"
+              checked={isModelPaper}
+              onChange={(e) => setIsModelPaper(e.target.checked)}
+              className="w-4 h-4 rounded border-border bg-secondary text-brand focus:ring-brand"
+            />
+            <label htmlFor="is-model-paper" className="flex flex-col cursor-pointer">
+              <span className="text-sm font-medium text-foreground">Model Paper</span>
+              <span className="text-xs text-muted-foreground">Mark as past paper/practice exam</span>
+            </label>
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">File (PDF) *</label>

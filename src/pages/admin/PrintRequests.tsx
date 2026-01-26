@@ -29,6 +29,10 @@ import {
   Clock,
   XCircle,
   Eye,
+  Download,
+  Check,
+  X,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -49,6 +53,8 @@ interface PrintRequest {
   payment_status: string;
   tracking_number: string | null;
   admin_notes: string | null;
+  receipt_url: string | null;
+  rejection_reason: string | null;
   created_at: string;
   shipped_at: string | null;
   delivered_at: string | null;
@@ -79,8 +85,10 @@ const PrintRequests = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedRequest, setSelectedRequest] = useState<PrintRequest | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [trackingNumber, setTrackingNumber] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchRequests = async () => {
@@ -106,9 +114,133 @@ const PrintRequests = () => {
     fetchRequests();
   }, [statusFilter]);
 
+  // Calculate stats from actual data
+  const stats = {
+    pending: requests.filter(r => r.status === 'pending').length,
+    processing: requests.filter(r => r.status === 'processing').length,
+    shipped: requests.filter(r => r.status === 'shipped').length,
+    delivered: requests.filter(r => r.status === 'delivered').length,
+  };
+
+  const sendInboxNotification = async (
+    userId: string, 
+    subject: string, 
+    body: string
+  ) => {
+    await supabase.from('messages').insert({
+      recipient_id: userId,
+      recipient_type: 'student',
+      recipient_user_id: userId,
+      subject,
+      body,
+      is_read: false,
+    });
+  };
+
+  const sendTelegramNotification = async (message: string, data: Record<string, unknown>) => {
+    try {
+      await supabase.functions.invoke('send-telegram-notification', {
+        body: {
+          type: 'print_request_update',
+          message,
+          data,
+          priority: 'medium',
+        },
+      });
+    } catch (err) {
+      console.error('Failed to send Telegram notification:', err);
+    }
+  };
+
+  const handleApprove = async (request: PrintRequest) => {
+    setIsUpdating(true);
+    
+    const { error } = await supabase
+      .from('print_requests')
+      .update({
+        status: 'confirmed',
+        payment_status: 'paid',
+        admin_notes: adminNotes || null,
+      })
+      .eq('id', request.id);
+
+    if (error) {
+      toast.error('Failed to approve request');
+    } else {
+      // Send inbox notification
+      await sendInboxNotification(
+        request.user_id,
+        `Print Order Confirmed - ${request.request_number}`,
+        `Great news! Your print request (${request.request_number}) has been approved and is now being processed. You will receive tracking information once your order ships.`
+      );
+      
+      // Send Telegram notification
+      await sendTelegramNotification(
+        `✅ Print request ${request.request_number} approved`,
+        {
+          request_number: request.request_number,
+          customer: request.full_name,
+          amount: `Rs. ${request.total_amount}`,
+        }
+      );
+      
+      toast.success('Request approved and notifications sent');
+      fetchRequests();
+      setShowDetailDialog(false);
+    }
+    setIsUpdating(false);
+  };
+
+  const handleReject = async () => {
+    if (!selectedRequest || !rejectionReason.trim()) {
+      toast.error('Rejection reason is required');
+      return;
+    }
+
+    setIsUpdating(true);
+    
+    const { error } = await supabase
+      .from('print_requests')
+      .update({
+        status: 'cancelled',
+        payment_status: 'refund_pending',
+        rejection_reason: rejectionReason,
+        admin_notes: adminNotes || null,
+      })
+      .eq('id', selectedRequest.id);
+
+    if (error) {
+      toast.error('Failed to reject request');
+    } else {
+      // Send inbox notification with rejection reason
+      await sendInboxNotification(
+        selectedRequest.user_id,
+        `Print Order Update - ${selectedRequest.request_number}`,
+        `Unfortunately, we couldn't process your print request (${selectedRequest.request_number}). Reason: ${rejectionReason}. If you paid via bank transfer, a refund will be processed. Please contact support if you have questions.`
+      );
+      
+      // Send Telegram notification
+      await sendTelegramNotification(
+        `❌ Print request ${selectedRequest.request_number} rejected`,
+        {
+          request_number: selectedRequest.request_number,
+          customer: selectedRequest.full_name,
+          reason: rejectionReason,
+        }
+      );
+      
+      toast.success('Request rejected and customer notified');
+      setShowRejectDialog(false);
+      setShowDetailDialog(false);
+      setRejectionReason('');
+      fetchRequests();
+    }
+    setIsUpdating(false);
+  };
+
   const updateStatus = async (requestId: string, newStatus: string) => {
     setIsUpdating(true);
-    const updates: any = {
+    const updates: Record<string, unknown> = {
       status: newStatus,
       admin_notes: adminNotes || null,
     };
@@ -132,11 +264,39 @@ const PrintRequests = () => {
     if (error) {
       toast.error('Failed to update status');
     } else {
+      // Send notification for status updates
+      if (selectedRequest && newStatus === 'shipped') {
+        await sendInboxNotification(
+          selectedRequest.user_id,
+          `Your Order Has Shipped! - ${selectedRequest.request_number}`,
+          `Your print order (${selectedRequest.request_number}) is on its way!${trackingNumber ? ` Tracking number: ${trackingNumber}.` : ''} Expected delivery in 3-5 business days.`
+        );
+      } else if (selectedRequest && newStatus === 'delivered') {
+        await sendInboxNotification(
+          selectedRequest.user_id,
+          `Order Delivered - ${selectedRequest.request_number}`,
+          `Your print order (${selectedRequest.request_number}) has been delivered. Thank you for using our print service!`
+        );
+      }
+      
       toast.success(`Status updated to ${newStatus}`);
       fetchRequests();
       setShowDetailDialog(false);
     }
     setIsUpdating(false);
+  };
+
+  const viewReceipt = (receiptUrl: string) => {
+    // Get public URL from Supabase storage
+    const { data } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(receiptUrl);
+    
+    if (data?.publicUrl) {
+      window.open(data.publicUrl, '_blank');
+    } else {
+      toast.error('Receipt not found');
+    }
   };
 
   const filteredRequests = requests.filter((req) => {
@@ -156,6 +316,11 @@ const PrintRequests = () => {
     setAdminNotes(request.admin_notes || '');
     setShowDetailDialog(true);
   };
+
+  const isPendingBankTransfer = (request: PrintRequest) => 
+    request.payment_method === 'bank_transfer' && 
+    request.status === 'pending' && 
+    request.payment_status !== 'paid';
 
   return (
     <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
@@ -206,16 +371,16 @@ const PrintRequests = () => {
           </div>
         </div>
 
-        {/* Stats */}
+        {/* Stats - Using calculated values from data */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          {['pending', 'processing', 'shipped', 'delivered'].map((status) => (
+          {(['pending', 'processing', 'shipped', 'delivered'] as const).map((status) => (
             <div key={status} className="glass-card p-4">
               <div className={`inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[status]}`}>
                 {STATUS_ICONS[status]}
                 <span className="capitalize">{status}</span>
               </div>
               <p className="text-2xl font-bold text-foreground mt-2">
-                {requests.filter(r => r.status === status).length}
+                {stats[status]}
               </p>
             </div>
           ))}
@@ -262,13 +427,27 @@ const PrintRequests = () => {
                       <td className="p-3 text-foreground text-sm capitalize">{request.print_type.replace(/_/g, ' ')}</td>
                       <td className="p-3 text-foreground text-sm font-medium">Rs. {request.total_amount?.toLocaleString()}</td>
                       <td className="p-3">
-                        <span className={`px-2 py-1 rounded text-xs font-medium ${
-                          request.payment_status === 'paid' 
-                            ? 'text-green-500 bg-green-500/10'
-                            : 'text-yellow-500 bg-yellow-500/10'
-                        }`}>
-                          {request.payment_status}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            request.payment_status === 'paid' 
+                              ? 'text-green-500 bg-green-500/10'
+                              : request.payment_status === 'pending_verification'
+                              ? 'text-orange-500 bg-orange-500/10'
+                              : 'text-yellow-500 bg-yellow-500/10'
+                          }`}>
+                            {request.payment_status?.replace(/_/g, ' ')}
+                          </span>
+                          {request.receipt_url && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-6 w-6 p-0"
+                              onClick={() => viewReceipt(request.receipt_url!)}
+                            >
+                              <Download className="w-3 h-3" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       <td className="p-3">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${STATUS_COLORS[request.status]}`}>
@@ -331,7 +510,63 @@ const PrintRequests = () => {
                   <p className="text-muted-foreground">Total</p>
                   <p className="font-medium text-brand">Rs. {selectedRequest.total_amount?.toLocaleString()}</p>
                 </div>
+                <div>
+                  <p className="text-muted-foreground">Payment Method</p>
+                  <p className="font-medium text-foreground capitalize">{selectedRequest.payment_method?.replace(/_/g, ' ')}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Payment Status</p>
+                  <p className={`font-medium ${
+                    selectedRequest.payment_status === 'paid' ? 'text-green-500' : 'text-yellow-500'
+                  }`}>
+                    {selectedRequest.payment_status?.replace(/_/g, ' ')}
+                  </p>
+                </div>
               </div>
+
+              {/* Receipt Button */}
+              {selectedRequest.receipt_url && (
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => viewReceipt(selectedRequest.receipt_url!)}
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  View Payment Receipt
+                </Button>
+              )}
+
+              {/* Bank Transfer Approval Buttons */}
+              {isPendingBankTransfer(selectedRequest) && (
+                <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertTriangle className="w-5 h-5 text-orange-500" />
+                    <p className="font-medium text-orange-500">Bank Transfer - Pending Verification</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Please verify the payment receipt before approving this order.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => handleApprove(selectedRequest)}
+                      disabled={isUpdating}
+                      className="flex-1 bg-green-500 hover:bg-green-600"
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={() => setShowRejectDialog(true)}
+                      disabled={isUpdating}
+                      className="flex-1"
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Tracking Number</label>
@@ -374,6 +609,40 @@ const PrintRequests = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rejection Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Print Request</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Please provide a reason for rejecting this request. This will be sent to the customer.
+            </p>
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Reason for rejection (e.g., Payment not verified, Invalid receipt)..."
+              rows={3}
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleReject}
+              disabled={isUpdating || !rejectionReason.trim()}
+            >
+              Reject Request
             </Button>
           </DialogFooter>
         </DialogContent>
