@@ -1,351 +1,450 @@
 
-# Mobile UI Fixes, Notifications & System Improvements
+# Comprehensive Feature Enhancement Plan
 
 ## Overview
-This plan addresses multiple mobile UI issues, missing features, and system improvements identified from the screenshots and requirements.
+This plan addresses multiple feature requests spanning admin functionality, student UX, content organization, and a new print request system with backend support.
 
 ---
 
-## Issues Identified
+## Phase 1: Enrollments Page - Delete All Button
 
-### From Screenshots:
-1. **Payment Method Dialog** - Card Payment button text is cut off on mobile
-2. **Join Requests page** - Action buttons (Reject) are cut off on mobile
-3. **AI Chat tables not rendering** - Markdown tables showing as raw text
-4. **AI Chat overlay covering send button** - Floating button overlaps the send button
-5. **AI Chat button shows on AI Chat page** - Should be hidden on `/ai-assistant`
+### File: `src/pages/admin/Enrollments.tsx`
 
-### From Requirements:
-6. **Access codes showing as "unused" when used** - Status not updating correctly
-7. **Telegram notification for new student signup with access code** - Missing notification
-8. **Revenue forecast logic incorrect** - Should compare week-over-week, not monthly
-9. **Support email update** - Change all emails to `support@notebase.tech`
+**Changes:**
+1. Add a "Delete All Enrollments" button in the header section (line ~203)
+2. Create a confirmation dialog requiring the admin to type "DELETE ALL" to confirm
+3. Implement cascading delete logic:
+   - Delete related `user_subjects` records first
+   - Delete `enrollments` records
+   - Optionally: Clear related `profiles` (but not auth.users)
+
+**Security Considerations:**
+- Require 2FA/OTP verification (reuse existing `OTPVerificationDialog`)
+- Add Telegram notification when bulk delete is executed
+- Log the action to an audit table
 
 ---
 
-## Phase 1: Mobile UI Fixes
+## Phase 2: Payment Dialog - Logged-In User Experience
 
-### 1.1 Payment Method Dialog (Mobile Responsiveness)
-**File:** `src/components/PaymentMethodDialog.tsx`
+### File: `src/components/PaymentMethodDialog.tsx`
 
-**Problem:** Button text and descriptions are cut off on small screens.
+**Issue:** Logged-in users with existing enrollment see payment options when they should just return to dashboard.
 
-**Solution:**
-- Reduce padding and icon size on mobile
-- Add `min-w-0` and `flex-shrink` to prevent text overflow
-- Make button layout stack vertically on very small screens
-- Reduce text size for mobile
+**Changes:**
+1. Accept new prop `hasExistingEnrollment: boolean`
+2. If user is logged in AND has an active enrollment:
+   - Show "You're already enrolled!" message
+   - Display "Back to Dashboard" button
+   - Hide payment method buttons
+3. PricingSection should pass `useAuth()` enrollment status to the dialog
 
 ```tsx
-// Changes to button styling:
-className="h-auto py-3 sm:py-4 px-4 sm:px-6 justify-start gap-3 sm:gap-4 flex-col sm:flex-row items-start sm:items-center"
+// New condition check at start of dialog content:
+if (hasExistingEnrollment) {
+  return (
+    <div>
+      <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
+      <h2>You're Already Enrolled!</h2>
+      <p>You have an active {tierName} subscription.</p>
+      <Button onClick={() => navigate('/dashboard')}>
+        Back to Dashboard
+      </Button>
+    </div>
+  );
+}
+```
 
-// Icon container:
-<div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand/10 flex-shrink-0 flex items-center justify-center">
-  <CreditCard className="w-5 h-5 sm:w-6 sm:h-6 text-brand" />
+---
+
+## Phase 3: Integrate Quizzes & Flashcards Under Topics
+
+### File: `src/pages/Subject.tsx`
+
+**Current Structure:** Three separate tabs (Notes, Flashcards, Quizzes)
+**New Structure:** Single unified view where each topic expands to show Notes, then Flashcards, then Quizzes
+
+**Implementation:**
+
+1. **Remove the Tabs component entirely** (lines 265-280)
+
+2. **Restructure the topic expansion** (lines 295-390):
+   - When a topic expands, show three sections:
+     - **Notes Section** (existing)
+     - **Flashcards Section** (filtered by `topic_id`)
+     - **Quizzes Section** (filtered by `topic_id`)
+
+3. **Add topic-specific filtering:**
+```tsx
+// Inside the expanded topic view:
+const topicFlashcards = flashcardSets.filter(fc => fc.topic_id === topic.id);
+const topicQuizzes = quizzes.filter(q => q.topic_id === topic.id);
+```
+
+4. **UI Layout for expanded topic:**
+```
+[Topic Header - Click to expand]
+├── Notes (with locked/unlocked badges)
+│   ├── Note 1 [View] or [Locked]
+│   └── Note 2 [View] or [Locked]
+├── Flashcards (if any for this topic)
+│   └── Flashcard Set 1 - 20 cards [Study] or [Locked]
+└── Quizzes (if any for this topic)
+    └── Quiz 1 - 15 questions [Start] or [Locked]
+```
+
+5. **Show locked/unlocked status** based on tier (already have `canAccess()` function)
+
+---
+
+## Phase 4: Bank Transfer Subject Selection - UI Enhancement
+
+### File: `src/pages/BankSignup.tsx`
+
+**Issue:** The subjects step (step='subjects') is visually basic compared to card payment flow.
+
+**Changes (lines 500-705):**
+
+1. **Add visual styling matching PaidSignup:**
+   - Add decorative gradients and blur orbs
+   - Use glass-card styling for subject selection
+   - Add animated checkmarks for selected subjects
+
+2. **Enhance subject cards:**
+```tsx
+<div className={`
+  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+  ${isSelected ? 'border-brand bg-brand/10' : 'border-border bg-card hover:border-brand/50'}
+`}>
+  {/* Subject icon based on basket */}
+  {/* Subject name with description */}
+  {/* Checkmark animation when selected */}
 </div>
+```
 
-// Text container:
-<div className="text-left min-w-0">
-  <p className="font-semibold text-foreground text-sm sm:text-base">Card Payment</p>
-  <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">
-    Pay instantly with Visa, Mastercard, or Amex
+3. **Add validation feedback section:**
+   - Show basket requirements
+   - Show warnings/errors in styled cards
+
+---
+
+## Phase 5: PDF Viewer - Get from Play Store Banner
+
+### File: `src/components/PDFViewer/PDFViewer.tsx`
+
+**Changes:**
+
+Add a banner below the PDF canvas (after line 325):
+
+```tsx
+{/* App Download Banner */}
+<div className="mt-4 p-4 bg-gradient-to-r from-brand/10 to-primary/10 rounded-lg border border-brand/20">
+  <div className="flex items-center gap-4 justify-center">
+    <img 
+      src="/google-play-badge.png" 
+      alt="Get it on Google Play"
+      className="h-12 cursor-pointer hover:scale-105 transition-transform"
+      onClick={() => window.open('https://play.google.com/store/apps/details?id=YOUR_APP_ID', '_blank')}
+    />
+    <div className="text-left">
+      <p className="font-medium text-foreground text-sm">📱 View Offline on Our App</p>
+      <p className="text-xs text-muted-foreground">
+        Download documents and study without internet
+      </p>
+    </div>
+  </div>
+</div>
+```
+
+**Assets Required:**
+- Add Google Play badge image to `public/google-play-badge.png`
+
+---
+
+## Phase 6: Content Management - Model Paper Toggle
+
+### File: `src/pages/admin/ContentManagement.tsx`
+
+### Database: Add new column to `notes` table
+
+**Migration:**
+```sql
+ALTER TABLE public.notes ADD COLUMN is_model_paper BOOLEAN DEFAULT false;
+```
+
+**UI Changes (around lines 430-475 in the note upload form):**
+
+Add a toggle switch:
+```tsx
+<div className="flex items-center space-x-2">
+  <Switch
+    id="is-model-paper"
+    checked={isModelPaper}
+    onCheckedChange={setIsModelPaper}
+  />
+  <Label htmlFor="is-model-paper">
+    This is a Model Paper
+  </Label>
+</div>
+```
+
+**Update the insert query:**
+```tsx
+.insert({
+  // ... existing fields
+  is_model_paper: isModelPaper,
+})
+```
+
+---
+
+## Phase 7: Print Request System
+
+This is a comprehensive new feature requiring multiple components.
+
+### 7.1 Database Schema
+
+**New Tables:**
+
+```sql
+-- Print Request Settings (for admin pricing)
+CREATE TABLE public.print_settings (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  notes_price_per_page NUMERIC DEFAULT 5,      -- LKR per page
+  model_paper_price_per_page NUMERIC DEFAULT 8,
+  base_delivery_fee NUMERIC DEFAULT 200,
+  cod_extra_fee NUMERIC DEFAULT 50,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- Print Requests
+CREATE TABLE public.print_requests (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  request_number TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',  -- pending, confirmed, processing, shipped, delivered, cancelled
+  
+  -- Delivery Info
+  full_name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  city TEXT,
+  
+  -- Order Details
+  print_type TEXT NOT NULL,  -- notes_only, model_papers_only, both
+  subject TEXT NOT NULL,
+  topic TEXT,
+  
+  -- Pricing
+  estimated_pages INTEGER DEFAULT 0,
+  estimated_price NUMERIC DEFAULT 0,
+  delivery_fee NUMERIC DEFAULT 0,
+  total_amount NUMERIC DEFAULT 0,
+  
+  -- Payment
+  payment_method TEXT NOT NULL,  -- card, bank_transfer, cod
+  payment_status TEXT DEFAULT 'pending',  -- pending, paid, refunded
+  order_id TEXT,
+  
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  shipped_at TIMESTAMP WITH TIME ZONE,
+  delivered_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Print Request Items (what's being printed)
+CREATE TABLE public.print_request_items (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  request_id UUID NOT NULL REFERENCES print_requests(id) ON DELETE CASCADE,
+  note_id UUID REFERENCES notes(id),
+  topic_id UUID REFERENCES topics(id),
+  item_type TEXT NOT NULL,  -- note, model_paper
+  title TEXT NOT NULL,
+  page_count INTEGER DEFAULT 1,
+  price_per_page NUMERIC DEFAULT 5,
+  subtotal NUMERIC DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+```
+
+### 7.2 Dashboard - Print Request Button
+
+**File: `src/pages/Dashboard.tsx`**
+
+Add new stat card or button (around line ~395):
+
+```tsx
+<div 
+  className="glass-card p-5 cursor-pointer hover:border-brand/30 transition-all"
+  onClick={() => setShowPrintRequestDialog(true)}
+>
+  <div className="flex items-center gap-3 mb-2">
+    <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
+      <Printer className="w-4 h-4 text-orange-500" />
+    </div>
+  </div>
+  <p className="text-lg font-display font-bold text-foreground">Request Printouts</p>
+  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
+    Notes & Model Papers
   </p>
 </div>
 ```
 
-### 1.2 Join Requests Page (Mobile Button Layout)
-**File:** `src/pages/admin/JoinRequests.tsx`
+### 7.3 Print Request Dialog Component
 
-**Problem:** Action buttons overflow horizontally on mobile.
+**New File: `src/components/dashboard/PrintRequestDialog.tsx`**
 
-**Solution:**
-- Wrap buttons to next line on small screens
-- Use `flex-wrap` with smaller button sizes on mobile
-- Stack buttons vertically on very small screens
+Multi-step dialog:
+
+**Step 1: Select Content Type**
+- [ ] Notes Only
+- [ ] Model Papers Only  
+- [ ] Both Notes & Model Papers
+
+**Step 2: Select Subject & Topics**
+- Dropdown: Select Subject (from user's enrolled subjects)
+- Multi-select: Select Topics (or "All Topics")
+- Shows estimated page count and price preview
+
+**Step 3: Delivery Information**
+- Full Name (pre-filled from profile)
+- Address (textarea)
+- Phone Number
+- City
+
+**Step 4: Payment Method**
+- Card Payment (via PayHere)
+- Bank Transfer (shows account details)
+- Cash on Delivery (COD) - additional fee noted
+
+**Step 5: Confirmation**
+- Order summary
+- Total price breakdown
+- Submit button
+
+### 7.4 CEO Dashboard - Print Settings Panel
+
+**File: `src/pages/admin/AdminDashboard.tsx` OR new file `src/pages/admin/PrintSettings.tsx`**
+
+Add a new section/page for managing print pricing:
 
 ```tsx
-// Change button container (line ~312):
-<div className="flex flex-wrap items-center gap-2 mt-3 md:mt-0">
-  {request.receipt_url && (
-    <Button variant="outline" size="sm" className="text-xs px-2 py-1.5">
-      <Download className="w-3 h-3 mr-1" />
-      Receipt
-    </Button>
-  )}
-  {/* ... other buttons with similar sizing */}
+<div className="glass-card p-6">
+  <h3 className="font-semibold mb-4 flex items-center gap-2">
+    <Printer className="w-5 h-5 text-brand" />
+    Print Request Pricing
+  </h3>
+  
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <Label>Notes Price (per page)</Label>
+      <Input type="number" value={notesPrice} onChange={...} />
+      <span className="text-xs text-muted-foreground">LKR</span>
+    </div>
+    
+    <div>
+      <Label>Model Paper Price (per page)</Label>
+      <Input type="number" value={modelPaperPrice} onChange={...} />
+    </div>
+    
+    <div>
+      <Label>Base Delivery Fee</Label>
+      <Input type="number" value={deliveryFee} onChange={...} />
+    </div>
+    
+    <div>
+      <Label>COD Extra Fee</Label>
+      <Input type="number" value={codFee} onChange={...} />
+    </div>
+  </div>
+  
+  <Button onClick={saveSettings}>Save Pricing</Button>
 </div>
-
-// On mobile, buttons should be in 2 rows of 2
 ```
 
-### 1.3 AI Chat Table Rendering Fix
-**File:** `src/components/ai-chat/MessageBubble.tsx`
+### 7.5 Admin Panel - Print Requests Management
 
-**Problem:** The `fixMalformedTables` function pattern doesn't catch all table formats.
+**New File: `src/pages/admin/PrintRequests.tsx`**
 
-**Solution:**
-- Enhance the regex pattern to handle more table variations
-- Add fallback parsing for vertical-bar-delimited content
-- Ensure table container has proper overflow handling
-
-```tsx
-function fixMalformedTables(content: string): string {
-  // Enhanced pattern to catch more table formats
-  // Also handle consecutive pipes on same line
-  
-  // First, try to detect tables that are entirely on one line
-  const lines = content.split('\n');
-  const processedLines: string[] = [];
-  
-  for (const line of lines) {
-    // Count pipes - if a line has many pipes, it might be a collapsed table
-    const pipeCount = (line.match(/\|/g) || []).length;
-    if (pipeCount > 4 && line.includes('|---')) {
-      // This line contains a collapsed table - expand it
-      const parts = line.split(/(\|[-:\s]+(?:\|[-:\s]+)+\|)/);
-      if (parts.length >= 2) {
-        // Reconstruct with newlines
-        processedLines.push(...parts.filter(Boolean).map(p => p.trim()));
-      } else {
-        processedLines.push(line);
-      }
-    } else {
-      processedLines.push(line);
-    }
-  }
-  
-  return processedLines.join('\n');
-}
-```
+Features:
+- List all print requests with status filtering
+- View request details
+- Update status (Processing, Shipped, Delivered)
+- Add tracking number
+- Print request summary for fulfillment
 
 ---
 
-## Phase 2: AI Chat Button Visibility Fix
+## Phase 8: Additional Files to Create/Modify
 
-### 2.1 Hide ChatButton on AI Chat Page
-**File:** `src/components/ai-chat/ChatButton.tsx`
+### New Files:
+1. `src/components/dashboard/PrintRequestDialog.tsx`
+2. `src/pages/admin/PrintRequests.tsx`
 
-**Problem:** The floating chat button appears even when user is already on the AI assistant page, overlapping the send button.
+### Modified Files:
+1. `src/pages/admin/Enrollments.tsx` - Delete all button
+2. `src/components/PaymentMethodDialog.tsx` - Logged-in check
+3. `src/components/PricingSection.tsx` - Pass enrollment status
+4. `src/pages/Subject.tsx` - Restructure tabs to unified view
+5. `src/pages/BankSignup.tsx` - Enhance subject selection UI
+6. `src/components/PDFViewer/PDFViewer.tsx` - Add app banner
+7. `src/pages/admin/ContentManagement.tsx` - Model paper toggle
+8. `src/pages/Dashboard.tsx` - Print request button
+9. `src/pages/admin/AdminDashboard.tsx` - Link to print settings
 
-**Solution:**
-- Check current route using `useLocation`
-- Hide button when on `/ai-assistant` route
-
-```tsx
-import { useLocation } from "react-router-dom";
-
-export function ChatButton({ className }: ChatButtonProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { user, enrollment } = useAuth();
-  const location = useLocation();
-
-  // Hide on AI assistant full page
-  if (location.pathname === '/ai-assistant') {
-    return null;
-  }
-
-  // Only show for logged-in users with enrollment
-  if (!user || !enrollment) {
-    return null;
-  }
-  // ... rest of component
-}
-```
+### Database Migrations:
+1. Add `is_model_paper` column to `notes` table
+2. Create `print_settings` table
+3. Create `print_requests` table
+4. Create `print_request_items` table
+5. Add RLS policies for new tables
 
 ---
 
-## Phase 3: Access Code Status Fix
+## Implementation Order
 
-### 3.1 Investigate Access Code Status Issue
-**File:** `src/pages/Access.tsx` (line ~213-222)
-
-**Problem:** Access codes still show as "unused" after being activated.
-
-**Analysis:** The current code updates the access code with:
-```tsx
-await supabase
-  .from('access_codes')
-  .update({
-    status: 'used' as const,
-    activated_by: authData.user.id,
-    activated_at: new Date().toISOString(),
-    bound_email: email,
-    activations_used: 1,
-  })
-  .eq('id', validatedCode.id);
-```
-
-**Potential Issues:**
-1. RLS policy might be blocking the update
-2. Update might be failing silently
-
-**Solution:**
-- Add proper error handling and logging
-- Ensure the update succeeds before proceeding
-- Add Telegram notification for new signup
-
-```tsx
-// Line ~213-222, add error handling:
-const { error: codeUpdateError } = await supabase
-  .from('access_codes')
-  .update({
-    status: 'used' as const,
-    activated_by: authData.user.id,
-    activated_at: new Date().toISOString(),
-    bound_email: email,
-    activations_used: 1,
-  })
-  .eq('id', validatedCode.id);
-
-if (codeUpdateError) {
-  console.error('Failed to update access code:', codeUpdateError);
-  // Continue anyway - enrollment is more important
-}
-
-// Send Telegram notification for new signup
-await supabase.functions.invoke('send-telegram-notification', {
-  body: {
-    type: 'new_access_code_signup',
-    message: `New student signed up using access code`,
-    data: {
-      email: email,
-      name: name,
-      code: accessCode,
-      tier: TIER_LABELS[validatedCode.tier as keyof typeof TIER_LABELS],
-      grade: GRADE_LABELS[validatedCode.grade as keyof typeof GRADE_LABELS],
-    },
-    priority: 'low'
-  }
-});
-```
+| Priority | Task | Effort |
+|----------|------|--------|
+| 1 | Payment Dialog - Logged-in check | 30 min |
+| 2 | Enrollments - Delete all button | 1 hour |
+| 3 | Subject Page - Integrate quizzes/flashcards under topics | 2 hours |
+| 4 | Content Management - Model paper toggle | 30 min |
+| 5 | PDF Viewer - Play Store banner | 30 min |
+| 6 | Bank Signup - UI enhancement | 1 hour |
+| 7 | Database - Print system tables | 30 min |
+| 8 | Dashboard - Print request button + dialog | 3 hours |
+| 9 | Admin - Print settings panel | 1 hour |
+| 10 | Admin - Print requests management | 2 hours |
 
 ---
 
-## Phase 4: Revenue Forecast Logic Update
+## Technical Notes
 
-### 4.1 Change to Week-over-Week Comparison
-**File:** `src/components/dashboard/RevenueForecast.tsx`
+### Security for Delete All Enrollments:
+- Wrap in transaction via edge function
+- Require OTP verification
+- Send Telegram notification
+- Log to audit table
 
-**Problem:** Current logic compares monthly data, but requirement is week-over-week.
-
-**Solution:**
-- Update props interface to accept weekly data
-- Change calculations to compare this week vs last week
-- Update visual labels
-
-```tsx
-interface RevenueForecastProps {
-  thisWeekRevenue: number;
-  lastWeekRevenue: number;
-  twoWeeksAgoRevenue: number;
-  daysIntoWeek: number; // 1-7
-}
-
-export const RevenueForecast = ({ 
-  thisWeekRevenue, 
-  lastWeekRevenue, 
-  twoWeeksAgoRevenue,
-  daysIntoWeek 
-}: RevenueForecastProps) => {
-  // Calculate weekly growth trend
-  const growth1 = lastWeekRevenue > 0 && twoWeeksAgoRevenue > 0 
-    ? ((lastWeekRevenue - twoWeeksAgoRevenue) / twoWeeksAgoRevenue) 
-    : 0;
-  
-  // Project this week based on days passed (7 days in a week)
-  const projectedThisWeek = daysIntoWeek > 0 
-    ? Math.round((thisWeekRevenue / daysIntoWeek) * 7)
-    : thisWeekRevenue;
-  
-  // Trend percentage vs last week
-  const trendPercent = lastWeekRevenue > 0 
-    ? Math.round(((projectedThisWeek - lastWeekRevenue) / lastWeekRevenue) * 100)
-    : 0;
-  
-  // Forecast next week
-  const forecastNextWeek = Math.round(projectedThisWeek * (1 + growth1));
-  
-  // Update labels: "2 weeks ago", "Last week", "This week"
-  // ...
-};
-```
-
-**Parent Component Update:**
-The component that uses `RevenueForecast` needs to provide weekly data. This typically would be in an admin dashboard or analytics page.
-
----
-
-## Phase 5: Support Email Update
-
-### 5.1 Update All Email References
-**Files to modify:**
-1. `src/components/Footer.tsx` (lines 53-55)
-2. `src/pages/PrivacyPolicy.tsx` (lines 150-156)
-3. `src/pages/RefundPolicy.tsx` (lines 93, 144-146)
-4. `src/pages/TermsOfService.tsx` (lines 160-163)
-
-**Change:** Replace all instances of `ransibeats@gmail.com` and `support@coursemaster.store` with `support@notebase.tech`
-
-```tsx
-// Footer.tsx
-<a href="mailto:support@notebase.tech" className="inline-flex items-center gap-2 text-muted-foreground hover:text-brand transition-colors text-sm">
-  <Mail className="w-4 h-4" />
-  support@notebase.tech
-</a>
-
-// All policy pages
-<a href="mailto:support@notebase.tech" className="text-primary hover:underline">
-  support@notebase.tech
-</a>
-```
-
----
-
-## Phase 6: Add Notification Type
-
-### 6.1 Update Telegram Notification Function
-**File:** `supabase/functions/send-telegram-notification/index.ts`
-
-**Add new notification type for access code signups:**
-
+### Print Request Pricing Logic:
 ```typescript
-const NOTIFICATION_TYPES: Record<string, { emoji: string; title: string; priority: string }> = {
-  // ... existing types
-  'new_access_code_signup': {
-    emoji: '🎓',
-    title: 'New Student Signup (Access Code)',
-    priority: 'low'
-  },
+const calculateTotal = (items, deliveryFee, codFee, paymentMethod) => {
+  const itemsTotal = items.reduce((sum, item) => 
+    sum + (item.page_count * item.price_per_page), 0
+  );
+  const codCharge = paymentMethod === 'cod' ? codFee : 0;
+  return itemsTotal + deliveryFee + codCharge;
 };
 ```
 
----
+### Subject Page Restructure:
+The key change is removing the Tabs wrapper and moving content inside each topic's expanded section. This provides a more intuitive flow where students can:
+1. Expand a topic
+2. Read the notes
+3. Practice with flashcards
+4. Test knowledge with quiz
 
-## Summary of Changes
-
-| File | Change |
-|------|--------|
-| `src/components/PaymentMethodDialog.tsx` | Mobile-responsive button layout |
-| `src/pages/admin/JoinRequests.tsx` | Wrap action buttons on mobile |
-| `src/components/ai-chat/MessageBubble.tsx` | Improve table parsing |
-| `src/components/ai-chat/ChatButton.tsx` | Hide on /ai-assistant route |
-| `src/pages/Access.tsx` | Add error handling + Telegram notification |
-| `src/components/dashboard/RevenueForecast.tsx` | Week-over-week logic |
-| `src/components/Footer.tsx` | Update email |
-| `src/pages/PrivacyPolicy.tsx` | Update email |
-| `src/pages/RefundPolicy.tsx` | Update email |
-| `src/pages/TermsOfService.tsx` | Update email |
-| `supabase/functions/send-telegram-notification/index.ts` | Add notification type |
-
----
-
-## Testing Checklist
-
-- [ ] Open Payment Method dialog on mobile - buttons should be fully visible
-- [ ] Open Join Requests on mobile - all action buttons visible (may wrap to 2 lines)
-- [ ] Send AI chat message with table - table should render properly
-- [ ] Navigate to /ai-assistant - floating chat button should not appear
-- [ ] Register new account with access code - code status should change to "used"
-- [ ] Check Telegram for new signup notification
-- [ ] Verify all policy pages show correct email: support@notebase.tech
+All without switching tabs or losing context.
