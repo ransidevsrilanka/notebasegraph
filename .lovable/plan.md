@@ -1,465 +1,679 @@
 
-# Comprehensive Print Request System & Dashboard Enhancement Plan
-
-## Executive Summary
-This plan addresses critical issues with the print request system, student dashboard UX, admin panel visibility, content organization, and creator dashboard improvements. The changes will create a fully-functional print request workflow with proper payment handling, admin management, and user notifications.
-
----
+# Print Request System Fixes & Enhancements
 
 ## Issues Identified
 
-| Issue | Description | Priority |
-|-------|-------------|----------|
-| 1 | Print Requests page missing from CEO sidebar | Critical |
-| 2 | Print request dialog needs Bank Transfer flow (bank details, reference, receipt upload) | Critical |
-| 3 | Print request dialog needs Card Payment (PayHere) integration | Critical |
-| 4 | Print request dialog needs COD confirmation screen | High |
-| 5 | User Inbox not visible in `/dashboard` header | High |
-| 6 | Print button should show existing orders status, not immediately open new request | High |
-| 7 | Metrics showing 0 in `/admin/print-requests` (stats are populated from live data but UI needs refresh) | Medium |
-| 8 | Subject page needs quizzes/flashcards under topics (not separate tabs) | Medium |
-| 9 | Bank Signup page subject selection needs better UI | Medium |
-| 10 | Content Management needs "Is Model Paper?" toggle | Medium |
-| 11 | Creator Dashboard UI improvements | Low |
-| 12 | Admin needs to send inbox notifications on print request approve/reject | High |
+1. **Print Request Dialog - History Management**: Currently shows all orders; needs to archive old completed/cancelled orders and only show ongoing orders (pending, confirmed, processing, shipped)
+2. **Card Payment - PayHere Popup Not Showing**: The dialog doesn't trigger PayHere payment flow when card payment is selected
+3. **Receipt Upload Failing**: Uses wrong storage bucket (`receipts` instead of `print-receipts` which doesn't exist)
+4. **Print Settings Panel Not Integrated**: `PrintSettingsPanel.tsx` exists but is not integrated into any admin page
+5. **Bank Details Not Editable**: Bank details for print orders should be manageable from `/admin/payment-settings`
+6. **Receipt Upload UX**: Needs to replicate the exact upgrade page flow with proper file handling
 
 ---
 
-## Phase 1: Add Print Requests to CEO Sidebar
+## Root Cause Analysis
 
-### File: `src/components/admin/AdminSidebar.tsx`
+### 1. Receipt Upload Failure
+**Problem**: Line 307-309 in `PrintRequestDialog.tsx` tries to upload to a `receipts` bucket that doesn't exist:
+```typescript
+const { error } = await supabase.storage
+  .from('receipts')  // ❌ This bucket doesn't exist
+  .upload(fileName, file);
+```
 
-**Changes:**
-1. Import `Printer` icon from lucide-react
-2. Add new menu item under "Requests" group:
-   - Label: "Print Requests"
-   - Href: `/admin/print-requests`
-   - Icon: `Printer`
-   - Badge: `stats.pendingPrintRequests` (new stat)
+**Solution**: Need to create `print-receipts` storage bucket OR use the existing `upgrade-receipts` bucket with proper folder structure.
 
-3. Update `AdminSidebarProps` interface to include `pendingPrintRequests: number`
+### 2. Card Payment Not Triggering
+**Problem**: In Step 4 (line 823-830), there's only a note saying "Card payment will be processed on the next step", but Step 5 (Confirmation) just calls `handleSubmit()` which doesn't initiate PayHere.
 
-### File: `src/pages/admin/AdminDashboard.tsx`
+**Solution**: When card payment is selected, after Step 5 confirmation, need to:
+1. Create the print_request record
+2. Call `payhere-checkout` edge function with `print_request_id`
+3. Open PayHere payment popup
+4. Handle success/failure callbacks
 
-**Changes:**
-1. Add query to count pending print requests
-2. Pass the count to AdminSidebar
+### 3. Missing Storage Bucket
+**Problem**: No `print-receipts` bucket exists in database migrations.
+
+**Solution**: Create storage bucket with proper RLS policies (similar to `upgrade-receipts`).
+
+### 4. History Management
+**Problem**: All orders are shown by default, cluttering the UI for users with many orders.
+
+**Solution**: 
+- Filter to show only "active" orders: `['pending', 'confirmed', 'processing', 'shipped']`
+- Add "View History" button to show completed/cancelled/delivered orders
+
+### 5. Print Settings Integration
+**Problem**: `PrintSettingsPanel.tsx` component exists but is not imported/used anywhere.
+
+**Solution**: Add to `/admin/payment-settings` page below the payment mode section.
+
+### 6. Bank Details Management
+**Problem**: Bank details are stored in `site_settings` with key `bank_details` but not editable from payment settings page.
+
+**Solution**: Add an editable form in `/admin/payment-settings` to manage bank details.
 
 ---
 
-## Phase 2: Redesign Print Request Dialog (Complete Overhaul)
+## Implementation Plan
 
-### File: `src/components/dashboard/PrintRequestDialog.tsx`
+### Phase 1: Database & Storage Setup
 
-**Current Behavior:** Opens a multi-step form to create new request
-**New Behavior:** 
-- First screen shows existing orders (if any) with status tracking
-- "New Request" button to create additional orders
-- Proper payment flows for each method
+#### 1.1 Create Print Receipts Storage Bucket
+**Migration SQL:**
+```sql
+-- Create print-receipts storage bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('print-receipts', 'print-receipts', false)
+ON CONFLICT (id) DO NOTHING;
 
-### 2.1 New Dialog Structure
+-- Allow authenticated users to upload their own receipts
+CREATE POLICY "Users can upload print receipts"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'print-receipts' 
+  AND (auth.uid())::text = (storage.foldername(name))[1]
+);
 
-**Screen 1: Order Status (Default View)**
+-- Allow users to read their own receipts
+CREATE POLICY "Users can view own print receipts"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'print-receipts' 
+  AND (auth.uid())::text = (storage.foldername(name))[1]
+);
+
+-- Allow admins to view all print receipts
+CREATE POLICY "Admins can view all print receipts"
+ON storage.objects
+FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'print-receipts' 
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('ceo', 'admin', 'head_ops')
+  )
+);
+
+-- Allow admins to delete print receipts
+CREATE POLICY "Admins can delete print receipts"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'print-receipts' 
+  AND EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid() 
+    AND role IN ('ceo', 'admin')
+  )
+);
 ```
-[Your Print Orders]
-- If no orders: "No print orders yet" + "Request Printouts" button
-- If orders exist: 
-  - List of orders with status badges (Pending/Processing/Shipped/Delivered)
-  - Tracking number if available
-  - Click to expand details
-  - "+ New Request" button at bottom
-```
 
-**Screen 2-6: Create New Order (existing multi-step flow)**
-
-### 2.2 Bank Transfer Flow Enhancement
-
-When user selects "Bank Transfer" in Step 4:
-
-**Step 4.1: Bank Details Screen**
-```
-Bank: [Bank Name from payment_settings]
-Account: [Account Number]
-Account Holder: [Account Holder Name]
-Branch: [Branch Name]
-
-Reference Number: PR-XXXXX (5-letter alphanumeric)
-Amount: Rs. [Total Amount]
-
-[Upload Receipt Button]
-[File name once uploaded]
-
-[Submit Request]
-```
-
-**Backend Changes:**
-- Store `reference_number` in print_requests
-- Store `receipt_url` in print_requests
-- Set `payment_status` to 'pending_verification'
-
-### 2.3 Card Payment Flow (PayHere Integration)
-
-When user selects "Card Payment":
-
-1. Call edge function to generate PayHere hash (similar to existing flow)
-2. Create payment form and submit to PayHere sandbox
-3. Handle return URL with success/failure
-4. Update print_request payment_status accordingly
-
-**Edge Function Update:** `supabase/functions/payhere-checkout/index.ts`
-- Add handling for `payment_type: 'print_request'`
-- Store `print_request_id` in payment record
-
-### 2.4 COD Flow Enhancement
-
-When user selects "Cash on Delivery":
-
-**Confirmation Screen:**
-```
-[Truck Icon]
-Cash on Delivery
-
-Your order will be prepared and shipped.
-Payment of Rs. [Total + COD Fee] will be collected upon delivery.
-
-Delivery Address:
-[Address]
-[City]
-
-Contact: [Phone]
-
-[X] I understand that payment will be collected upon delivery
-
-[Confirm Order]
+#### 1.2 Ensure Bank Details Schema
+Bank details should be stored in `site_settings` table with key `bank_details` as JSON:
+```json
+{
+  "bank_name": "Bank of Ceylon",
+  "account_number": "1234567890",
+  "account_holder": "NoteBASE Education",
+  "branch_name": "Colombo Main"
+}
 ```
 
 ---
 
-## Phase 3: Add Inbox Button to Student Dashboard
+### Phase 2: Fix Receipt Upload in Print Request Dialog
 
-### File: `src/pages/Dashboard.tsx`
+#### File: `src/components/dashboard/PrintRequestDialog.tsx`
 
-**Changes:**
-1. Import `InboxButton` from `@/components/inbox/InboxButton`
-2. Add `<InboxButton />` to the header section next to the Logout button
+**Changes to `handleReceiptUpload` function (lines 300-319):**
 
-```tsx
-<div className="flex items-center gap-4">
-  {/* Tier Badge */}
-  <div className={...}>...</div>
+Replace the current implementation with the Upgrade page pattern:
+
+```typescript
+const handleReceiptUpload = async (file: File) => {
+  if (!user) return null;
   
-  <InboxButton />  {/* ADD THIS */}
+  setIsUploading(true);
   
-  <Button variant="ghost" size="icon" onClick={signOut}>
-    <LogOut className="w-5 h-5" />
-  </Button>
-</div>
+  try {
+    // Use unique timestamp to avoid UPDATE RLS issues
+    const fileExt = file.name.split('.').pop();
+    const timestamp = Date.now();
+    const filePath = `${user.id}/print_${timestamp}.${fileExt}`;
+    
+    const { error } = await supabase.storage
+      .from('print-receipts')  // ✅ Correct bucket name
+      .upload(filePath, file, {
+        upsert: false,  // Don't use upsert to avoid UPDATE policy requirement
+        contentType: file.type || undefined,
+        cacheControl: '3600',
+      });
+    
+    if (error) {
+      console.error('Storage upload error:', {
+        error,
+        bucket: 'print-receipts',
+        path: filePath,
+        userId: user.id,
+      });
+      toast.error('Failed to upload receipt');
+      setIsUploading(false);
+      return null;
+    }
+    
+    setIsUploading(false);
+    return filePath;  // ✅ Return full path, not just filename
+    
+  } catch (err: any) {
+    console.error('Receipt upload error:', err);
+    toast.error(err?.message || 'Failed to upload receipt');
+    setIsUploading(false);
+    return null;
+  }
+};
+```
+
+**Update `handleSubmit` to properly store receipt URL (line 332-334):**
+
+```typescript
+// Handle bank transfer receipt upload
+if (paymentMethod === 'bank_transfer' && receiptFile) {
+  receiptUrl = await handleReceiptUpload(receiptFile);
+  if (!receiptUrl) {
+    setIsLoading(false);
+    return; // Stop if upload failed
+  }
+}
 ```
 
 ---
 
-## Phase 4: Admin Print Request Management Enhancements
+### Phase 3: Implement Card Payment Flow
 
-### File: `src/pages/admin/PrintRequests.tsx`
+#### File: `src/components/dashboard/PrintRequestDialog.tsx`
 
-**Changes:**
+**Add new function to initiate PayHere payment:**
 
-### 4.1 Fix Metrics Display
-The metrics currently filter from `requests` array which is correct. The issue is the initial fetch may return 0 if no print_settings exist. Add fallback:
-
-```tsx
-// Ensure stats are calculated from actual data
-const pendingCount = requests.filter(r => r.status === 'pending').length;
-const processingCount = requests.filter(r => r.status === 'processing').length;
-// etc.
+```typescript
+const initiateCardPayment = async (printRequestId: string) => {
+  if (!user || !enrollment) return;
+  
+  try {
+    setIsLoading(true);
+    
+    // Call edge function to get PayHere hash
+    const { data, error } = await supabase.functions.invoke('payhere-checkout', {
+      body: {
+        order_id: `PR-${printRequestId.substring(0, 8)}`,
+        items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,
+        amount: calculateTotal(),
+        currency: 'LKR',
+        first_name: fullName.split(' ')[0] || 'Customer',
+        last_name: fullName.split(' ').slice(1).join(' ') || '',
+        email: user.email || '',
+        phone: phone,
+        address: address,
+        city: city || 'Colombo',
+        country: 'Sri Lanka',
+        print_request_id: printRequestId,
+      }
+    });
+    
+    if (error) {
+      console.error('PayHere checkout error:', error);
+      toast.error('Failed to initiate payment');
+      setIsLoading(false);
+      return;
+    }
+    
+    // Create PayHere form and submit
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = data.sandbox ? 'https://sandbox.payhere.lk/pay/checkout' : 'https://www.payhere.lk/pay/checkout';
+    
+    // Add all PayHere fields
+    Object.entries(data).forEach(([key, value]) => {
+      if (key !== 'sandbox') {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = String(value);
+        form.appendChild(input);
+      }
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    
+  } catch (err: any) {
+    console.error('Card payment error:', err);
+    toast.error('Failed to process payment');
+    setIsLoading(false);
+  }
+};
 ```
 
-### 4.2 Add Approve/Reject Actions for Bank Transfer Requests
+**Modify `handleSubmit` to handle card payment (replace lines 321-369):**
 
-When a bank transfer request is pending:
-- Show "Approve" and "Reject" buttons
-- On Approve:
-  - Update status to 'confirmed'
-  - Update payment_status to 'paid'
-  - Send inbox notification to user
-  - Send Telegram notification
-- On Reject:
-  - Update status to 'cancelled'
-  - Require rejection reason
-  - Send inbox notification with reason
+```typescript
+const handleSubmit = async () => {
+  if (!user || !enrollment) return;
+  
+  setIsLoading(true);
+  
+  const requestNumber = referenceNumber || generateReferenceNumber();
+  const subjectName = subjects.find(s => s.id === selectedSubject)?.name || '';
+  
+  let receiptUrl: string | null = null;
+  
+  // Handle bank transfer receipt upload
+  if (paymentMethod === 'bank_transfer' && receiptFile) {
+    receiptUrl = await handleReceiptUpload(receiptFile);
+    if (!receiptUrl) {
+      setIsLoading(false);
+      return; // Stop if upload failed
+    }
+  }
+  
+  // Create print request record
+  const { data: printRequest, error } = await supabase
+    .from('print_requests')
+    .insert({
+      user_id: user.id,
+      request_number: requestNumber,
+      full_name: fullName,
+      address,
+      phone,
+      city,
+      print_type: printType,
+      subject_id: selectedSubject,
+      subject_name: subjectName,
+      topic_ids: allTopics ? [] : selectedTopics,
+      estimated_pages: estimatedPages,
+      estimated_price: calculateTotal() - (settings?.base_delivery_fee || 0) - (paymentMethod === 'cod' ? settings?.cod_extra_fee || 0 : 0),
+      delivery_fee: settings?.base_delivery_fee || 0,
+      total_amount: calculateTotal(),
+      payment_method: paymentMethod,
+      payment_status: paymentMethod === 'bank_transfer' ? 'pending_verification' : paymentMethod === 'card' ? 'pending' : 'pending',
+      status: paymentMethod === 'cod' ? 'confirmed' : 'pending',
+      receipt_url: receiptUrl,
+    })
+    .select()
+    .single();
+  
+  if (error) {
+    toast.error('Failed to submit request');
+    console.error(error);
+    setIsLoading(false);
+    return;
+  }
+  
+  // Handle different payment methods
+  if (paymentMethod === 'card') {
+    // Initiate PayHere payment
+    await initiateCardPayment(printRequest.id);
+  } else if (paymentMethod === 'bank_transfer') {
+    toast.success('Print request submitted! Please wait for verification.');
+    resetForm();
+    loadExistingOrders();
+    setViewMode('orders');
+    setIsLoading(false);
+  } else if (paymentMethod === 'cod') {
+    toast.success('Print request submitted! Payment will be collected upon delivery.');
+    resetForm();
+    loadExistingOrders();
+    setViewMode('orders');
+    setIsLoading(false);
+  }
+};
+```
 
-### 4.3 Receipt Viewer
+---
 
-Add ability to view/download uploaded receipts:
-```tsx
-{request.receipt_url && (
-  <Button variant="outline" size="sm" onClick={() => viewReceipt(request.receipt_url)}>
-    <Download className="w-4 h-4 mr-1" />
-    Receipt
-  </Button>
+### Phase 4: Add History Management
+
+#### File: `src/components/dashboard/PrintRequestDialog.tsx`
+
+**Add state for showing history (after line 126):**
+
+```typescript
+const [showHistory, setShowHistory] = useState(false);
+```
+
+**Filter orders based on history view (update line 195-204):**
+
+```typescript
+useEffect(() => {
+  if (open && viewMode === 'orders') {
+    loadExistingOrders();
+  }
+}, [open, viewMode, user?.id]);
+
+// Filter orders based on showHistory
+const activeStatuses = ['pending', 'confirmed', 'processing', 'shipped'];
+const completedStatuses = ['delivered', 'cancelled'];
+
+const displayedOrders = showHistory 
+  ? existingOrders.filter(order => completedStatuses.includes(order.status))
+  : existingOrders.filter(order => activeStatuses.includes(order.status));
+```
+
+**Update orders view UI (replace lines 426-478):**
+
+```typescript
+{viewMode === 'orders' && (
+  <div className="space-y-4">
+    {loadingOrders ? (
+      <div className="text-center py-8 text-muted-foreground">
+        <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+        Loading orders...
+      </div>
+    ) : (
+      <>
+        {/* Toggle between Active and History */}
+        <div className="flex items-center gap-2 p-1 bg-secondary/50 rounded-lg">
+          <button
+            onClick={() => setShowHistory(false)}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              !showHistory 
+                ? 'bg-background text-foreground shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Active Orders ({existingOrders.filter(o => activeStatuses.includes(o.status)).length})
+          </button>
+          <button
+            onClick={() => setShowHistory(true)}
+            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+              showHistory 
+                ? 'bg-background text-foreground shadow-sm' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            History ({existingOrders.filter(o => completedStatuses.includes(o.status)).length})
+          </button>
+        </div>
+        
+        {displayedOrders.length === 0 ? (
+          <div className="text-center py-8">
+            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-muted-foreground mb-4">
+              {showHistory ? 'No completed orders yet' : 'No active orders'}
+            </p>
+            {!showHistory && (
+              <Button variant="brand" onClick={startNewRequest}>
+                <Plus className="w-4 h-4 mr-2" />
+                Request Printouts
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {displayedOrders.map((order) => (
+                <div key={order.id} className="p-4 border border-border rounded-lg space-y-2">
+                  {/* ... existing order card UI ... */}
+                </div>
+              ))}
+            </div>
+            
+            {!showHistory && (
+              <Button variant="brand" onClick={startNewRequest} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                New Request
+              </Button>
+            )}
+          </>
+        )}
+      </>
+    )}
+  </div>
 )}
 ```
 
 ---
 
-## Phase 5: Print Request Inbox Notifications
+### Phase 5: Integrate Print Settings & Bank Details in Payment Settings
 
-### Notification Templates
+#### File: `src/pages/admin/PaymentSettings.tsx`
 
-**On Bank Transfer Approval:**
-```
-Subject: Print Order Confirmed - PR-XXXXX
-Body: Great news! Your print request (PR-XXXXX) has been approved and is now being processed. You will receive tracking information once your order ships.
-```
+**Add imports (after line 18):**
 
-**On Bank Transfer Rejection:**
-```
-Subject: Print Order Update - PR-XXXXX
-Body: Unfortunately, we couldn't verify your payment for print request PR-XXXXX. Reason: [Admin Notes]. Please contact support if you believe this is an error.
+```typescript
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import PrintSettingsPanel from '@/components/dashboard/PrintSettingsPanel';
+import { Building2, Save } from 'lucide-react';
 ```
 
-**On Status Update (Shipped):**
-```
-Subject: Your Order Has Shipped! - PR-XXXXX
-Body: Your print order (PR-XXXXX) is on its way! Tracking number: [TRACKING]. Expected delivery in 3-5 business days.
-```
+**Add state for bank details (after line 34):**
 
-**On Card Payment Success:**
-```
-Subject: Payment Confirmed - PR-XXXXX
-Body: Your payment has been received! Your print order (PR-XXXXX) is now being processed.
-```
-
----
-
-## Phase 6: Database Schema Updates
-
-### Add Missing Columns to print_requests
-
-```sql
-ALTER TABLE print_requests ADD COLUMN IF NOT EXISTS receipt_url TEXT;
-ALTER TABLE print_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+```typescript
+const [bankDetails, setBankDetails] = useState({
+  bank_name: '',
+  account_number: '',
+  account_holder: '',
+  branch_name: '',
+});
+const [isSavingBank, setIsSavingBank] = useState(false);
 ```
 
-### Update RLS Policy for Receipt Upload
+**Fetch bank details (update `fetchPaymentMode` or add new effect):**
 
-```sql
--- Allow users to update their own print requests (for receipt upload)
-CREATE POLICY "Users can update own print requests"
-  ON print_requests
-  FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+```typescript
+useEffect(() => {
+  const fetchBankDetails = async () => {
+    const { data, error } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'bank_details')
+      .maybeSingle();
+    
+    if (!error && data?.value) {
+      setBankDetails(data.value as any);
+    }
+  };
+  
+  fetchBankDetails();
+}, []);
 ```
 
----
+**Add save bank details function:**
 
-## Phase 7: Content Management - Model Paper Toggle
-
-### File: `src/pages/admin/ContentManagement.tsx`
-
-**Changes in Note Upload Section (around line 432):**
-
-1. Add state for model paper toggle:
-```tsx
-const [isModelPaper, setIsModelPaper] = useState(false);
-```
-
-2. Add toggle UI below tier selection:
-```tsx
-<div className="flex items-center gap-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/30">
-  <Switch
-    id="is-model-paper"
-    checked={isModelPaper}
-    onCheckedChange={setIsModelPaper}
-  />
-  <Label htmlFor="is-model-paper" className="flex flex-col">
-    <span className="font-medium">Model Paper</span>
-    <span className="text-xs text-muted-foreground">Mark as past paper/practice exam</span>
-  </Label>
-</div>
-```
-
-3. Update insert query:
-```tsx
-.insert({
-  // ... existing fields
-  is_model_paper: isModelPaper,
-})
-```
-
-4. Reset after upload:
-```tsx
-setIsModelPaper(false);
-```
-
----
-
-## Phase 8: Subject Page - Integrate Quizzes & Flashcards Under Topics
-
-### File: `src/pages/Subject.tsx`
-
-**Major Restructure:**
-
-Remove the Tabs component. Instead, when a topic expands, show three collapsible sections:
-
-```
-[Topic Name] [Click to expand]
-├── Notes Section
-│   ├── Note 1 [View] or [Locked]
-│   └── Note 2 [View] or [Locked]
-├── Flashcards Section (if any for this topic)
-│   └── Set 1 - 20 cards [Study] or [Locked]
-└── Quizzes Section (if any for this topic)
-    └── Quiz 1 - 15 questions [Start] or [Locked]
-```
-
-**Implementation:**
-1. Remove TabsList and TabsTrigger components
-2. Remove TabsContent wrappers
-3. Inside expanded topic section, add:
-   - Notes list (existing)
-   - Flashcards filtered by `topic_id === topic.id`
-   - Quizzes filtered by `topic_id === topic.id`
-
----
-
-## Phase 9: Bank Signup UI Enhancement
-
-### File: `src/pages/BankSignup.tsx`
-
-**Changes to Subjects Step (step === 'subjects'):**
-
-1. Add decorative gradient orbs (matching PaidSignup)
-2. Enhance subject cards with:
-   - Glass morphism effect
-   - Animated checkmarks
-   - Hover states
-   - Icon based on basket type
-
-```tsx
-<div className={`
-  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
-  ${isSelected 
-    ? 'border-brand bg-brand/10 shadow-lg shadow-brand/20' 
-    : 'border-border bg-card hover:border-brand/50'
+```typescript
+const saveBankDetails = async () => {
+  setIsSavingBank(true);
+  try {
+    const { data: existing } = await supabase
+      .from('site_settings')
+      .select('id')
+      .eq('key', 'bank_details')
+      .maybeSingle();
+    
+    if (existing) {
+      const { error } = await supabase
+        .from('site_settings')
+        .update({ value: bankDetails })
+        .eq('key', 'bank_details');
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('site_settings')
+        .insert([{ key: 'bank_details', value: bankDetails }]);
+      if (error) throw error;
+    }
+    
+    toast.success('Bank details updated successfully');
+  } catch (err) {
+    console.error('Error saving bank details:', err);
+    toast.error('Failed to save bank details');
+  } finally {
+    setIsSavingBank(false);
   }
-`}>
-  <div className="absolute top-2 right-2">
-    {isSelected && (
-      <div className="w-6 h-6 rounded-full bg-brand flex items-center justify-center">
-        <Check className="w-4 h-4 text-white" />
-      </div>
-    )}
+};
+```
+
+**Add UI sections (after the payment mode section, before closing container div):**
+
+```tsx
+{/* Bank Details Section */}
+<div className="glass-card p-6 space-y-6">
+  <div className="flex items-center gap-3">
+    <Building2 className="w-5 h-5 text-brand" />
+    <div>
+      <h2 className="text-lg font-semibold text-foreground">Bank Account Details</h2>
+      <p className="text-xs text-muted-foreground">For print orders and bank transfers</p>
+    </div>
   </div>
-  {/* Subject content */}
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="space-y-2">
+      <Label>Bank Name</Label>
+      <Input
+        value={bankDetails.bank_name}
+        onChange={(e) => setBankDetails(prev => ({ ...prev, bank_name: e.target.value }))}
+        placeholder="Bank of Ceylon"
+      />
+    </div>
+    
+    <div className="space-y-2">
+      <Label>Account Number</Label>
+      <Input
+        value={bankDetails.account_number}
+        onChange={(e) => setBankDetails(prev => ({ ...prev, account_number: e.target.value }))}
+        placeholder="1234567890"
+      />
+    </div>
+    
+    <div className="space-y-2">
+      <Label>Account Holder Name</Label>
+      <Input
+        value={bankDetails.account_holder}
+        onChange={(e) => setBankDetails(prev => ({ ...prev, account_holder: e.target.value }))}
+        placeholder="NoteBASE Education"
+      />
+    </div>
+    
+    <div className="space-y-2">
+      <Label>Branch Name</Label>
+      <Input
+        value={bankDetails.branch_name}
+        onChange={(e) => setBankDetails(prev => ({ ...prev, branch_name: e.target.value }))}
+        placeholder="Colombo Main"
+      />
+    </div>
+  </div>
+  
+  <Button 
+    variant="brand" 
+    onClick={saveBankDetails}
+    disabled={isSavingBank}
+    className="w-full"
+  >
+    <Save className="w-4 h-4 mr-2" />
+    {isSavingBank ? 'Saving...' : 'Save Bank Details'}
+  </Button>
 </div>
+
+{/* Print Pricing Settings */}
+<PrintSettingsPanel />
 ```
 
 ---
 
-## Phase 10: Creator Dashboard UI Tweaks
+### Phase 6: Edge Function Updates (Already Implemented)
 
-### File: `src/pages/creator/CreatorDashboard.tsx`
-
-**Improvements:**
-1. Add subtle gradient background to stat cards
-2. Improve mobile responsiveness for charts
-3. Add skeleton loading states
-4. Enhance color contrast on dark mode
-5. Add tooltip explanations for complex metrics
-
----
-
-## Implementation Order
-
-| Step | Task | Files | Effort |
-|------|------|-------|--------|
-| 1 | Add Print Requests to CEO sidebar | AdminSidebar.tsx, AdminDashboard.tsx | 30 min |
-| 2 | Add InboxButton to student Dashboard | Dashboard.tsx | 15 min |
-| 3 | Database migration for receipt_url, rejection_reason | New migration | 15 min |
-| 4 | Overhaul PrintRequestDialog (order status view) | PrintRequestDialog.tsx | 2 hours |
-| 5 | Implement Bank Transfer flow (reference, receipt) | PrintRequestDialog.tsx | 1.5 hours |
-| 6 | Implement Card Payment (PayHere) flow | PrintRequestDialog.tsx, payhere-checkout | 2 hours |
-| 7 | Implement COD confirmation | PrintRequestDialog.tsx | 30 min |
-| 8 | Enhance admin PrintRequests (approve/reject/notifications) | PrintRequests.tsx | 1.5 hours |
-| 9 | Add Model Paper toggle to ContentManagement | ContentManagement.tsx | 30 min |
-| 10 | Restructure Subject page (quizzes/flashcards under topics) | Subject.tsx | 2 hours |
-| 11 | Enhance BankSignup subject selection UI | BankSignup.tsx | 1 hour |
-| 12 | Creator Dashboard UI tweaks | CreatorDashboard.tsx | 1 hour |
-
----
-
-## Technical Details
-
-### PayHere Integration for Print Requests
-
-The existing `payhere-checkout` edge function will be extended to handle print requests:
-
-```typescript
-// In generate-hash handler, check for print_request_id
-if (print_request_id) {
-  // Store in custom_2 field as "print_XXXX"
-  custom_2 = `print_${print_request_id}`;
-}
-
-// In notify handler, check for print payment
-if (custom_2?.startsWith('print_')) {
-  const printRequestId = custom_2.replace('print_', '');
-  // Update print_request payment_status
-  await supabase
-    .from('print_requests')
-    .update({ 
-      payment_status: status_code === '2' ? 'paid' : 'failed',
-      order_id: order_id 
-    })
-    .eq('id', printRequestId);
-}
-```
-
-### Bank Transfer Reference Number Generation
-
-```typescript
-function generateReferenceNumber(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = 'PR-';
-  for (let i = 0; i < 5; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
-```
-
-### Inbox Notification Function
-
-```typescript
-async function sendPrintNotification(
-  userId: string, 
-  subject: string, 
-  body: string
-) {
-  await supabase.from('messages').insert({
-    recipient_id: userId,
-    recipient_type: 'student',
-    subject,
-    body,
-    is_read: false
-  });
-}
-```
+The `payhere-checkout` edge function already handles print requests correctly (lines 287-312 for hash generation, lines 532-578 for payment notification). No changes needed.
 
 ---
 
 ## Testing Checklist
 
-- [ ] Print Requests visible in CEO sidebar with badge count
-- [ ] Student dashboard shows Inbox button in header
-- [ ] Clicking print button shows existing orders (if any)
-- [ ] Bank transfer shows bank details, generates reference, allows receipt upload
-- [ ] Card payment opens PayHere popup, handles success/failure
-- [ ] COD shows confirmation screen with terms
-- [ ] Admin can approve/reject bank transfer requests
-- [ ] Inbox notifications sent on all status changes
-- [ ] Model paper toggle works in content management
-- [ ] Quizzes/flashcards appear under topics in subject page
-- [ ] Bank signup subject selection has improved UI
+### Receipt Upload
+- [ ] Create print-receipts storage bucket
+- [ ] Upload receipt from print request dialog (bank transfer)
+- [ ] Verify file appears in storage bucket
+- [ ] Verify admin can view receipt in print requests page
+
+### Card Payment
+- [ ] Select card payment in print request dialog
+- [ ] Submit order - PayHere popup should appear
+- [ ] Complete test payment
+- [ ] Verify order status changes to "confirmed"
+- [ ] Verify payment_status changes to "paid"
+- [ ] Verify user receives inbox notification
+- [ ] Verify admin receives Telegram notification
+
+### History Management
+- [ ] Create multiple print orders
+- [ ] Mark some as delivered/cancelled
+- [ ] Verify "Active Orders" shows only pending/confirmed/processing/shipped
+- [ ] Click "History" tab
+- [ ] Verify shows only delivered/cancelled orders
+- [ ] Verify counts are accurate
+
+### Payment Settings Integration
+- [ ] Navigate to /admin/payment-settings
+- [ ] Verify bank details form is visible
+- [ ] Update bank details
+- [ ] Save - verify success toast
+- [ ] Verify print settings panel is visible
+- [ ] Update pricing
+- [ ] Save - verify success toast
+- [ ] Create new print request
+- [ ] Verify bank details shown match updated values
+- [ ] Verify pricing matches updated values
+
+### COD Flow
+- [ ] Select COD payment method
+- [ ] Verify COD fee is added to total
+- [ ] Verify confirmation checkbox is required
+- [ ] Submit order
+- [ ] Verify status is "confirmed" immediately
+- [ ] Verify payment_status is "pending"
+
+---
+
+## Files to Modify
+
+1. **Database Migration** (new file)
+   - Create `print-receipts` storage bucket
+   - Add RLS policies
+
+2. **`src/components/dashboard/PrintRequestDialog.tsx`**
+   - Fix `handleReceiptUpload` to use correct bucket
+   - Add `initiateCardPayment` function
+   - Update `handleSubmit` to handle card payments
+   - Add history management (showHistory state)
+   - Update orders display UI with Active/History tabs
+
+3. **`src/pages/admin/PaymentSettings.tsx`**
+   - Add bank details state and form
+   - Add `saveBankDetails` function
+   - Integrate `PrintSettingsPanel` component
+   - Add UI sections for bank details and print pricing
+
+---
+
+## Summary of Changes
+
+| Component | Change | Lines Affected |
+|-----------|--------|----------------|
+| Database Migration | Create print-receipts bucket | New file |
+| PrintRequestDialog | Fix receipt upload bucket | 300-319 |
+| PrintRequestDialog | Add card payment flow | New function + 321-369 |
+| PrintRequestDialog | Add history management | 126, 195-478 |
+| PaymentSettings | Add bank details management | 18, 34, new sections |
+| PaymentSettings | Integrate PrintSettingsPanel | After mode section |
+
+All changes preserve existing functionality while adding the requested features and fixing critical bugs.
