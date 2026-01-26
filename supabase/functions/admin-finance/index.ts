@@ -211,6 +211,28 @@ serve(async (req) => {
   }
 
   try {
+    // Verify OTP for destructive actions (delete all enrollments, etc.)
+    if (path === "verify-refund-otp" && req.method === "POST") {
+      const { otp_code } = await req.json();
+      const validCode = Deno.env.get("REFUND_OTP_CODE");
+      
+      if (!validCode) {
+        console.error("REFUND_OTP_CODE secret not configured");
+        return new Response(
+          JSON.stringify({ valid: false, error: "OTP not configured on server" }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const isValid = otp_code === validCode;
+      console.log("OTP verification:", isValid ? "SUCCESS" : "FAILED");
+      
+      return new Response(
+        JSON.stringify({ valid: isValid }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Finalize a payment from user after card payment - creates attribution, updates commissions
     // This endpoint can be called by the paying user themselves
     // IDEMPOTENT: Check attribution FIRST, only update stats if NEW attribution created

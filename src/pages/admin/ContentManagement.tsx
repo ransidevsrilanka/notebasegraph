@@ -135,6 +135,7 @@ const ContentManagement = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [noteUploadRequested, setNoteUploadRequested] = useState(false);
   const [isModelPaper, setIsModelPaper] = useState(false);
+  const [pageCount, setPageCount] = useState(1);
   const [subjectSearch, setSubjectSearch] = useState('');
 
   // Question Bank state
@@ -458,6 +459,7 @@ const ContentManagement = () => {
           min_tier: noteMinTier,
           is_active: true,
           is_model_paper: isModelPaper,
+          page_count: pageCount,
         });
 
       if (insertError) throw insertError;
@@ -468,6 +470,7 @@ const ContentManagement = () => {
       setNoteFile(null);
       setNoteMinTier('starter');
       setIsModelPaper(false);
+      setPageCount(1);
       fetchNotes(selectedTopic.id);
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -1474,6 +1477,17 @@ const ContentManagement = () => {
               <span className="text-sm font-medium text-foreground">Model Paper</span>
               <span className="text-xs text-muted-foreground">Mark as past paper/practice exam</span>
             </label>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Number of Pages *</label>
+            <Input
+              type="number"
+              min="1"
+              value={pageCount}
+              onChange={(e) => setPageCount(Math.max(1, parseInt(e.target.value) || 1))}
+              placeholder="Enter page count"
+              className="bg-secondary border-border h-9"
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">File (PDF) *</label>

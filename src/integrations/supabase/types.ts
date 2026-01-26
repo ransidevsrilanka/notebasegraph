@@ -1014,6 +1014,7 @@ export type Database = {
           is_active: boolean | null
           is_model_paper: boolean | null
           min_tier: string | null
+          page_count: number | null
           title: string
           topic_id: string | null
           updated_at: string
@@ -1030,6 +1031,7 @@ export type Database = {
           is_active?: boolean | null
           is_model_paper?: boolean | null
           min_tier?: string | null
+          page_count?: number | null
           title: string
           topic_id?: string | null
           updated_at?: string
@@ -1046,6 +1048,7 @@ export type Database = {
           is_active?: boolean | null
           is_model_paper?: boolean | null
           min_tier?: string | null
+          page_count?: number | null
           title?: string
           topic_id?: string | null
           updated_at?: string

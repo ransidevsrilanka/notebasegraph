@@ -351,7 +351,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     if (!user || !enrollment) return;
     
     try {
-      const { data, error } = await supabase.functions.invoke('payhere-checkout', {
+      // Call with explicit generate-hash path for print request payments
+      const { data, error } = await supabase.functions.invoke('payhere-checkout/generate-hash', {
         body: {
           order_id: `PR-${printRequestId.substring(0, 8)}`,
           items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,

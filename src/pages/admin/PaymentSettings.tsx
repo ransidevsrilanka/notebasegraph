@@ -19,9 +19,7 @@ import {
   Monitor,
   Building2,
   Save,
-  Printer,
 } from 'lucide-react';
-import PrintSettingsPanel from '@/components/dashboard/PrintSettingsPanel';
 
 interface PaymentMode {
   mode: 'test' | 'live';
@@ -401,15 +399,6 @@ const PaymentSettings = () => {
             <Save className="w-4 h-4 mr-2" />
             {isSavingBank ? 'Saving...' : 'Save Bank Details'}
           </Button>
-        </div>
-
-        {/* Print Pricing Settings */}
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 px-1">
-            <Printer className="w-4 h-4 text-brand" />
-            <h2 className="text-sm font-medium text-foreground">Print Order Pricing</h2>
-          </div>
-          <PrintSettingsPanel />
         </div>
 
         {/* Live Mode Warning */}
