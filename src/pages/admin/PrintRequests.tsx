@@ -472,142 +472,150 @@ const PrintRequests = () => {
         </div>
       </div>
 
-      {/* Detail Dialog */}
+      {/* Detail Dialog - Horizontal Layout */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Request Details - {selectedRequest?.request_number}</DialogTitle>
           </DialogHeader>
           
           {selectedRequest && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 p-4 bg-secondary/50 rounded-lg text-sm">
-                <div>
-                  <p className="text-muted-foreground">Customer</p>
-                  <p className="font-medium text-foreground">{selectedRequest.full_name}</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Order Info */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Customer</p>
+                    <p className="font-medium text-foreground truncate">{selectedRequest.full_name}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Phone</p>
+                    <p className="font-medium text-foreground">{selectedRequest.phone}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Subject</p>
+                    <p className="font-medium text-foreground truncate">{selectedRequest.subject_name}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Type</p>
+                    <p className="font-medium text-foreground capitalize">{selectedRequest.print_type.replace(/_/g, ' ')}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Pages</p>
+                    <p className="font-medium text-foreground">{selectedRequest.estimated_pages}</p>
+                  </div>
+                  <div className="p-2 bg-brand/10 border border-brand/30 rounded">
+                    <p className="text-[10px] text-brand uppercase">Total</p>
+                    <p className="font-bold text-brand">Rs. {selectedRequest.total_amount?.toLocaleString()}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Payment</p>
+                    <p className="font-medium text-foreground capitalize">{selectedRequest.payment_method?.replace(/_/g, ' ')}</p>
+                  </div>
+                  <div className="p-2 bg-secondary/50 rounded">
+                    <p className="text-[10px] text-muted-foreground uppercase">Status</p>
+                    <p className={`font-medium ${selectedRequest.payment_status === 'paid' ? 'text-green-500' : 'text-yellow-500'}`}>
+                      {selectedRequest.payment_status?.replace(/_/g, ' ')}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-muted-foreground">Phone</p>
-                  <p className="font-medium text-foreground">{selectedRequest.phone}</p>
-                </div>
-                <div className="col-span-2">
-                  <p className="text-muted-foreground">Address</p>
+                
+                <div className="p-2 bg-secondary/50 rounded text-sm">
+                  <p className="text-[10px] text-muted-foreground uppercase mb-1">Address</p>
                   <p className="font-medium text-foreground">{selectedRequest.address}{selectedRequest.city && `, ${selectedRequest.city}`}</p>
                 </div>
-                <div>
-                  <p className="text-muted-foreground">Subject</p>
-                  <p className="font-medium text-foreground">{selectedRequest.subject_name}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Type</p>
-                  <p className="font-medium text-foreground capitalize">{selectedRequest.print_type.replace(/_/g, ' ')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Pages</p>
-                  <p className="font-medium text-foreground">{selectedRequest.estimated_pages}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Total</p>
-                  <p className="font-medium text-brand">Rs. {selectedRequest.total_amount?.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Payment Method</p>
-                  <p className="font-medium text-foreground capitalize">{selectedRequest.payment_method?.replace(/_/g, ' ')}</p>
-                </div>
-                <div>
-                  <p className="text-muted-foreground">Payment Status</p>
-                  <p className={`font-medium ${
-                    selectedRequest.payment_status === 'paid' ? 'text-green-500' : 'text-yellow-500'
-                  }`}>
-                    {selectedRequest.payment_status?.replace(/_/g, ' ')}
-                  </p>
-                </div>
+
+                {/* Receipt Button */}
+                {selectedRequest.receipt_url && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full"
+                    onClick={() => viewReceipt(selectedRequest.receipt_url!)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    View Receipt
+                  </Button>
+                )}
               </div>
 
-              {/* Receipt Button */}
-              {selectedRequest.receipt_url && (
-                <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={() => viewReceipt(selectedRequest.receipt_url!)}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  View Payment Receipt
-                </Button>
-              )}
-
-              {/* Bank Transfer Approval Buttons */}
-              {isPendingBankTransfer(selectedRequest) && (
-                <div className="p-4 bg-orange-500/10 rounded-lg border border-orange-500/30">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle className="w-5 h-5 text-orange-500" />
-                    <p className="font-medium text-orange-500">Bank Transfer - Pending Verification</p>
+              {/* Right Column: Actions */}
+              <div className="space-y-4">
+                {/* Bank Transfer Approval */}
+                {isPendingBankTransfer(selectedRequest) && (
+                  <div className="p-3 bg-orange-500/10 rounded-lg border border-orange-500/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-orange-500" />
+                      <p className="font-medium text-orange-500 text-sm">Bank Transfer - Verify</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        onClick={() => handleApprove(selectedRequest)}
+                        disabled={isUpdating}
+                        size="sm"
+                        className="flex-1 bg-green-500 hover:bg-green-600"
+                      >
+                        <Check className="w-3 h-3 mr-1" />
+                        Approve
+                      </Button>
+                      <Button 
+                        variant="destructive"
+                        onClick={() => setShowRejectDialog(true)}
+                        disabled={isUpdating}
+                        size="sm"
+                        className="flex-1"
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Reject
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Please verify the payment receipt before approving this order.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button 
-                      onClick={() => handleApprove(selectedRequest)}
-                      disabled={isUpdating}
-                      className="flex-1 bg-green-500 hover:bg-green-600"
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Approve
-                    </Button>
-                    <Button 
-                      variant="destructive"
-                      onClick={() => setShowRejectDialog(true)}
-                      disabled={isUpdating}
-                      className="flex-1"
-                    >
-                      <X className="w-4 h-4 mr-1" />
-                      Reject
-                    </Button>
-                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Tracking Number</label>
+                  <Input
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    placeholder="Enter tracking number"
+                    className="h-8 text-sm"
+                  />
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Tracking Number</label>
-                <Input
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="Enter tracking number"
-                />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Admin Notes</label>
+                  <Textarea
+                    value={adminNotes}
+                    onChange={(e) => setAdminNotes(e.target.value)}
+                    placeholder="Internal notes..."
+                    rows={2}
+                    className="text-sm"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Admin Notes</label>
-                <Textarea
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="Internal notes..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Update Status</label>
-                <div className="flex flex-wrap gap-2">
-                  {['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
-                    <Button
-                      key={status}
-                      variant={selectedRequest.status === status ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => updateStatus(selectedRequest.id, status)}
-                      disabled={isUpdating}
-                      className="capitalize"
-                    >
-                      {status}
-                    </Button>
-                  ))}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium">Update Status</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {['confirmed', 'processing', 'shipped', 'delivered', 'cancelled'].map((status) => (
+                      <Button
+                        key={status}
+                        variant={selectedRequest.status === status ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => updateStatus(selectedRequest.id, status)}
+                        disabled={isUpdating}
+                        className="capitalize text-xs h-7"
+                      >
+                        {status}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDetailDialog(false)}>
+            <Button variant="outline" size="sm" onClick={() => setShowDetailDialog(false)}>
               Close
             </Button>
           </DialogFooter>

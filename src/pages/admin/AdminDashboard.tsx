@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
+import MiniStatCard from '@/components/dashboard/MiniStatCard';
 import { MiniChart } from '@/components/dashboard/MiniChart';
 import { ChartLegend } from '@/components/dashboard/ChartLegend';
 import { ProgressRing } from '@/components/dashboard/ProgressRing';
@@ -79,6 +80,8 @@ interface Stats {
   totalCMOs: number;
   cmoCreators: number;
   cmoNetworkRevenue: number;
+  // Print request stats
+  printRevenue: number;
 }
 
 interface TopCreator {
@@ -237,6 +240,8 @@ const AdminDashboard = () => {
     totalCMOs: 0,
     cmoCreators: 0,
     cmoNetworkRevenue: 0,
+    // Print stats
+    printRevenue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -444,6 +449,16 @@ const AdminDashboard = () => {
         );
       }
 
+      // Print request revenue calculation
+      const { data: printPayments } = await supabase
+        .from('print_requests')
+        .select('total_amount')
+        .eq('payment_status', 'paid');
+      
+      const printRevenue = (printPayments || []).reduce(
+        (sum, p) => sum + Number(p.total_amount || 0), 0
+      );
+
       // Weekly revenue calculations
       const now = new Date();
       const dayOfWeek = now.getDay() || 7; // Sunday = 0, convert to 7
@@ -545,6 +560,7 @@ const AdminDashboard = () => {
         totalCMOs: totalCMOs || 0,
         cmoCreators: cmoCreators || 0,
         cmoNetworkRevenue,
+        printRevenue,
       });
 
     } catch (error) {
@@ -692,11 +708,20 @@ const AdminDashboard = () => {
 
           {/* Main Content */}
           <main className="p-6 space-y-6">
-            {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-              {statCards.map((card) => (
-                <StatCard key={card.label} {...card} />
-              ))}
+            {/* Compact Metrics Grid */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+              <MiniStatCard label="Total Revenue" value={stats.totalRevenue} format="currency" trend={revenueTrend !== 0 ? { value: Math.abs(revenueTrend), isPositive: revenueTrend > 0 } : undefined} />
+              <MiniStatCard label="This Month" value={stats.thisMonthRevenue} format="currency" />
+              <MiniStatCard label="Last Month" value={stats.lastMonthRevenue} format="currency" />
+              <MiniStatCard label="Print Revenue" value={stats.printRevenue} format="currency" />
+              <MiniStatCard label="Card Payments" value={stats.cardPayments} format="currency" />
+              <MiniStatCard label="Bank Payments" value={stats.bankPayments} format="currency" />
+              <MiniStatCard label="Students" value={stats.totalStudents} />
+              <MiniStatCard label="Creators" value={stats.totalCreators} />
+              <MiniStatCard label="CMOs" value={stats.totalCMOs} />
+              <MiniStatCard label="Active Codes" value={stats.activeCodes} />
+              <MiniStatCard label="Pending Upgrades" value={stats.pendingUpgrades} highlight={stats.pendingUpgrades > 0} />
+              <MiniStatCard label="Pending Prints" value={stats.pendingPrintRequests} highlight={stats.pendingPrintRequests > 0} />
             </div>
 
             {/* Conversion Funnel & Revenue Forecast */}

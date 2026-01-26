@@ -8,9 +8,11 @@ import type { Json } from '@/integrations/supabase/types';
 import { 
   ArrowLeft, 
   Save,
-  RefreshCw
+  RefreshCw,
+  Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import PrintSettingsPanel from '@/components/dashboard/PrintSettingsPanel';
 
 interface TierPricing {
   name: string;
@@ -240,6 +242,15 @@ const PricingSettings = () => {
             Example: Upgrading from Silver (Rs. {pricing.starter.price}) to Platinum (Rs. {pricing.lifetime.price}) = 
             ({pricing.lifetime.price} - {pricing.starter.price}) × 1.1 = <span className="text-brand font-semibold">Rs. {Math.round((pricing.lifetime.price - pricing.starter.price) * 1.1).toLocaleString()}</span>
           </p>
+        </div>
+
+        {/* Print Request Pricing Section */}
+        <div className="mt-8">
+          <h2 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Printer className="w-5 h-5 text-brand" />
+            Print Request Pricing
+          </h2>
+          <PrintSettingsPanel />
         </div>
       </div>
     </main>
