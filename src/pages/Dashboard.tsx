@@ -26,6 +26,7 @@ import ReferralProgress from '@/components/dashboard/ReferralProgress';
 import SubscriptionStatus from '@/components/dashboard/SubscriptionStatus';
 import MediumChangeRequestDialog from '@/components/dashboard/MediumChangeRequestDialog';
 import PrintRequestDialog from '@/components/dashboard/PrintRequestDialog';
+import InboxButton from '@/components/inbox/InboxButton';
 import { useAICredits } from '@/hooks/useAICredits';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -289,6 +290,9 @@ const Dashboard = () => {
                   {TIER_LABELS[enrollment.tier]}
                 </span>
               </div>
+              
+              {/* Inbox Button */}
+              <InboxButton />
               
               <Button
                 type="button"

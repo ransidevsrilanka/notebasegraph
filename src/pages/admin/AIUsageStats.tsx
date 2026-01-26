@@ -18,14 +18,19 @@ const AIUsageStats = () => {
   const { data: sidebarStats } = useQuery({
     queryKey: ['admin-sidebar-stats'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_admin_dashboard_stats');
-      if (error) throw error;
-      const row = data?.[0];
+      const [joinResult, upgradeResult, withdrawalResult, headOpsResult, printResult] = await Promise.all([
+        supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('head_ops_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('print_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      ]);
       return { 
-        pendingJoinRequests: row?.pending_join_requests ?? 0, 
-        pendingUpgrades: row?.pending_upgrades ?? 0, 
-        pendingWithdrawals: row?.pending_withdrawals ?? 0,
-        pendingHeadOpsRequests: 0 
+        pendingJoinRequests: joinResult.count ?? 0, 
+        pendingUpgrades: upgradeResult.count ?? 0, 
+        pendingWithdrawals: withdrawalResult.count ?? 0,
+        pendingHeadOpsRequests: headOpsResult.count ?? 0,
+        pendingPrintRequests: printResult.count ?? 0,
       };
     },
   });
@@ -162,6 +167,7 @@ const AIUsageStats = () => {
           pendingUpgrades: sidebarStats?.pendingUpgrades ?? 0,
           pendingWithdrawals: sidebarStats?.pendingWithdrawals ?? 0,
           pendingHeadOpsRequests: sidebarStats?.pendingHeadOpsRequests ?? 0,
+          pendingPrintRequests: sidebarStats?.pendingPrintRequests ?? 0,
         }} />
         
         <main className="flex-1 p-6 overflow-auto admin-premium-bg">

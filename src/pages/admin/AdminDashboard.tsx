@@ -52,6 +52,7 @@ interface Stats {
   pendingJoinRequests: number;
   pendingWithdrawals: number;
   pendingHeadOpsRequests: number;
+  pendingPrintRequests: number;
   totalRevenue: number;
   thisMonthRevenue: number;
   lastMonthRevenue: number;
@@ -211,6 +212,7 @@ const AdminDashboard = () => {
     pendingJoinRequests: 0,
     pendingWithdrawals: 0,
     pendingHeadOpsRequests: 0,
+    pendingPrintRequests: 0,
     totalRevenue: 0,
     thisMonthRevenue: 0,
     lastMonthRevenue: 0,
@@ -263,6 +265,7 @@ const AdminDashboard = () => {
         { count: pendingJoinRequests },
         { count: pendingWithdrawals },
         { count: pendingHeadOpsRequests },
+        { count: pendingPrintRequests },
         { count: totalCreators },
         { data: enrollmentTiers },
         { data: businessPhase },
@@ -276,6 +279,7 @@ const AdminDashboard = () => {
         supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('head_ops_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('print_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('tier').eq('is_active', true),
         supabase.from('business_phases').select('*').limit(1).maybeSingle(),
@@ -518,6 +522,7 @@ const AdminDashboard = () => {
         pendingJoinRequests: pendingJoinRequests || 0,
         pendingWithdrawals: pendingWithdrawals || 0,
         pendingHeadOpsRequests: pendingHeadOpsRequests || 0,
+        pendingPrintRequests: pendingPrintRequests || 0,
         totalRevenue,
         thisMonthRevenue,
         lastMonthRevenue,

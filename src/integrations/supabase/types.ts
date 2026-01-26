@@ -1392,6 +1392,8 @@ export type Database = {
           payment_status: string | null
           phone: string
           print_type: string
+          receipt_url: string | null
+          rejection_reason: string | null
           request_number: string
           shipped_at: string | null
           status: string | null
@@ -1419,6 +1421,8 @@ export type Database = {
           payment_status?: string | null
           phone: string
           print_type: string
+          receipt_url?: string | null
+          rejection_reason?: string | null
           request_number: string
           shipped_at?: string | null
           status?: string | null
@@ -1446,6 +1450,8 @@ export type Database = {
           payment_status?: string | null
           phone?: string
           print_type?: string
+          receipt_url?: string | null
+          rejection_reason?: string | null
           request_number?: string
           shipped_at?: string | null
           status?: string | null

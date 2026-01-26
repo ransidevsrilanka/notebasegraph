@@ -52,6 +52,7 @@ const UserReferrals = () => {
     pendingUpgrades: 0,
     pendingWithdrawals: 0,
     pendingHeadOpsRequests: 0,
+    pendingPrintRequests: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,9 +63,10 @@ const UserReferrals = () => {
   }, []);
 
   const fetchSidebarStats = async () => {
-    const [upgradeRequests, withdrawalRequests] = await Promise.all([
+    const [upgradeRequests, withdrawalRequests, printRequests] = await Promise.all([
       supabase.from('upgrade_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('withdrawal_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('print_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
 
     setSidebarStats({
@@ -72,6 +74,7 @@ const UserReferrals = () => {
       pendingUpgrades: upgradeRequests.count || 0,
       pendingWithdrawals: withdrawalRequests.count || 0,
       pendingHeadOpsRequests: 0,
+      pendingPrintRequests: printRequests.count || 0,
     });
   };
 
