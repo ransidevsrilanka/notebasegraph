@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -16,11 +17,22 @@ import {
   Loader2,
   Globe,
   Monitor,
+  Building2,
+  Save,
+  Printer,
 } from 'lucide-react';
+import PrintSettingsPanel from '@/components/dashboard/PrintSettingsPanel';
 
 interface PaymentMode {
   mode: 'test' | 'live';
   test_environment: 'localhost' | 'web';
+}
+
+interface BankDetails {
+  bank_name: string;
+  account_number: string;
+  account_holder: string;
+  branch_name: string;
 }
 
 const PaymentSettings = () => {
@@ -32,9 +44,19 @@ const PaymentSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showConfirmLive, setShowConfirmLive] = useState(false);
+  
+  // Bank Details State
+  const [bankDetails, setBankDetails] = useState<BankDetails>({
+    bank_name: '',
+    account_number: '',
+    account_holder: '',
+    branch_name: '',
+  });
+  const [isSavingBank, setIsSavingBank] = useState(false);
 
   useEffect(() => {
     fetchPaymentMode();
+    fetchBankDetails();
   }, []);
 
   const fetchPaymentMode = async () => {
@@ -57,6 +79,33 @@ const PaymentSettings = () => {
       console.error('Error:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchBankDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'bank_details')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching bank details:', error);
+        return;
+      }
+
+      if (data?.value && typeof data.value === 'object') {
+        const bankData = data.value as Record<string, string>;
+        setBankDetails({
+          bank_name: bankData.bank_name || '',
+          account_number: bankData.account_number || '',
+          account_holder: bankData.account_holder || '',
+          branch_name: bankData.branch_name || '',
+        });
+      }
+    } catch (err) {
+      console.error('Error:', err);
     }
   };
 
@@ -107,6 +156,39 @@ const PaymentSettings = () => {
     }
   };
 
+  const saveBankDetails = async () => {
+    setIsSavingBank(true);
+    try {
+      const { data: existing } = await supabase
+        .from('site_settings')
+        .select('id')
+        .eq('key', 'bank_details')
+        .maybeSingle();
+
+      const jsonValue = JSON.parse(JSON.stringify(bankDetails));
+
+      if (existing) {
+        const { error } = await supabase
+          .from('site_settings')
+          .update({ value: jsonValue })
+          .eq('key', 'bank_details');
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('site_settings')
+          .insert([{ key: 'bank_details', value: jsonValue }]);
+        if (error) throw error;
+      }
+
+      toast.success('Bank details updated successfully');
+    } catch (err) {
+      console.error('Error saving bank details:', err);
+      toast.error('Failed to save bank details');
+    } finally {
+      setIsSavingBank(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
@@ -137,9 +219,9 @@ const PaymentSettings = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
+      <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
         {/* Current Mode Status */}
-        <div className={`glass-card p-6 mb-6 border ${paymentMode.mode === 'live' ? 'border-green-500/30 bg-green-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
+        <div className={`glass-card p-6 border ${paymentMode.mode === 'live' ? 'border-green-500/30 bg-green-500/5' : 'border-amber-500/30 bg-amber-500/5'}`}>
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${paymentMode.mode === 'live' ? 'bg-green-500/20' : 'bg-amber-500/20'}`}>
               {paymentMode.mode === 'live' ? (
@@ -257,14 +339,82 @@ const PaymentSettings = () => {
                 Saving...
               </>
             ) : (
-              'Save Settings'
+              'Save Payment Mode'
             )}
           </Button>
         </div>
 
+        {/* Bank Details Section */}
+        <div className="glass-card p-6 space-y-6">
+          <div className="flex items-center gap-3">
+            <Building2 className="w-5 h-5 text-brand" />
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">Bank Account Details</h2>
+              <p className="text-xs text-muted-foreground">For print orders and bank transfers</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Bank Name</Label>
+              <Input
+                value={bankDetails.bank_name}
+                onChange={(e) => setBankDetails(prev => ({ ...prev, bank_name: e.target.value }))}
+                placeholder="Commercial Bank"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Account Number</Label>
+              <Input
+                value={bankDetails.account_number}
+                onChange={(e) => setBankDetails(prev => ({ ...prev, account_number: e.target.value }))}
+                placeholder="1234567890"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Account Holder Name</Label>
+              <Input
+                value={bankDetails.account_holder}
+                onChange={(e) => setBankDetails(prev => ({ ...prev, account_holder: e.target.value }))}
+                placeholder="NoteBASE Education"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Branch Name</Label>
+              <Input
+                value={bankDetails.branch_name}
+                onChange={(e) => setBankDetails(prev => ({ ...prev, branch_name: e.target.value }))}
+                placeholder="Colombo Main"
+              />
+            </div>
+          </div>
+          
+          <Button 
+            variant="brand" 
+            onClick={saveBankDetails}
+            disabled={isSavingBank}
+            className="w-full"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {isSavingBank ? 'Saving...' : 'Save Bank Details'}
+          </Button>
+        </div>
+
+        {/* Print Pricing Settings */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Printer className="w-4 h-4 text-brand" />
+            <h2 className="text-sm font-medium text-foreground">Print Order Pricing</h2>
+          </div>
+          <PrintSettingsPanel />
+        </div>
+
         {/* Live Mode Warning */}
         {paymentMode.mode === 'live' && (
-          <div className="mt-6 p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
+          <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
               <div>
