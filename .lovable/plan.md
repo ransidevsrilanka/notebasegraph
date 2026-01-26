@@ -1,194 +1,286 @@
 
-# Comprehensive Feature Enhancement Plan
+# Comprehensive Print Request System & Dashboard Enhancement Plan
 
-## Overview
-This plan addresses multiple feature requests spanning admin functionality, student UX, content organization, and a new print request system with backend support.
+## Executive Summary
+This plan addresses critical issues with the print request system, student dashboard UX, admin panel visibility, content organization, and creator dashboard improvements. The changes will create a fully-functional print request workflow with proper payment handling, admin management, and user notifications.
 
 ---
 
-## Phase 1: Enrollments Page - Delete All Button
+## Issues Identified
 
-### File: `src/pages/admin/Enrollments.tsx`
+| Issue | Description | Priority |
+|-------|-------------|----------|
+| 1 | Print Requests page missing from CEO sidebar | Critical |
+| 2 | Print request dialog needs Bank Transfer flow (bank details, reference, receipt upload) | Critical |
+| 3 | Print request dialog needs Card Payment (PayHere) integration | Critical |
+| 4 | Print request dialog needs COD confirmation screen | High |
+| 5 | User Inbox not visible in `/dashboard` header | High |
+| 6 | Print button should show existing orders status, not immediately open new request | High |
+| 7 | Metrics showing 0 in `/admin/print-requests` (stats are populated from live data but UI needs refresh) | Medium |
+| 8 | Subject page needs quizzes/flashcards under topics (not separate tabs) | Medium |
+| 9 | Bank Signup page subject selection needs better UI | Medium |
+| 10 | Content Management needs "Is Model Paper?" toggle | Medium |
+| 11 | Creator Dashboard UI improvements | Low |
+| 12 | Admin needs to send inbox notifications on print request approve/reject | High |
+
+---
+
+## Phase 1: Add Print Requests to CEO Sidebar
+
+### File: `src/components/admin/AdminSidebar.tsx`
 
 **Changes:**
-1. Add a "Delete All Enrollments" button in the header section (line ~203)
-2. Create a confirmation dialog requiring the admin to type "DELETE ALL" to confirm
-3. Implement cascading delete logic:
-   - Delete related `user_subjects` records first
-   - Delete `enrollments` records
-   - Optionally: Clear related `profiles` (but not auth.users)
+1. Import `Printer` icon from lucide-react
+2. Add new menu item under "Requests" group:
+   - Label: "Print Requests"
+   - Href: `/admin/print-requests`
+   - Icon: `Printer`
+   - Badge: `stats.pendingPrintRequests` (new stat)
 
-**Security Considerations:**
-- Require 2FA/OTP verification (reuse existing `OTPVerificationDialog`)
-- Add Telegram notification when bulk delete is executed
-- Log the action to an audit table
+3. Update `AdminSidebarProps` interface to include `pendingPrintRequests: number`
 
----
-
-## Phase 2: Payment Dialog - Logged-In User Experience
-
-### File: `src/components/PaymentMethodDialog.tsx`
-
-**Issue:** Logged-in users with existing enrollment see payment options when they should just return to dashboard.
+### File: `src/pages/admin/AdminDashboard.tsx`
 
 **Changes:**
-1. Accept new prop `hasExistingEnrollment: boolean`
-2. If user is logged in AND has an active enrollment:
-   - Show "You're already enrolled!" message
-   - Display "Back to Dashboard" button
-   - Hide payment method buttons
-3. PricingSection should pass `useAuth()` enrollment status to the dialog
+1. Add query to count pending print requests
+2. Pass the count to AdminSidebar
 
-```tsx
-// New condition check at start of dialog content:
-if (hasExistingEnrollment) {
-  return (
-    <div>
-      <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-4" />
-      <h2>You're Already Enrolled!</h2>
-      <p>You have an active {tierName} subscription.</p>
-      <Button onClick={() => navigate('/dashboard')}>
-        Back to Dashboard
-      </Button>
-    </div>
-  );
-}
+---
+
+## Phase 2: Redesign Print Request Dialog (Complete Overhaul)
+
+### File: `src/components/dashboard/PrintRequestDialog.tsx`
+
+**Current Behavior:** Opens a multi-step form to create new request
+**New Behavior:** 
+- First screen shows existing orders (if any) with status tracking
+- "New Request" button to create additional orders
+- Proper payment flows for each method
+
+### 2.1 New Dialog Structure
+
+**Screen 1: Order Status (Default View)**
+```
+[Your Print Orders]
+- If no orders: "No print orders yet" + "Request Printouts" button
+- If orders exist: 
+  - List of orders with status badges (Pending/Processing/Shipped/Delivered)
+  - Tracking number if available
+  - Click to expand details
+  - "+ New Request" button at bottom
+```
+
+**Screen 2-6: Create New Order (existing multi-step flow)**
+
+### 2.2 Bank Transfer Flow Enhancement
+
+When user selects "Bank Transfer" in Step 4:
+
+**Step 4.1: Bank Details Screen**
+```
+Bank: [Bank Name from payment_settings]
+Account: [Account Number]
+Account Holder: [Account Holder Name]
+Branch: [Branch Name]
+
+Reference Number: PR-XXXXX (5-letter alphanumeric)
+Amount: Rs. [Total Amount]
+
+[Upload Receipt Button]
+[File name once uploaded]
+
+[Submit Request]
+```
+
+**Backend Changes:**
+- Store `reference_number` in print_requests
+- Store `receipt_url` in print_requests
+- Set `payment_status` to 'pending_verification'
+
+### 2.3 Card Payment Flow (PayHere Integration)
+
+When user selects "Card Payment":
+
+1. Call edge function to generate PayHere hash (similar to existing flow)
+2. Create payment form and submit to PayHere sandbox
+3. Handle return URL with success/failure
+4. Update print_request payment_status accordingly
+
+**Edge Function Update:** `supabase/functions/payhere-checkout/index.ts`
+- Add handling for `payment_type: 'print_request'`
+- Store `print_request_id` in payment record
+
+### 2.4 COD Flow Enhancement
+
+When user selects "Cash on Delivery":
+
+**Confirmation Screen:**
+```
+[Truck Icon]
+Cash on Delivery
+
+Your order will be prepared and shipped.
+Payment of Rs. [Total + COD Fee] will be collected upon delivery.
+
+Delivery Address:
+[Address]
+[City]
+
+Contact: [Phone]
+
+[X] I understand that payment will be collected upon delivery
+
+[Confirm Order]
 ```
 
 ---
 
-## Phase 3: Integrate Quizzes & Flashcards Under Topics
+## Phase 3: Add Inbox Button to Student Dashboard
 
-### File: `src/pages/Subject.tsx`
+### File: `src/pages/Dashboard.tsx`
 
-**Current Structure:** Three separate tabs (Notes, Flashcards, Quizzes)
-**New Structure:** Single unified view where each topic expands to show Notes, then Flashcards, then Quizzes
+**Changes:**
+1. Import `InboxButton` from `@/components/inbox/InboxButton`
+2. Add `<InboxButton />` to the header section next to the Logout button
 
-**Implementation:**
-
-1. **Remove the Tabs component entirely** (lines 265-280)
-
-2. **Restructure the topic expansion** (lines 295-390):
-   - When a topic expands, show three sections:
-     - **Notes Section** (existing)
-     - **Flashcards Section** (filtered by `topic_id`)
-     - **Quizzes Section** (filtered by `topic_id`)
-
-3. **Add topic-specific filtering:**
 ```tsx
-// Inside the expanded topic view:
-const topicFlashcards = flashcardSets.filter(fc => fc.topic_id === topic.id);
-const topicQuizzes = quizzes.filter(q => q.topic_id === topic.id);
-```
-
-4. **UI Layout for expanded topic:**
-```
-[Topic Header - Click to expand]
-├── Notes (with locked/unlocked badges)
-│   ├── Note 1 [View] or [Locked]
-│   └── Note 2 [View] or [Locked]
-├── Flashcards (if any for this topic)
-│   └── Flashcard Set 1 - 20 cards [Study] or [Locked]
-└── Quizzes (if any for this topic)
-    └── Quiz 1 - 15 questions [Start] or [Locked]
-```
-
-5. **Show locked/unlocked status** based on tier (already have `canAccess()` function)
-
----
-
-## Phase 4: Bank Transfer Subject Selection - UI Enhancement
-
-### File: `src/pages/BankSignup.tsx`
-
-**Issue:** The subjects step (step='subjects') is visually basic compared to card payment flow.
-
-**Changes (lines 500-705):**
-
-1. **Add visual styling matching PaidSignup:**
-   - Add decorative gradients and blur orbs
-   - Use glass-card styling for subject selection
-   - Add animated checkmarks for selected subjects
-
-2. **Enhance subject cards:**
-```tsx
-<div className={`
-  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
-  ${isSelected ? 'border-brand bg-brand/10' : 'border-border bg-card hover:border-brand/50'}
-`}>
-  {/* Subject icon based on basket */}
-  {/* Subject name with description */}
-  {/* Checkmark animation when selected */}
+<div className="flex items-center gap-4">
+  {/* Tier Badge */}
+  <div className={...}>...</div>
+  
+  <InboxButton />  {/* ADD THIS */}
+  
+  <Button variant="ghost" size="icon" onClick={signOut}>
+    <LogOut className="w-5 h-5" />
+  </Button>
 </div>
 ```
 
-3. **Add validation feedback section:**
-   - Show basket requirements
-   - Show warnings/errors in styled cards
-
 ---
 
-## Phase 5: PDF Viewer - Get from Play Store Banner
+## Phase 4: Admin Print Request Management Enhancements
 
-### File: `src/components/PDFViewer/PDFViewer.tsx`
+### File: `src/pages/admin/PrintRequests.tsx`
 
 **Changes:**
 
-Add a banner below the PDF canvas (after line 325):
+### 4.1 Fix Metrics Display
+The metrics currently filter from `requests` array which is correct. The issue is the initial fetch may return 0 if no print_settings exist. Add fallback:
 
 ```tsx
-{/* App Download Banner */}
-<div className="mt-4 p-4 bg-gradient-to-r from-brand/10 to-primary/10 rounded-lg border border-brand/20">
-  <div className="flex items-center gap-4 justify-center">
-    <img 
-      src="/google-play-badge.png" 
-      alt="Get it on Google Play"
-      className="h-12 cursor-pointer hover:scale-105 transition-transform"
-      onClick={() => window.open('https://play.google.com/store/apps/details?id=YOUR_APP_ID', '_blank')}
-    />
-    <div className="text-left">
-      <p className="font-medium text-foreground text-sm">📱 View Offline on Our App</p>
-      <p className="text-xs text-muted-foreground">
-        Download documents and study without internet
-      </p>
-    </div>
-  </div>
-</div>
+// Ensure stats are calculated from actual data
+const pendingCount = requests.filter(r => r.status === 'pending').length;
+const processingCount = requests.filter(r => r.status === 'processing').length;
+// etc.
 ```
 
-**Assets Required:**
-- Add Google Play badge image to `public/google-play-badge.png`
+### 4.2 Add Approve/Reject Actions for Bank Transfer Requests
+
+When a bank transfer request is pending:
+- Show "Approve" and "Reject" buttons
+- On Approve:
+  - Update status to 'confirmed'
+  - Update payment_status to 'paid'
+  - Send inbox notification to user
+  - Send Telegram notification
+- On Reject:
+  - Update status to 'cancelled'
+  - Require rejection reason
+  - Send inbox notification with reason
+
+### 4.3 Receipt Viewer
+
+Add ability to view/download uploaded receipts:
+```tsx
+{request.receipt_url && (
+  <Button variant="outline" size="sm" onClick={() => viewReceipt(request.receipt_url)}>
+    <Download className="w-4 h-4 mr-1" />
+    Receipt
+  </Button>
+)}
+```
 
 ---
 
-## Phase 6: Content Management - Model Paper Toggle
+## Phase 5: Print Request Inbox Notifications
+
+### Notification Templates
+
+**On Bank Transfer Approval:**
+```
+Subject: Print Order Confirmed - PR-XXXXX
+Body: Great news! Your print request (PR-XXXXX) has been approved and is now being processed. You will receive tracking information once your order ships.
+```
+
+**On Bank Transfer Rejection:**
+```
+Subject: Print Order Update - PR-XXXXX
+Body: Unfortunately, we couldn't verify your payment for print request PR-XXXXX. Reason: [Admin Notes]. Please contact support if you believe this is an error.
+```
+
+**On Status Update (Shipped):**
+```
+Subject: Your Order Has Shipped! - PR-XXXXX
+Body: Your print order (PR-XXXXX) is on its way! Tracking number: [TRACKING]. Expected delivery in 3-5 business days.
+```
+
+**On Card Payment Success:**
+```
+Subject: Payment Confirmed - PR-XXXXX
+Body: Your payment has been received! Your print order (PR-XXXXX) is now being processed.
+```
+
+---
+
+## Phase 6: Database Schema Updates
+
+### Add Missing Columns to print_requests
+
+```sql
+ALTER TABLE print_requests ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+ALTER TABLE print_requests ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+```
+
+### Update RLS Policy for Receipt Upload
+
+```sql
+-- Allow users to update their own print requests (for receipt upload)
+CREATE POLICY "Users can update own print requests"
+  ON print_requests
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+```
+
+---
+
+## Phase 7: Content Management - Model Paper Toggle
 
 ### File: `src/pages/admin/ContentManagement.tsx`
 
-### Database: Add new column to `notes` table
+**Changes in Note Upload Section (around line 432):**
 
-**Migration:**
-```sql
-ALTER TABLE public.notes ADD COLUMN is_model_paper BOOLEAN DEFAULT false;
+1. Add state for model paper toggle:
+```tsx
+const [isModelPaper, setIsModelPaper] = useState(false);
 ```
 
-**UI Changes (around lines 430-475 in the note upload form):**
-
-Add a toggle switch:
+2. Add toggle UI below tier selection:
 ```tsx
-<div className="flex items-center space-x-2">
+<div className="flex items-center gap-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/30">
   <Switch
     id="is-model-paper"
     checked={isModelPaper}
     onCheckedChange={setIsModelPaper}
   />
-  <Label htmlFor="is-model-paper">
-    This is a Model Paper
+  <Label htmlFor="is-model-paper" className="flex flex-col">
+    <span className="font-medium">Model Paper</span>
+    <span className="text-xs text-muted-foreground">Mark as past paper/practice exam</span>
   </Label>
 </div>
 ```
 
-**Update the insert query:**
+3. Update insert query:
 ```tsx
 .insert({
   // ... existing fields
@@ -196,255 +288,178 @@ Add a toggle switch:
 })
 ```
 
----
-
-## Phase 7: Print Request System
-
-This is a comprehensive new feature requiring multiple components.
-
-### 7.1 Database Schema
-
-**New Tables:**
-
-```sql
--- Print Request Settings (for admin pricing)
-CREATE TABLE public.print_settings (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  notes_price_per_page NUMERIC DEFAULT 5,      -- LKR per page
-  model_paper_price_per_page NUMERIC DEFAULT 8,
-  base_delivery_fee NUMERIC DEFAULT 200,
-  cod_extra_fee NUMERIC DEFAULT 50,
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-
--- Print Requests
-CREATE TABLE public.print_requests (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  request_number TEXT NOT NULL,
-  status TEXT DEFAULT 'pending',  -- pending, confirmed, processing, shipped, delivered, cancelled
-  
-  -- Delivery Info
-  full_name TEXT NOT NULL,
-  address TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  city TEXT,
-  
-  -- Order Details
-  print_type TEXT NOT NULL,  -- notes_only, model_papers_only, both
-  subject TEXT NOT NULL,
-  topic TEXT,
-  
-  -- Pricing
-  estimated_pages INTEGER DEFAULT 0,
-  estimated_price NUMERIC DEFAULT 0,
-  delivery_fee NUMERIC DEFAULT 0,
-  total_amount NUMERIC DEFAULT 0,
-  
-  -- Payment
-  payment_method TEXT NOT NULL,  -- card, bank_transfer, cod
-  payment_status TEXT DEFAULT 'pending',  -- pending, paid, refunded
-  order_id TEXT,
-  
-  -- Timestamps
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-  shipped_at TIMESTAMP WITH TIME ZONE,
-  delivered_at TIMESTAMP WITH TIME ZONE
-);
-
--- Print Request Items (what's being printed)
-CREATE TABLE public.print_request_items (
-  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  request_id UUID NOT NULL REFERENCES print_requests(id) ON DELETE CASCADE,
-  note_id UUID REFERENCES notes(id),
-  topic_id UUID REFERENCES topics(id),
-  item_type TEXT NOT NULL,  -- note, model_paper
-  title TEXT NOT NULL,
-  page_count INTEGER DEFAULT 1,
-  price_per_page NUMERIC DEFAULT 5,
-  subtotal NUMERIC DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
-);
-```
-
-### 7.2 Dashboard - Print Request Button
-
-**File: `src/pages/Dashboard.tsx`**
-
-Add new stat card or button (around line ~395):
-
+4. Reset after upload:
 ```tsx
-<div 
-  className="glass-card p-5 cursor-pointer hover:border-brand/30 transition-all"
-  onClick={() => setShowPrintRequestDialog(true)}
->
-  <div className="flex items-center gap-3 mb-2">
-    <div className="w-9 h-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
-      <Printer className="w-4 h-4 text-orange-500" />
-    </div>
-  </div>
-  <p className="text-lg font-display font-bold text-foreground">Request Printouts</p>
-  <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
-    Notes & Model Papers
-  </p>
-</div>
+setIsModelPaper(false);
 ```
-
-### 7.3 Print Request Dialog Component
-
-**New File: `src/components/dashboard/PrintRequestDialog.tsx`**
-
-Multi-step dialog:
-
-**Step 1: Select Content Type**
-- [ ] Notes Only
-- [ ] Model Papers Only  
-- [ ] Both Notes & Model Papers
-
-**Step 2: Select Subject & Topics**
-- Dropdown: Select Subject (from user's enrolled subjects)
-- Multi-select: Select Topics (or "All Topics")
-- Shows estimated page count and price preview
-
-**Step 3: Delivery Information**
-- Full Name (pre-filled from profile)
-- Address (textarea)
-- Phone Number
-- City
-
-**Step 4: Payment Method**
-- Card Payment (via PayHere)
-- Bank Transfer (shows account details)
-- Cash on Delivery (COD) - additional fee noted
-
-**Step 5: Confirmation**
-- Order summary
-- Total price breakdown
-- Submit button
-
-### 7.4 CEO Dashboard - Print Settings Panel
-
-**File: `src/pages/admin/AdminDashboard.tsx` OR new file `src/pages/admin/PrintSettings.tsx`**
-
-Add a new section/page for managing print pricing:
-
-```tsx
-<div className="glass-card p-6">
-  <h3 className="font-semibold mb-4 flex items-center gap-2">
-    <Printer className="w-5 h-5 text-brand" />
-    Print Request Pricing
-  </h3>
-  
-  <div className="grid grid-cols-2 gap-4">
-    <div>
-      <Label>Notes Price (per page)</Label>
-      <Input type="number" value={notesPrice} onChange={...} />
-      <span className="text-xs text-muted-foreground">LKR</span>
-    </div>
-    
-    <div>
-      <Label>Model Paper Price (per page)</Label>
-      <Input type="number" value={modelPaperPrice} onChange={...} />
-    </div>
-    
-    <div>
-      <Label>Base Delivery Fee</Label>
-      <Input type="number" value={deliveryFee} onChange={...} />
-    </div>
-    
-    <div>
-      <Label>COD Extra Fee</Label>
-      <Input type="number" value={codFee} onChange={...} />
-    </div>
-  </div>
-  
-  <Button onClick={saveSettings}>Save Pricing</Button>
-</div>
-```
-
-### 7.5 Admin Panel - Print Requests Management
-
-**New File: `src/pages/admin/PrintRequests.tsx`**
-
-Features:
-- List all print requests with status filtering
-- View request details
-- Update status (Processing, Shipped, Delivered)
-- Add tracking number
-- Print request summary for fulfillment
 
 ---
 
-## Phase 8: Additional Files to Create/Modify
+## Phase 8: Subject Page - Integrate Quizzes & Flashcards Under Topics
 
-### New Files:
-1. `src/components/dashboard/PrintRequestDialog.tsx`
-2. `src/pages/admin/PrintRequests.tsx`
+### File: `src/pages/Subject.tsx`
 
-### Modified Files:
-1. `src/pages/admin/Enrollments.tsx` - Delete all button
-2. `src/components/PaymentMethodDialog.tsx` - Logged-in check
-3. `src/components/PricingSection.tsx` - Pass enrollment status
-4. `src/pages/Subject.tsx` - Restructure tabs to unified view
-5. `src/pages/BankSignup.tsx` - Enhance subject selection UI
-6. `src/components/PDFViewer/PDFViewer.tsx` - Add app banner
-7. `src/pages/admin/ContentManagement.tsx` - Model paper toggle
-8. `src/pages/Dashboard.tsx` - Print request button
-9. `src/pages/admin/AdminDashboard.tsx` - Link to print settings
+**Major Restructure:**
 
-### Database Migrations:
-1. Add `is_model_paper` column to `notes` table
-2. Create `print_settings` table
-3. Create `print_requests` table
-4. Create `print_request_items` table
-5. Add RLS policies for new tables
+Remove the Tabs component. Instead, when a topic expands, show three collapsible sections:
+
+```
+[Topic Name] [Click to expand]
+├── Notes Section
+│   ├── Note 1 [View] or [Locked]
+│   └── Note 2 [View] or [Locked]
+├── Flashcards Section (if any for this topic)
+│   └── Set 1 - 20 cards [Study] or [Locked]
+└── Quizzes Section (if any for this topic)
+    └── Quiz 1 - 15 questions [Start] or [Locked]
+```
+
+**Implementation:**
+1. Remove TabsList and TabsTrigger components
+2. Remove TabsContent wrappers
+3. Inside expanded topic section, add:
+   - Notes list (existing)
+   - Flashcards filtered by `topic_id === topic.id`
+   - Quizzes filtered by `topic_id === topic.id`
+
+---
+
+## Phase 9: Bank Signup UI Enhancement
+
+### File: `src/pages/BankSignup.tsx`
+
+**Changes to Subjects Step (step === 'subjects'):**
+
+1. Add decorative gradient orbs (matching PaidSignup)
+2. Enhance subject cards with:
+   - Glass morphism effect
+   - Animated checkmarks
+   - Hover states
+   - Icon based on basket type
+
+```tsx
+<div className={`
+  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+  ${isSelected 
+    ? 'border-brand bg-brand/10 shadow-lg shadow-brand/20' 
+    : 'border-border bg-card hover:border-brand/50'
+  }
+`}>
+  <div className="absolute top-2 right-2">
+    {isSelected && (
+      <div className="w-6 h-6 rounded-full bg-brand flex items-center justify-center">
+        <Check className="w-4 h-4 text-white" />
+      </div>
+    )}
+  </div>
+  {/* Subject content */}
+</div>
+```
+
+---
+
+## Phase 10: Creator Dashboard UI Tweaks
+
+### File: `src/pages/creator/CreatorDashboard.tsx`
+
+**Improvements:**
+1. Add subtle gradient background to stat cards
+2. Improve mobile responsiveness for charts
+3. Add skeleton loading states
+4. Enhance color contrast on dark mode
+5. Add tooltip explanations for complex metrics
 
 ---
 
 ## Implementation Order
 
-| Priority | Task | Effort |
-|----------|------|--------|
-| 1 | Payment Dialog - Logged-in check | 30 min |
-| 2 | Enrollments - Delete all button | 1 hour |
-| 3 | Subject Page - Integrate quizzes/flashcards under topics | 2 hours |
-| 4 | Content Management - Model paper toggle | 30 min |
-| 5 | PDF Viewer - Play Store banner | 30 min |
-| 6 | Bank Signup - UI enhancement | 1 hour |
-| 7 | Database - Print system tables | 30 min |
-| 8 | Dashboard - Print request button + dialog | 3 hours |
-| 9 | Admin - Print settings panel | 1 hour |
-| 10 | Admin - Print requests management | 2 hours |
+| Step | Task | Files | Effort |
+|------|------|-------|--------|
+| 1 | Add Print Requests to CEO sidebar | AdminSidebar.tsx, AdminDashboard.tsx | 30 min |
+| 2 | Add InboxButton to student Dashboard | Dashboard.tsx | 15 min |
+| 3 | Database migration for receipt_url, rejection_reason | New migration | 15 min |
+| 4 | Overhaul PrintRequestDialog (order status view) | PrintRequestDialog.tsx | 2 hours |
+| 5 | Implement Bank Transfer flow (reference, receipt) | PrintRequestDialog.tsx | 1.5 hours |
+| 6 | Implement Card Payment (PayHere) flow | PrintRequestDialog.tsx, payhere-checkout | 2 hours |
+| 7 | Implement COD confirmation | PrintRequestDialog.tsx | 30 min |
+| 8 | Enhance admin PrintRequests (approve/reject/notifications) | PrintRequests.tsx | 1.5 hours |
+| 9 | Add Model Paper toggle to ContentManagement | ContentManagement.tsx | 30 min |
+| 10 | Restructure Subject page (quizzes/flashcards under topics) | Subject.tsx | 2 hours |
+| 11 | Enhance BankSignup subject selection UI | BankSignup.tsx | 1 hour |
+| 12 | Creator Dashboard UI tweaks | CreatorDashboard.tsx | 1 hour |
 
 ---
 
-## Technical Notes
+## Technical Details
 
-### Security for Delete All Enrollments:
-- Wrap in transaction via edge function
-- Require OTP verification
-- Send Telegram notification
-- Log to audit table
+### PayHere Integration for Print Requests
 
-### Print Request Pricing Logic:
+The existing `payhere-checkout` edge function will be extended to handle print requests:
+
 ```typescript
-const calculateTotal = (items, deliveryFee, codFee, paymentMethod) => {
-  const itemsTotal = items.reduce((sum, item) => 
-    sum + (item.page_count * item.price_per_page), 0
-  );
-  const codCharge = paymentMethod === 'cod' ? codFee : 0;
-  return itemsTotal + deliveryFee + codCharge;
-};
+// In generate-hash handler, check for print_request_id
+if (print_request_id) {
+  // Store in custom_2 field as "print_XXXX"
+  custom_2 = `print_${print_request_id}`;
+}
+
+// In notify handler, check for print payment
+if (custom_2?.startsWith('print_')) {
+  const printRequestId = custom_2.replace('print_', '');
+  // Update print_request payment_status
+  await supabase
+    .from('print_requests')
+    .update({ 
+      payment_status: status_code === '2' ? 'paid' : 'failed',
+      order_id: order_id 
+    })
+    .eq('id', printRequestId);
+}
 ```
 
-### Subject Page Restructure:
-The key change is removing the Tabs wrapper and moving content inside each topic's expanded section. This provides a more intuitive flow where students can:
-1. Expand a topic
-2. Read the notes
-3. Practice with flashcards
-4. Test knowledge with quiz
+### Bank Transfer Reference Number Generation
 
-All without switching tabs or losing context.
+```typescript
+function generateReferenceNumber(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = 'PR-';
+  for (let i = 0; i < 5; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+```
+
+### Inbox Notification Function
+
+```typescript
+async function sendPrintNotification(
+  userId: string, 
+  subject: string, 
+  body: string
+) {
+  await supabase.from('messages').insert({
+    recipient_id: userId,
+    recipient_type: 'student',
+    subject,
+    body,
+    is_read: false
+  });
+}
+```
+
+---
+
+## Testing Checklist
+
+- [ ] Print Requests visible in CEO sidebar with badge count
+- [ ] Student dashboard shows Inbox button in header
+- [ ] Clicking print button shows existing orders (if any)
+- [ ] Bank transfer shows bank details, generates reference, allows receipt upload
+- [ ] Card payment opens PayHere popup, handles success/failure
+- [ ] COD shows confirmation screen with terms
+- [ ] Admin can approve/reject bank transfer requests
+- [ ] Inbox notifications sent on all status changes
+- [ ] Model paper toggle works in content management
+- [ ] Quizzes/flashcards appear under topics in subject page
+- [ ] Bank signup subject selection has improved UI
