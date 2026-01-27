@@ -4,7 +4,7 @@ import { Key, ArrowRight, ChevronDown } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useBranding } from "@/hooks/useBranding";
 
-// Word-by-word reveal component
+// Word-by-word reveal component - "Note" white, "base" gradient
 const AnimatedHeading = ({ text }: { text: string }) => {
   const [isVisible, setIsVisible] = useState(false);
   const ref = useRef<HTMLHeadingElement>(null);
@@ -14,29 +14,58 @@ const AnimatedHeading = ({ text }: { text: string }) => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Split text and identify "base" for special styling
+  // Special handling for "Notebase" - split into "Note" + "base"
+  const renderWord = (word: string, wordIndex: number) => {
+    // Check if word contains "Notebase" (case insensitive)
+    if (/notebase/i.test(word)) {
+      const match = word.match(/(note)(base)/i);
+      if (match) {
+        return (
+          <span
+            key={wordIndex}
+            className="inline-block"
+            style={{
+              opacity: isVisible ? 1 : 0,
+              transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
+              filter: isVisible ? 'blur(0px)' : 'blur(8px)',
+              transition: `all 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${wordIndex * 0.1}s`,
+            }}
+          >
+            <span className="text-foreground">{match[1]}</span>
+            <span className="text-brand-gradient gradient-animate">{match[2]}</span>
+          </span>
+        );
+      }
+    }
+    
+    // For other words with "base" in them
+    const isBase = /base/i.test(word) && !/note/i.test(word);
+    return (
+      <span
+        key={wordIndex}
+        className={`inline-block ${isBase ? 'text-brand-gradient gradient-animate' : ''}`}
+        style={{
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? 'translateY(0)' : 'translateY(20px)',
+          filter: isVisible ? 'blur(0px)' : 'blur(8px)',
+          transition: `all 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${wordIndex * 0.1}s`,
+        }}
+      >
+        {word}
+      </span>
+    );
+  };
+
   const words = text.split(' ');
   
   return (
     <h1 ref={ref} className="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black mb-6 md:mb-8 text-foreground tracking-[-0.04em] leading-[0.9]">
-      {words.map((word, index) => {
-        const isBase = /base/i.test(word);
-        return (
-          <span
-            key={index}
-            className={`inline-block ${isBase ? 'text-brand-gradient gradient-animate' : ''}`}
-            style={{
-              opacity: isVisible ? 1 : 0,
-              transform: isVisible ? 'translateY(0) blur(0)' : 'translateY(20px)',
-              filter: isVisible ? 'blur(0px)' : 'blur(8px)',
-              transition: `all 0.6s cubic-bezier(0.16, 1, 0.3, 1) ${index * 0.1}s`,
-            }}
-          >
-            {word}
-            {index < words.length - 1 && '\u00A0'}
-          </span>
-        );
-      })}
+      {words.map((word, index) => (
+        <>
+          {renderWord(word, index)}
+          {index < words.length - 1 && '\u00A0'}
+        </>
+      ))}
     </h1>
   );
 };
@@ -131,29 +160,29 @@ const ParallaxHero = () => {
             {branding.tagline}
           </p>
 
-          {/* CTA Buttons with enhanced effects */}
+          {/* CTA Buttons with enhanced effects - View Plans first, Enter Code second */}
           <div 
             className="flex flex-col sm:flex-row items-center justify-center gap-3 md:gap-4 mb-16 md:mb-20 px-4 animate-text-reveal" 
             style={{ animationDelay: '0.7s' }}
           >
-            <Link to="/access" className="w-full sm:w-auto">
+            <Link to="/pricing" className="w-full sm:w-auto">
               <Button 
                 variant="brand" 
                 size="lg" 
                 className="gap-3 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-semibold w-full sm:w-auto btn-shimmer btn-ripple hover-glow transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
               >
-                <Key className="w-4 md:w-5 h-4 md:h-5" />
-                Enter Access Code
+                View Plans
+                <ArrowRight className="w-4 md:w-5 h-4 md:h-5" />
               </Button>
             </Link>
-            <Link to="/pricing" className="w-full sm:w-auto">
+            <Link to="/access" className="w-full sm:w-auto">
               <Button 
                 variant="outline" 
                 size="lg" 
                 className="gap-2 px-8 md:px-10 h-12 md:h-14 text-sm md:text-base font-medium border-border/50 hover:bg-glass hover:border-brand/30 w-full sm:w-auto transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] group"
               >
-                View Plans
-                <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                <Key className="w-4 h-4" />
+                Enter Access Code
               </Button>
             </Link>
           </div>

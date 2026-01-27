@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Key } from "lucide-react";
 import { useBranding } from "@/hooks/useBranding";
@@ -8,6 +8,7 @@ const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { branding, isLoading } = useBranding();
 
   const navLinks = [
@@ -28,9 +29,14 @@ const Navbar = () => {
     if (path.startsWith("/#")) {
       const id = path.replace("/#", "");
       if (location.pathname === "/") {
+        // Already on home page, just scroll
         document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
       } else {
-        window.location.href = path;
+        // Navigate to home first, then scroll after a short delay
+        navigate("/");
+        setTimeout(() => {
+          document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+        }, 100);
       }
     }
     setIsOpen(false);

@@ -55,6 +55,7 @@ import AIUsageStats from "./pages/admin/AIUsageStats";
 import UserReferrals from "./pages/admin/UserReferrals";
 import SubjectMediumRequests from "./pages/admin/SubjectMediumRequests";
 import PrintRequests from "./pages/admin/PrintRequests";
+import TestimonialsSettings from "./pages/admin/TestimonialsSettings";
 import AIChat from "./pages/AIChat";
 import NotFound from "./pages/NotFound";
 import { ChatButton } from "./components/ai-chat";
@@ -258,6 +259,11 @@ const App = () => (
             <Route path="/admin/print-requests" element={
               <ProtectedRoute requireAdmin>
                 <PrintRequests />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/testimonials" element={
+              <ProtectedRoute requireAdmin>
+                <TestimonialsSettings />
               </ProtectedRoute>
             } />
             

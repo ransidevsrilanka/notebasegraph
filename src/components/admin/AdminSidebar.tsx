@@ -37,6 +37,7 @@ import {
   Gift,
   Languages,
   Printer,
+  Star,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -103,6 +104,7 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
       items: [
         { label: 'Pricing', href: '/admin/pricing', icon: DollarSign, badge: 0 },
         { label: 'Branding', href: '/admin/branding', icon: Palette, badge: 0 },
+        { label: 'Testimonials', href: '/admin/testimonials', icon: Star, badge: 0 },
         { label: 'Payment Settings', href: '/admin/payment-settings', icon: Settings, badge: 0 },
         { label: 'Security', href: '/admin/security', icon: Shield, badge: 0 },
       ],

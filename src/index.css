@@ -592,7 +592,7 @@
     transform: scale(1.02);
   }
 
-  /* Nav link underline animation */
+  /* Nav link underline animation - curved pill shape */
   .nav-link-underline {
     position: relative;
   }
@@ -600,17 +600,20 @@
   .nav-link-underline::after {
     content: '';
     position: absolute;
-    bottom: -2px;
-    left: 0;
+    bottom: 2px;
+    left: 50%;
     width: 0;
-    height: 2px;
+    height: 3px;
     background: linear-gradient(90deg, hsl(var(--brand)), hsl(var(--brand-light)));
-    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    border-radius: 1px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 999px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px hsl(var(--brand) / 0.4);
   }
 
-  .nav-link-underline:hover::after {
-    width: 100%;
+  .nav-link-underline:hover::after,
+  .nav-link-underline[data-active="true"]::after {
+    width: 60%;
   }
 
   /* Button ripple effect */
