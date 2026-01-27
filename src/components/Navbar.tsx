@@ -12,11 +12,29 @@ const Navbar = () => {
 
   const navLinks = [
     { name: "Home", path: "/" },
+    { name: "Features", path: "/#features" },
     { name: "Pricing", path: "/pricing" },
+    { name: "Reviews", path: "/#reviews" },
+    { name: "FAQ", path: "/#faq" },
     { name: "About", path: "/about" },
   ];
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path.startsWith("/#")) return false;
+    return location.pathname === path;
+  };
+
+  const handleNavClick = (path: string) => {
+    if (path.startsWith("/#")) {
+      const id = path.replace("/#", "");
+      if (location.pathname === "/") {
+        document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.location.href = path;
+      }
+    }
+    setIsOpen(false);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -27,23 +45,27 @@ const Navbar = () => {
   }, []);
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-vault-dark/90 backdrop-blur-xl border-b border-border/50' : 'bg-transparent'
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
+      scrolled ? 'bg-vault-dark/95 backdrop-blur-xl border-b border-border/50 shadow-lg shadow-black/20' : 'bg-transparent'
     }`}>
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 z-10">
+          {/* Logo with hover animation */}
+          <Link to="/" className="flex items-center gap-2 z-10 group">
             {!isLoading && (
               branding.logoImage ? (
-                <img src={branding.logoImage} alt={branding.siteName} className="w-8 h-8 md:w-10 md:h-10 rounded-lg object-cover" />
+                <img 
+                  src={branding.logoImage} 
+                  alt={branding.siteName} 
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-lg object-cover transition-transform duration-300 group-hover:scale-110" 
+                />
               ) : branding.logoText ? (
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
                   <span className="font-display text-base md:text-lg font-bold text-brand">{branding.logoText}</span>
                 </div>
               ) : null
             )}
-            <span className="font-display text-lg md:text-xl font-bold text-foreground tracking-tight hidden sm:block">
+            <span className="font-display text-lg md:text-xl font-bold text-foreground tracking-tight hidden sm:block group-hover:text-brand transition-colors duration-300">
               {branding.siteName}
             </span>
           </Link>
@@ -51,31 +73,43 @@ const Navbar = () => {
           {/* Centered Desktop Navigation */}
           <div className="hidden md:flex items-center justify-center absolute left-1/2 -translate-x-1/2">
             <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-glass/50 border border-border/30 backdrop-blur-sm">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  to={link.path}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                    isActive(link.path)
-                      ? "bg-brand/10 text-brand"
-                      : "text-muted-foreground hover:text-foreground hover:bg-glass"
-                  }`}
-                >
-                  {link.name}
-                </Link>
+              {navLinks.map((link, index) => (
+                link.path.startsWith("/#") ? (
+                  <button
+                    key={link.name}
+                    onClick={() => handleNavClick(link.path)}
+                    className="nav-link-underline px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 text-muted-foreground hover:text-foreground hover:bg-glass"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    {link.name}
+                  </button>
+                ) : (
+                  <Link
+                    key={link.name}
+                    to={link.path}
+                    className={`nav-link-underline px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                      isActive(link.path)
+                        ? "bg-brand/10 text-brand"
+                        : "text-muted-foreground hover:text-foreground hover:bg-glass"
+                    }`}
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    {link.name}
+                  </Link>
+                )
               ))}
             </div>
           </div>
 
-          {/* CTA Buttons */}
+          {/* CTA Buttons with shimmer effect */}
           <div className="hidden md:flex items-center gap-3 z-10">
             <Link to="/auth">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground font-medium hover-magnetic">
                 Sign In
               </Button>
             </Link>
             <Link to="/access">
-              <Button variant="brand" size="sm" className="gap-2 font-semibold">
+              <Button variant="brand" size="sm" className="gap-2 font-semibold btn-shimmer btn-ripple">
                 <Key className="w-4 h-4" />
                 Enter Code
               </Button>
@@ -91,24 +125,46 @@ const Navbar = () => {
           </button>
         </div>
 
-        {/* Mobile Navigation */}
-        <div className={`md:hidden overflow-hidden transition-all duration-300 ease-out ${
-          isOpen ? 'max-h-80 opacity-100' : 'max-h-0 opacity-0'
+        {/* Mobile Navigation with staggered reveal */}
+        <div className={`md:hidden overflow-hidden transition-all duration-500 ease-out ${
+          isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'
         }`}>
-          <div className="py-4 space-y-2 border-t border-border/50 bg-vault-dark">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                to={link.path}
-                onClick={() => setIsOpen(false)}
-                className={`block px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                  isActive(link.path)
-                    ? "bg-brand/10 text-brand"
-                    : "text-muted-foreground hover:text-foreground hover:bg-glass"
-                }`}
-              >
-                {link.name}
-              </Link>
+          <div className="py-4 space-y-2 border-t border-border/50 bg-vault-dark/95 backdrop-blur-xl">
+            {navLinks.map((link, index) => (
+              link.path.startsWith("/#") ? (
+                <button
+                  key={link.name}
+                  onClick={() => handleNavClick(link.path)}
+                  className="block w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-glass"
+                  style={{ 
+                    animationDelay: `${index * 50}ms`,
+                    opacity: isOpen ? 1 : 0,
+                    transform: isOpen ? 'translateY(0)' : 'translateY(-10px)',
+                    transition: `all 0.3s ease ${index * 50}ms`
+                  }}
+                >
+                  {link.name}
+                </button>
+              ) : (
+                <Link
+                  key={link.name}
+                  to={link.path}
+                  onClick={() => setIsOpen(false)}
+                  className={`block px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                    isActive(link.path)
+                      ? "bg-brand/10 text-brand"
+                      : "text-muted-foreground hover:text-foreground hover:bg-glass"
+                  }`}
+                  style={{ 
+                    animationDelay: `${index * 50}ms`,
+                    opacity: isOpen ? 1 : 0,
+                    transform: isOpen ? 'translateY(0)' : 'translateY(-10px)',
+                    transition: `all 0.3s ease ${index * 50}ms`
+                  }}
+                >
+                  {link.name}
+                </Link>
+              )
             ))}
             <div className="pt-2 space-y-2">
               <Link to="/auth" onClick={() => setIsOpen(false)}>
@@ -117,7 +173,7 @@ const Navbar = () => {
                 </Button>
               </Link>
               <Link to="/access" onClick={() => setIsOpen(false)}>
-                <Button variant="brand" size="sm" className="w-full gap-2">
+                <Button variant="brand" size="sm" className="w-full gap-2 btn-shimmer">
                   <Key className="w-4 h-4" />
                   Enter Code
                 </Button>

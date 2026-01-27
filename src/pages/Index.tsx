@@ -2,8 +2,10 @@ import Navbar from "@/components/Navbar";
 import ParallaxHero from "@/components/ParallaxHero";
 import FeaturesGrid from "@/components/FeaturesGrid";
 import StickyServices from "@/components/StickyServices";
+import TestimonialsSection from "@/components/TestimonialsSection";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import PricingSection from "@/components/PricingSection";
+import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
 
 const Index = () => {
@@ -13,7 +15,9 @@ const Index = () => {
       <ParallaxHero />
       <FeaturesGrid />
       <StickyServices />
+      <TestimonialsSection />
       <PricingSection />
+      <FAQSection />
       <WhyChooseUs />
       <Footer />
     </main>

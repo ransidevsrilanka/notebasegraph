@@ -482,4 +482,187 @@
   .border-glow:hover::before {
     opacity: 1;
   }
+
+  /* ===== NEW PREMIUM ANIMATIONS ===== */
+
+  /* Shimmer effect for CTAs */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--brand)) 0%,
+      hsl(var(--brand-light)) 50%,
+      hsl(var(--brand)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      transparent 100%
+    );
+    transition: left 0.5s ease;
+  }
+
+  .btn-shimmer:hover::after {
+    left: 100%;
+  }
+
+  /* Marquee animations */
+  @keyframes marquee-left {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+
+  @keyframes marquee-right {
+    from { transform: translateX(-50%); }
+    to { transform: translateX(0); }
+  }
+
+  .animate-marquee-left {
+    animation: marquee-left 30s linear infinite;
+  }
+
+  .animate-marquee-right {
+    animation: marquee-right 30s linear infinite;
+  }
+
+  /* Text reveal blur animation */
+  @keyframes text-reveal {
+    from { 
+      opacity: 0; 
+      filter: blur(10px); 
+      transform: translateY(20px); 
+    }
+    to { 
+      opacity: 1; 
+      filter: blur(0); 
+      transform: translateY(0); 
+    }
+  }
+
+  .animate-text-reveal {
+    animation: text-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Word-by-word reveal */
+  .word-reveal > span {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: text-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Gradient shift animation */
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  .gradient-animate {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  /* Magnetic hover effect */
+  .hover-magnetic {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hover-magnetic:hover {
+    transform: scale(1.02);
+  }
+
+  /* Nav link underline animation */
+  .nav-link-underline {
+    position: relative;
+  }
+
+  .nav-link-underline::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: linear-gradient(90deg, hsl(var(--brand)), hsl(var(--brand-light)));
+    transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 1px;
+  }
+
+  .nav-link-underline:hover::after {
+    width: 100%;
+  }
+
+  /* Button ripple effect */
+  .btn-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn-ripple::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  .btn-ripple:active::before {
+    width: 300px;
+    height: 300px;
+  }
+
+  /* Staggered reveal animation delays */
+  .stagger-delay-1 { animation-delay: 0.1s; }
+  .stagger-delay-2 { animation-delay: 0.2s; }
+  .stagger-delay-3 { animation-delay: 0.3s; }
+  .stagger-delay-4 { animation-delay: 0.4s; }
+  .stagger-delay-5 { animation-delay: 0.5s; }
+  .stagger-delay-6 { animation-delay: 0.6s; }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-shimmer,
+    .animate-marquee-left,
+    .animate-marquee-right,
+    .animate-text-reveal,
+    .animate-float,
+    .animate-pulse-glow,
+    .gradient-animate {
+      animation: none;
+    }
+    
+    .hover-magnetic:hover {
+      transform: none;
+    }
+    
+    .nav-link-underline::after {
+      transition: none;
+    }
+  }
 }
