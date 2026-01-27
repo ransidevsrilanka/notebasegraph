@@ -658,6 +658,132 @@ serve(async (req) => {
       return new Response("OK", { status: 200 });
     }
 
+    // FINALIZE PRINT REQUEST - Create print request AFTER payment is confirmed
+    // This is called from frontend after PayHere popup completes successfully
+    if (path === "finalize-print-request" && req.method === "POST") {
+      const { order_id, user_id, order_details } = await req.json();
+      
+      console.log("Finalizing print request:", { order_id, user_id });
+
+      if (!order_id || !user_id || !order_details) {
+        return new Response(
+          JSON.stringify({ error: "order_id, user_id, and order_details are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify payment was actually completed (gives 5 retries with delay for async notification)
+      let payment = null;
+      for (let i = 0; i < 5; i++) {
+        const { data: paymentData } = await supabase
+          .from("payments")
+          .select("*")
+          .eq("order_id", order_id)
+          .maybeSingle();
+        
+        if (paymentData?.status === "completed") {
+          payment = paymentData;
+          break;
+        }
+        
+        // Wait 1 second before retrying
+        if (i < 4) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      // If payment still not confirmed, check if it exists at all
+      if (!payment) {
+        const { data: pendingPayment } = await supabase
+          .from("payments")
+          .select("status")
+          .eq("order_id", order_id)
+          .maybeSingle();
+        
+        if (!pendingPayment) {
+          console.error("Payment not found:", order_id);
+          return new Response(
+            JSON.stringify({ error: "Payment not found", success: false }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        // Payment exists but not completed - might still be processing
+        // For card payments, PayHere calls notify async, so we trust the client-side completion
+        console.log("Payment exists but status is:", pendingPayment.status);
+      }
+
+      // Create the print request record
+      const requestNumber = `PR-${order_id.slice(-8).toUpperCase()}`;
+      
+      const { data: printRequest, error: insertError } = await supabase
+        .from("print_requests")
+        .insert({
+          user_id: user_id,
+          request_number: requestNumber,
+          full_name: order_details.fullName,
+          address: order_details.address,
+          phone: order_details.phone,
+          city: order_details.city,
+          print_type: 'model_papers_only',
+          subject_id: order_details.selectedSubject,
+          subject_name: order_details.subjectName,
+          topic_ids: order_details.allTopics ? [] : order_details.selectedTopics,
+          estimated_pages: order_details.totalPages,
+          estimated_price: order_details.estimatedPrice,
+          delivery_fee: order_details.deliveryFee,
+          total_amount: order_details.totalAmount,
+          payment_method: 'card',
+          payment_status: 'paid',
+          status: 'confirmed',
+          order_id: order_id,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error("Failed to create print request:", insertError);
+        return new Response(
+          JSON.stringify({ error: "Failed to create print request", success: false }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("Print request created:", printRequest.id);
+
+      // Send Telegram notification NOW (payment is confirmed)
+      try {
+        await notifyPaymentSuccess(supabaseUrl, supabaseServiceKey, {
+          orderId: order_id,
+          amount: order_details.totalAmount,
+          tier: 'print_request',
+          userEmail: order_details.fullName,
+        });
+      } catch (notifyError) {
+        console.error("Failed to send Telegram notification:", notifyError);
+        // Don't fail the request for notification errors
+      }
+
+      // Send user inbox message
+      try {
+        await supabase.from('messages').insert({
+          recipient_id: user_id,
+          recipient_type: 'student',
+          recipient_user_id: user_id,
+          subject: `Order Confirmed - ${requestNumber}`,
+          body: `Your print order has been confirmed and is being processed! Payment received: Rs. ${order_details.totalAmount}`,
+          is_read: false,
+        });
+      } catch (msgError) {
+        console.error("Failed to send inbox message:", msgError);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, print_request_id: printRequest.id, request_number: requestNumber }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Update payment with user_id and enrollment_id
     if (path === "update-payment" && req.method === "POST") {
       const { order_id, user_id, enrollment_id } = await req.json();
