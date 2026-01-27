@@ -1801,6 +1801,45 @@ export type Database = {
         }
         Relationships: []
       }
+      student_testimonials: {
+        Row: {
+          created_at: string | null
+          grade: string
+          id: string
+          is_active: boolean | null
+          message: string
+          name: string
+          rating: number
+          sort_order: number | null
+          stream: string | null
+          year: string
+        }
+        Insert: {
+          created_at?: string | null
+          grade: string
+          id?: string
+          is_active?: boolean | null
+          message: string
+          name: string
+          rating?: number
+          sort_order?: number | null
+          stream?: string | null
+          year: string
+        }
+        Update: {
+          created_at?: string | null
+          grade?: string
+          id?: string
+          is_active?: boolean | null
+          message?: string
+          name?: string
+          rating?: number
+          sort_order?: number | null
+          stream?: string | null
+          year?: string
+        }
+        Relationships: []
+      }
       subject_medium_requests: {
         Row: {
           admin_notes: string | null
@@ -1915,6 +1954,39 @@ export type Database = {
           stream?: string | null
           streams?: Json | null
           subject_code?: string | null
+        }
+        Relationships: []
+      }
+      teacher_testimonials: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          message: string
+          name: string
+          photo_url: string | null
+          sort_order: number | null
+          title: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message: string
+          name: string
+          photo_url?: string | null
+          sort_order?: number | null
+          title?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          message?: string
+          name?: string
+          photo_url?: string | null
+          sort_order?: number | null
+          title?: string | null
         }
         Relationships: []
       }

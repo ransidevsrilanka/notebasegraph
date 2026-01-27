@@ -634,16 +634,24 @@ const CreatorDashboard = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
+    <main className="min-h-screen bg-background dashboard-theme relative overflow-hidden">
+      {/* Premium background orbs */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-[10%] left-[15%] w-[400px] h-[400px] bg-brand/10 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[20%] right-[10%] w-[350px] h-[350px] bg-blue-500/8 rounded-full blur-[100px]" />
+        <div className="absolute top-[50%] right-[30%] w-[250px] h-[250px] bg-purple-500/6 rounded-full blur-[80px]" />
+      </div>
+      
       {/* Header */}
-      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+      <header className="bg-card/80 border-b border-border backdrop-blur-xl sticky top-0 z-50 relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-brand/5 via-transparent to-brand/5 pointer-events-none" />
+        <div className="container mx-auto px-4 py-4 relative">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link to="/" className="font-display text-xl font-bold text-foreground">
+              <Link to="/" className="font-display text-xl font-bold text-foreground hover:text-brand transition-colors">
                 Creator Dashboard
               </Link>
-              <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-medium">
+              <span className="px-3 py-1 rounded-full bg-gradient-to-r from-brand/20 to-brand/10 text-brand text-xs font-semibold border border-brand/20">
                 Creator
               </span>
             </div>
@@ -658,7 +666,7 @@ const CreatorDashboard = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 relative z-10">
         {/* Last Updated Timestamp */}
         <div className="flex items-center justify-end mb-2">
           <p className="text-xs text-muted-foreground">
@@ -666,10 +674,10 @@ const CreatorDashboard = () => {
           </p>
         </div>
 
-        {/* Welcome */}
+        {/* Welcome - Enhanced */}
         <div className="mb-8">
-          <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-            Welcome back, {creatorData?.display_name || profile?.full_name || 'Creator'}
+          <h1 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-1">
+            Welcome back, <span className="text-brand-gradient">{creatorData?.display_name || profile?.full_name || 'Creator'}</span>
           </h1>
           <p className="text-muted-foreground">
             Here's how your referrals are performing
@@ -688,56 +696,56 @@ const CreatorDashboard = () => {
           </div>
         )}
 
-        {/* Stats Cards - Enhanced with gradients */}
+        {/* Stats Cards - Enhanced with gradients and glow */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="glass-card p-6 relative overflow-hidden group hover:border-blue-500/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-blue-500/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(59,130,246,0.15)]">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                  <Users className="w-6 h-6 text-blue-500" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/30 to-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-lg shadow-blue-500/10">
+                  <Users className="w-6 h-6 text-blue-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground">{totalReferred}</p>
+              <p className="text-3xl font-bold text-foreground mb-1">{totalReferred}</p>
               <p className="text-muted-foreground text-sm">Total Users Referred</p>
             </div>
           </div>
 
-          <div className="glass-card p-6 relative overflow-hidden group hover:border-green-500/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-green-500/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(34,197,94,0.15)]">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/30 to-green-500/10 flex items-center justify-center border border-green-500/20">
-                  <TrendingUp className="w-6 h-6 text-green-500" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/30 to-green-500/10 flex items-center justify-center border border-green-500/20 shadow-lg shadow-green-500/10">
+                  <TrendingUp className="w-6 h-6 text-green-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground">{monthlyPaidUsers}</p>
+              <p className="text-3xl font-bold text-foreground mb-1">{monthlyPaidUsers}</p>
               <p className="text-muted-foreground text-sm">Paid Users This Month</p>
             </div>
           </div>
 
-          <div className="glass-card p-6 relative overflow-hidden group hover:border-purple-500/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-purple-500/40 transition-all duration-300 hover:shadow-[0_0_30px_rgba(168,85,247,0.15)]">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-purple-500/10 flex items-center justify-center border border-purple-500/20">
-                  <Award className="w-6 h-6 text-purple-500" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-purple-500/10 flex items-center justify-center border border-purple-500/20 shadow-lg shadow-purple-500/10">
+                  <Award className="w-6 h-6 text-purple-400" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground">{lifetimePaidUsers}</p>
+              <p className="text-3xl font-bold text-foreground mb-1">{lifetimePaidUsers}</p>
               <p className="text-muted-foreground text-sm">Lifetime Paid Users</p>
             </div>
           </div>
 
-          <div className="glass-card p-6 relative overflow-hidden group hover:border-brand/30 transition-colors">
-            <div className="absolute inset-0 bg-gradient-to-br from-brand/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-brand/40 transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--brand)/0.2)] animate-pulse-glow">
+            <div className="absolute inset-0 bg-gradient-to-br from-brand/10 to-transparent opacity-100 transition-opacity" />
             <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/30 to-brand/10 flex items-center justify-center border border-brand/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/40 to-brand/20 flex items-center justify-center border border-brand/30 shadow-lg shadow-brand/20">
                   <Wallet className="w-6 h-6 text-brand" />
                 </div>
               </div>
-              <p className="text-2xl font-bold text-foreground">LKR {availableBalance.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-brand mb-1">LKR {availableBalance.toLocaleString()}</p>
               <p className="text-muted-foreground text-sm">Available Balance</p>
             </div>
           </div>
@@ -746,8 +754,11 @@ const CreatorDashboard = () => {
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Earnings Chart */}
-          <div className="glass-card p-6">
-            <h3 className="font-semibold text-foreground mb-4">Monthly Earnings</h3>
+          <div className="glass-card p-6 hover:border-brand/20 transition-colors">
+            <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-brand" />
+              Monthly Earnings
+            </h3>
             {monthlyData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={monthlyData}>
