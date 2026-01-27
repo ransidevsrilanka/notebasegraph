@@ -46,11 +46,41 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Use the global PayHere interface from PaymentMethodDialog
+interface PrintPayHerePayment {
+  sandbox: boolean;
+  merchant_id: string;
+  return_url: string;
+  cancel_url: string;
+  notify_url: string;
+  order_id: string;
+  items: string;
+  amount: string;
+  currency: string;
+  hash: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  country: string;
+  custom_1?: string;
+  custom_2?: string;
+}
+
 interface PrintSettings {
   notes_price_per_page: number;
   model_paper_price_per_page: number;
   base_delivery_fee: number;
   cod_extra_fee: number;
+}
+
+interface Paper {
+  id: string;
+  title: string;
+  page_count: number;
+  topic_id: string;
 }
 
 interface BankSettings {
@@ -128,20 +158,22 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   const [settings, setSettings] = useState<PrintSettings | null>(null);
   const [bankSettings, setBankSettings] = useState<BankSettings | null>(null);
   
-  // Step 2: Subject & Topics
+  // Step 1: Subject & Topics & Papers
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [papers, setPapers] = useState<Paper[]>([]);
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [selectedPapers, setSelectedPapers] = useState<string[]>([]);
   const [allTopics, setAllTopics] = useState(false);
   
-  // Step 3: Delivery Info
+  // Step 2: Delivery Info
   const [fullName, setFullName] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   
-  // Step 4: Payment
+  // Step 3: Payment
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cod');
   
   // Bank Transfer Flow
@@ -152,8 +184,10 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   // COD confirmation
   const [codConfirmed, setCodConfirmed] = useState(false);
   
-  // Pricing
-  const [estimatedPages, setEstimatedPages] = useState(50);
+  // Auto-calculated total pages from selected papers
+  const totalPages = papers
+    .filter(p => selectedPapers.includes(p.id))
+    .reduce((sum, p) => sum + (p.page_count || 1), 0);
   
   // Filter orders
   const activeOrders = existingOrders.filter(o => ACTIVE_STATUSES.includes(o.status));
@@ -178,8 +212,24 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   useEffect(() => {
     if (selectedSubject) {
       loadTopics(selectedSubject);
+      setSelectedTopics([]);
+      setSelectedPapers([]);
+      setPapers([]);
     }
   }, [selectedSubject]);
+  
+  // Load papers when topics change
+  useEffect(() => {
+    if (selectedTopics.length > 0 || allTopics) {
+      const topicIds = allTopics ? topics.map(t => t.id) : selectedTopics;
+      if (topicIds.length > 0) {
+        loadPapers(topicIds);
+      }
+    } else {
+      setPapers([]);
+      setSelectedPapers([]);
+    }
+  }, [selectedTopics, allTopics, topics]);
   
   const loadExistingOrders = async () => {
     if (!user) return;
@@ -248,10 +298,15 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     // Build query with grade AND medium filter to avoid duplicates
     let query = supabase
       .from('subjects')
-      .select('id, name')
+      .select('id, name, streams')
       .eq('grade', enrollment.grade)
       .eq('medium', enrollment.medium)
       .eq('is_active', true);
+    
+    // For A/L students, also filter by stream
+    if (enrollment.stream && !enrollment.grade.startsWith('ol_')) {
+      query = query.contains('streams', [enrollment.stream]);
+    }
     
     if (subjectNames.length > 0) {
       query = query.in('name', subjectNames);
@@ -280,6 +335,38 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     if (data) setTopics(data);
   };
   
+  const loadPapers = async (topicIds: string[]) => {
+    const { data } = await supabase
+      .from('notes')
+      .select('id, title, page_count, topic_id')
+      .in('topic_id', topicIds)
+      .eq('is_model_paper', true)
+      .eq('is_active', true)
+      .order('title');
+    
+    if (data) {
+      setPapers(data as Paper[]);
+      // Auto-select all papers by default
+      setSelectedPapers(data.map(p => p.id));
+    }
+  };
+  
+  // Load PayHere SDK
+  const loadPayHereScript = (): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (window.payhere) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://www.payhere.lk/lib/payhere.js";
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Failed to load PayHere SDK"));
+      document.body.appendChild(script);
+    });
+  };
+  
   const generateReferenceNumber = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = 'PR-';
@@ -295,7 +382,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     // Only model papers - always use model paper pricing
     const pricePerPage = settings.model_paper_price_per_page;
     
-    const itemsTotal = estimatedPages * pricePerPage;
+    // Use auto-calculated totalPages from selected papers
+    const itemsTotal = totalPages * pricePerPage;
     const deliveryFee = settings.base_delivery_fee;
     const codFee = paymentMethod === 'cod' ? settings.cod_extra_fee : 0;
     
@@ -319,6 +407,21 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     if (!user || !enrollment) return;
     
     try {
+      // Load PayHere SDK first
+      try {
+        await loadPayHereScript();
+      } catch (loadError) {
+        console.log('First PayHere load attempt failed, retrying...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        try {
+          await loadPayHereScript();
+        } catch (retryError) {
+          toast.error("Payment system unavailable. Please try again or choose a different method.");
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       // Call with explicit generate-hash path for print request payments
       const { data, error } = await supabase.functions.invoke('payhere-checkout/generate-hash', {
         body: {
@@ -339,35 +442,66 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       
       if (error) {
         console.error('PayHere checkout error:', error);
-        toast.error('Failed to initiate payment');
+        toast.error('Failed to initiate payment. Please try again or choose a different method.');
         setIsLoading(false);
         return;
       }
       
-      // Create PayHere form and submit
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = data.sandbox 
-        ? 'https://sandbox.payhere.lk/pay/checkout' 
-        : 'https://www.payhere.lk/pay/checkout';
+      const notifyUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/payhere-checkout/notify`;
+      const returnUrl = `${window.location.origin}/dashboard?print_payment=success`;
+      const cancelUrl = `${window.location.origin}/dashboard?print_payment=cancelled`;
       
-      // Add all PayHere fields
-      Object.entries(data).forEach(([key, value]) => {
-        if (key !== 'sandbox') {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = String(value);
-          form.appendChild(input);
-        }
-      });
+      // Set up PayHere callbacks
+      window.payhere.onCompleted = (orderId: string) => {
+        console.log("Print payment completed. OrderID:", orderId);
+        toast.success("Payment completed! Your order is confirmed.");
+        loadExistingOrders();
+      };
       
-      document.body.appendChild(form);
-      form.submit();
+      window.payhere.onDismissed = () => {
+        console.log("Payment dismissed by user");
+        toast.info("Payment cancelled. You can try again or choose a different payment method.");
+        setIsLoading(false);
+      };
+      
+      window.payhere.onError = (error: string) => {
+        console.error("PayHere SDK error:", error);
+        toast.error(`Payment failed: ${error}. Please try again or choose a different payment method.`);
+        setIsLoading(false);
+      };
+      
+      // Create payment object for popup
+      const payment: PrintPayHerePayment = {
+        sandbox: data.sandbox || false,
+        merchant_id: data.merchant_id,
+        return_url: returnUrl,
+        cancel_url: cancelUrl,
+        notify_url: notifyUrl,
+        order_id: data.order_id,
+        items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,
+        amount: calculateTotal().toFixed(2),
+        currency: "LKR",
+        hash: data.hash,
+        first_name: fullName.split(' ')[0] || 'Customer',
+        last_name: fullName.split(' ').slice(1).join(' ') || 'User',
+        email: user.email || '',
+        phone: phone,
+        address: address,
+        city: city || 'Colombo',
+        country: "Sri Lanka",
+        custom_1: printRequestId,
+        custom_2: "print_request",
+      };
+      
+      // Close dialog first, then open PayHere popup
+      onOpenChange(false);
+      setTimeout(() => {
+        window.payhere.startPayment(payment as any);
+      }, 100);
       
     } catch (err: any) {
       console.error('Card payment error:', err);
-      toast.error('Failed to process payment');
+      toast.error('Failed to process payment. Please try again or choose a different method.');
       setIsLoading(false);
     }
   };
@@ -403,7 +537,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         subject_id: selectedSubject,
         subject_name: subjectName,
         topic_ids: allTopics ? [] : selectedTopics,
-        estimated_pages: estimatedPages,
+        estimated_pages: totalPages,
         estimated_price: calculateTotal() - (settings?.base_delivery_fee || 0) - (paymentMethod === 'cod' ? settings?.cod_extra_fee || 0 : 0),
         delivery_fee: settings?.base_delivery_fee || 0,
         total_amount: calculateTotal(),
@@ -497,6 +631,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     setStep(1);
     setSelectedSubject('');
     setSelectedTopics([]);
+    setSelectedPapers([]);
+    setPapers([]);
     setAllTopics(false);
     setAddress('');
     setCity('');
@@ -508,7 +644,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   
   const canProceed = () => {
     switch (step) {
-      case 1: return selectedSubject && (allTopics || selectedTopics.length > 0);
+      case 1: return selectedSubject && (allTopics || selectedTopics.length > 0) && selectedPapers.length > 0 && totalPages > 0;
       case 2: return fullName && address && phone;
       case 3: 
         if (paymentMethod === 'bank_transfer') return receiptFile !== null;
@@ -709,16 +845,49 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                   </div>
                 )}
                 
+                {/* Paper Selection */}
+                {papers.length > 0 && (
+                  <div className="space-y-3">
+                    <Label>Select Papers to Print</Label>
+                    <div className="space-y-2 max-h-40 overflow-y-auto border border-border rounded-lg p-2">
+                      {papers.map((paper) => (
+                        <div
+                          key={paper.id}
+                          className="flex items-center justify-between gap-2 p-2 hover:bg-secondary/50 rounded cursor-pointer"
+                          onClick={() => {
+                            setSelectedPapers(prev =>
+                              prev.includes(paper.id)
+                                ? prev.filter(p => p !== paper.id)
+                                : [...prev, paper.id]
+                            );
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Checkbox checked={selectedPapers.includes(paper.id)} />
+                            <span className="text-sm">{paper.title}</span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">{paper.page_count || 1} pages</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Auto-calculated page count - read only */}
                 <div className="p-3 bg-secondary/50 rounded-lg">
-                  <Label className="text-xs text-muted-foreground">Estimated Pages</Label>
-                  <Input
-                    type="number"
-                    value={estimatedPages}
-                    onChange={(e) => setEstimatedPages(parseInt(e.target.value) || 0)}
-                    min={1}
-                    max={500}
-                    className="mt-1"
-                  />
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Total Pages (Auto-calculated)</Label>
+                      <p className="text-lg font-semibold text-foreground">{totalPages} pages</p>
+                    </div>
+                    <div className="text-right">
+                      <Label className="text-xs text-muted-foreground">Selected Papers</Label>
+                      <p className="text-lg font-semibold text-foreground">{selectedPapers.length}</p>
+                    </div>
+                  </div>
+                  {totalPages === 0 && selectedPapers.length === 0 && (allTopics || selectedTopics.length > 0) && (
+                    <p className="text-xs text-amber-500 mt-2">No papers available for selected topics</p>
+                  )}
                 </div>
               </div>
             )}
@@ -946,7 +1115,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                       <span className="text-sm font-medium">Secure Card Payment via PayHere</span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
-                      You will be redirected to PayHere's secure payment page after confirming your order.
+                      A secure payment popup will open after confirming your order. Please do not close it until payment is complete.
                     </p>
                     <div className="flex justify-between p-3 bg-brand/10 rounded-lg mt-3">
                       <span className="font-medium">Amount to Pay</span>
@@ -1001,8 +1170,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                     <span className="text-foreground font-medium">{allTopics ? 'All Topics' : `${selectedTopics.length} selected`}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Est. Pages</span>
-                    <span className="text-foreground font-medium">{estimatedPages}</span>
+                    <span className="text-muted-foreground">Papers / Pages</span>
+                    <span className="text-foreground font-medium">{selectedPapers.length} papers / {totalPages} pages</span>
                   </div>
                   <hr className="border-border" />
                   <div className="flex justify-between text-sm">
