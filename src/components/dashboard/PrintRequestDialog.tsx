@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -25,7 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import {
   Printer,
   FileText,
-  Scroll,
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
@@ -41,12 +39,11 @@ import {
   Plus,
   Upload,
   Copy,
-  AlertCircle,
   History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Use the global PayHere interface from PaymentMethodDialog
+// PayHere types
 interface PrintPayHerePayment {
   sandbox: boolean;
   merchant_id: string;
@@ -114,6 +111,22 @@ interface PrintOrder {
   created_at: string;
 }
 
+interface OrderDetails {
+  fullName: string;
+  address: string;
+  phone: string;
+  city: string;
+  selectedSubject: string;
+  selectedTopics: string[];
+  selectedPapers: string[];
+  allTopics: boolean;
+  totalPages: number;
+  subjectName: string;
+  totalAmount: number;
+  deliveryFee: number;
+  estimatedPrice: number;
+}
+
 interface PrintRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -149,6 +162,10 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   
+  // Refs to store order details for card payment callback
+  const orderDetailsRef = useRef<OrderDetails | null>(null);
+  const orderIdRef = useRef<string>('');
+  
   // Existing orders
   const [existingOrders, setExistingOrders] = useState<PrintOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
@@ -179,7 +196,6 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   // Bank Transfer Flow
   const [referenceNumber, setReferenceNumber] = useState('');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   
   // COD confirmation
   const [codConfirmed, setCodConfirmed] = useState(false);
@@ -276,7 +292,6 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         branch_name: bankData.branch_name || '',
       });
     } else {
-      // Default fallback
       setBankSettings({
         bank_name: 'Commercial Bank',
         account_number: '1234567890',
@@ -287,15 +302,31 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   };
   
   const loadSubjects = async () => {
-    if (!enrollment) return;
+    if (!enrollment) {
+      console.log('No enrollment found for subjects loading');
+      return;
+    }
     
-    const subjectNames = userSubjects ? [
-      userSubjects.subject_1,
-      userSubjects.subject_2,
-      userSubjects.subject_3,
-    ].filter(Boolean) : [];
+    // Get user's locked subjects if any (only if is_locked is true)
+    const userSubjectsAny = userSubjects as any;
+    const isLocked = userSubjectsAny?.is_locked === true;
+    const subjectNames = isLocked ? [
+      userSubjects?.subject_1,
+      userSubjects?.subject_2,
+      userSubjects?.subject_3,
+    ].filter(Boolean) as string[] : [];
     
-    // Build query with grade AND medium filter to avoid duplicates
+    console.log('Loading subjects for:', { 
+      grade: enrollment.grade, 
+      medium: enrollment.medium, 
+      stream: enrollment.stream,
+      isLocked,
+      lockedSubjects: subjectNames 
+    });
+    
+    let subjectsFound: Subject[] = [];
+    
+    // Strategy 1: Try subjects table with grade + medium filter
     let query = supabase
       .from('subjects')
       .select('id, name, streams')
@@ -306,10 +337,6 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     // If user has locked subjects, filter by those names only
     if (subjectNames.length > 0) {
       query = query.in('name', subjectNames);
-    } 
-    // For A/L students without locked subjects, filter by stream
-    else if (enrollment.stream && !enrollment.grade.startsWith('ol_')) {
-      query = query.contains('streams', [enrollment.stream]);
     }
     
     const { data, error } = await query;
@@ -318,10 +345,30 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       console.error('Error loading subjects:', error);
     }
     
-    // If no data found, fallback to stream_subjects table
-    if (!data || data.length === 0) {
-      console.log('No subjects found in subjects table, falling back to stream_subjects');
-      const stream = enrollment.grade.startsWith('ol_') ? 'ol' : enrollment.stream;
+    if (data && data.length > 0) {
+      // For A/L without locked subjects, filter by stream
+      let filteredData = data;
+      if (subjectNames.length === 0 && enrollment.stream && !enrollment.grade?.startsWith('ol_')) {
+        filteredData = data.filter(s => {
+          const streams = (s as any).streams;
+          return streams && Array.isArray(streams) && streams.includes(enrollment.stream);
+        });
+      }
+      
+      if (filteredData.length > 0) {
+        // Deduplicate by name
+        const uniqueSubjects = filteredData.filter(
+          (subject, index, self) => index === self.findIndex(s => s.name === subject.name)
+        );
+        subjectsFound = uniqueSubjects.map(s => ({ id: s.id, name: s.name }));
+      }
+    }
+    
+    // Strategy 2: Fallback to stream_subjects table if no results
+    if (subjectsFound.length === 0) {
+      console.log('Falling back to stream_subjects table');
+      const stream = enrollment.grade?.startsWith('ol_') ? 'ol' : enrollment.stream;
+      
       if (stream) {
         const { data: streamData } = await supabase
           .from('stream_subjects')
@@ -330,21 +377,18 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
           .order('sort_order');
         
         if (streamData && streamData.length > 0) {
-          // Map stream_subjects to Subject interface
-          setSubjects(streamData.map(s => ({ id: s.id, name: s.subject_name })));
-          return;
+          // Filter by locked subjects if user has them
+          let filtered = streamData;
+          if (subjectNames.length > 0) {
+            filtered = streamData.filter(s => subjectNames.includes(s.subject_name));
+          }
+          subjectsFound = filtered.map(s => ({ id: s.id, name: s.subject_name }));
         }
       }
     }
     
-    // Deduplicate by name (safety net)
-    if (data && data.length > 0) {
-      const uniqueSubjects = data.filter(
-        (subject, index, self) =>
-          index === self.findIndex(s => s.name === subject.name)
-      );
-      setSubjects(uniqueSubjects);
-    }
+    console.log('Subjects loaded:', subjectsFound.length, subjectsFound);
+    setSubjects(subjectsFound);
   };
   
   const loadTopics = async (subjectId: string) => {
@@ -402,10 +446,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
   const calculateTotal = () => {
     if (!settings) return 0;
     
-    // Only model papers - always use model paper pricing
     const pricePerPage = settings.model_paper_price_per_page;
-    
-    // Use auto-calculated totalPages from selected papers
     const itemsTotal = totalPages * pricePerPage;
     const deliveryFee = settings.base_delivery_fee;
     const codFee = paymentMethod === 'cod' ? settings.cod_extra_fee : 0;
@@ -419,18 +460,22 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
-        resolve(result.split(',')[1]); // Remove data:type;base64, prefix
+        resolve(result.split(',')[1]);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   };
   
-  const initiateCardPayment = async (printRequestId: string) => {
+  /**
+   * CARD PAYMENT FLOW - Deferred print request creation
+   * The print request is ONLY created after payment succeeds
+   */
+  const initiateCardPayment = async (orderDetails: OrderDetails) => {
     if (!user || !enrollment) return;
     
     try {
-      // Load PayHere SDK first
+      // Load PayHere SDK
       try {
         await loadPayHereScript();
       } catch (loadError) {
@@ -445,12 +490,19 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         }
       }
       
-      // Call with explicit generate-hash path for print request payments
+      // Generate temporary order ID (no database record yet)
+      const tempOrderId = `PR-${Date.now().toString(36).slice(-8).toUpperCase()}`;
+      
+      // Store order details for callback
+      orderDetailsRef.current = orderDetails;
+      orderIdRef.current = tempOrderId;
+      
+      // Call hash generation WITHOUT creating print_request
       const { data, error } = await supabase.functions.invoke('payhere-checkout/generate-hash', {
         body: {
-          order_id: `PR-${printRequestId.substring(0, 8)}`,
-          items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,
-          amount: calculateTotal(),
+          order_id: tempOrderId,
+          items: `Print Request - ${orderDetails.subjectName}`,
+          amount: orderDetails.totalAmount,
           currency: 'LKR',
           first_name: fullName.split(' ')[0] || 'Customer',
           last_name: fullName.split(' ').slice(1).join(' ') || '',
@@ -459,7 +511,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
           address: address,
           city: city || 'Colombo',
           country: 'Sri Lanka',
-          print_request_id: printRequestId,
+          // Pass order details to be stored on backend for later use
+          print_order_details: JSON.stringify(orderDetails),
         }
       });
       
@@ -475,22 +528,54 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       const cancelUrl = `${window.location.origin}/dashboard?print_payment=cancelled`;
       
       // Set up PayHere callbacks
-      window.payhere.onCompleted = (orderId: string) => {
-        console.log("Print payment completed. OrderID:", orderId);
-        toast.success("Payment completed! Your order is confirmed.");
-        loadExistingOrders();
+      window.payhere.onCompleted = async (orderId: string) => {
+        console.log("Card payment completed. OrderID:", orderId);
+        
+        // NOW create the print request via edge function (payment confirmed)
+        const details = orderDetailsRef.current;
+        if (!details) {
+          toast.error("Order details not found. Please contact support.");
+          return;
+        }
+        
+        try {
+          const { data: result, error: createError } = await supabase.functions.invoke('payhere-checkout/finalize-print-request', {
+            body: {
+              order_id: orderId,
+              user_id: user.id,
+              order_details: details,
+            }
+          });
+          
+          if (!createError && result?.success) {
+            toast.success("Payment successful! Your print order is confirmed.");
+            loadExistingOrders();
+            resetForm();
+            setViewMode('orders');
+          } else {
+            console.error('Failed to create print request:', createError);
+            toast.error("Payment received but order creation failed. Please contact support with order ID: " + orderId);
+          }
+        } catch (err) {
+          console.error('Error finalizing print request:', err);
+          toast.error("Payment received but order creation failed. Please contact support.");
+        }
+        
+        setIsLoading(false);
       };
       
       window.payhere.onDismissed = () => {
         console.log("Payment dismissed by user");
-        toast.info("Payment cancelled. You can try again or choose a different payment method.");
+        toast.info("Payment cancelled");
         setIsLoading(false);
+        // NO orphan record created!
       };
       
       window.payhere.onError = (error: string) => {
         console.error("PayHere SDK error:", error);
-        toast.error(`Payment failed: ${error}. Please try again or choose a different payment method.`);
+        toast.error(`Payment failed: ${error}`);
         setIsLoading(false);
+        // NO orphan record created!
       };
       
       // Create payment object for popup
@@ -501,8 +586,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         cancel_url: cancelUrl,
         notify_url: notifyUrl,
         order_id: data.order_id,
-        items: `Print Request - ${subjects.find(s => s.id === selectedSubject)?.name}`,
-        amount: calculateTotal().toFixed(2),
+        items: `Print Request - ${orderDetails.subjectName}`,
+        amount: orderDetails.totalAmount.toFixed(2),
         currency: "LKR",
         hash: data.hash,
         first_name: fullName.split(' ')[0] || 'Customer',
@@ -512,8 +597,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         address: address,
         city: city || 'Colombo',
         country: "Sri Lanka",
-        custom_1: printRequestId,
-        custom_2: "print_request",
+        custom_1: 'print_request_pending',
+        custom_2: `print_pending_${tempOrderId}`,
       };
       
       // Close dialog first, then open PayHere popup
@@ -529,6 +614,11 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     }
   };
   
+  /**
+   * Main submit handler
+   * - For CARD payments: Opens PayHere popup, creates record ONLY after payment succeeds
+   * - For BANK_TRANSFER/COD: Creates record immediately (requires manual admin verification)
+   */
   const handleSubmit = async () => {
     if (!user || !enrollment) return;
     
@@ -543,10 +633,36 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     
     setIsLoading(true);
     
-    const requestNumber = referenceNumber || generateReferenceNumber();
     const subjectName = subjects.find(s => s.id === selectedSubject)?.name || '';
     
-    // Create print request record (no storage - receipts go to Telegram)
+    // Build order details object
+    const orderDetails: OrderDetails = {
+      fullName,
+      address,
+      phone,
+      city,
+      selectedSubject,
+      selectedTopics,
+      selectedPapers,
+      allTopics,
+      totalPages,
+      subjectName,
+      totalAmount: calculateTotal(),
+      deliveryFee: settings?.base_delivery_fee || 0,
+      estimatedPrice: calculateTotal() - (settings?.base_delivery_fee || 0) - (paymentMethod === 'cod' ? settings?.cod_extra_fee || 0 : 0),
+    };
+    
+    // === CARD PAYMENT: Deferred creation ===
+    // Do NOT create database record yet - wait for payment confirmation
+    if (paymentMethod === 'card') {
+      await initiateCardPayment(orderDetails);
+      return;
+    }
+    
+    // === BANK TRANSFER / COD: Immediate creation ===
+    // These require manual admin verification anyway
+    const requestNumber = referenceNumber || generateReferenceNumber();
+    
     const { data: printRequest, error } = await supabase
       .from('print_requests')
       .insert({
@@ -561,9 +677,9 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         subject_name: subjectName,
         topic_ids: allTopics ? [] : selectedTopics,
         estimated_pages: totalPages,
-        estimated_price: calculateTotal() - (settings?.base_delivery_fee || 0) - (paymentMethod === 'cod' ? settings?.cod_extra_fee || 0 : 0),
-        delivery_fee: settings?.base_delivery_fee || 0,
-        total_amount: calculateTotal(),
+        estimated_price: orderDetails.estimatedPrice,
+        delivery_fee: orderDetails.deliveryFee,
+        total_amount: orderDetails.totalAmount,
         payment_method: paymentMethod,
         payment_status: paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending',
         status: paymentMethod === 'cod' ? 'confirmed' : 'pending',
@@ -579,7 +695,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       return;
     }
     
-    // Send Telegram notification for all print requests
+    // Send Telegram notification ONLY for bank_transfer and COD
+    // Card payments send notification after payment confirmation in edge function
     try {
       if (paymentMethod === 'bank_transfer' && receiptFile) {
         // Send receipt as document to Telegram
@@ -589,7 +706,7 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         await supabase.functions.invoke('send-telegram-document', {
           body: {
             type: 'print_request',
-            message: `Print Request Received\nRequest: ${requestNumber}\nCustomer: ${fullName}\nSubject: ${subjectName}\nTotal: Rs. ${calculateTotal()}`,
+            message: `🖨️ Print Request (Bank Transfer)\nRequest: ${requestNumber}\nCustomer: ${fullName}\nSubject: ${subjectName}\nTotal: Rs. ${orderDetails.totalAmount}`,
             file_base64: base64,
             file_name: `print_${requestNumber}.${fileExt}`,
             file_type: receiptFile.type,
@@ -599,49 +716,45 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
               phone: phone,
               subject: subjectName,
               payment_method: 'Bank Transfer',
-              total: calculateTotal()
+              total: orderDetails.totalAmount
             }
           }
         });
-      } else {
-        // Send text notification for COD/card
+      } else if (paymentMethod === 'cod') {
+        // Send text notification for COD only
         await supabase.functions.invoke('send-telegram-notification', {
           body: {
             type: 'new_print_request',
-            message: `New Print Request: ${requestNumber}`,
+            message: `🖨️ Print Request (COD)\nRequest: ${requestNumber}\nCustomer: ${fullName}\nSubject: ${subjectName}\nTotal: Rs. ${orderDetails.totalAmount}`,
             data: {
               request_number: requestNumber,
               customer: fullName,
               phone: phone,
               subject: subjectName,
-              payment_method: paymentMethod === 'cod' ? 'Cash on Delivery' : 'Card',
-              total: calculateTotal()
+              payment_method: 'Cash on Delivery',
+              total: orderDetails.totalAmount
             },
             priority: 'medium'
           }
         });
       }
+      // NOTE: No notification for 'card' here - will be sent after payment confirms in edge function
     } catch (telegramError) {
       console.error('Failed to send Telegram notification:', telegramError);
       // Don't fail the request for Telegram errors
     }
     
-    // Handle different payment methods
-    if (paymentMethod === 'card') {
-      await initiateCardPayment(printRequest.id);
-    } else if (paymentMethod === 'bank_transfer') {
+    // Complete the flow for bank_transfer and cod
+    if (paymentMethod === 'bank_transfer') {
       toast.success('Print request submitted! Please wait for verification.');
-      resetForm();
-      loadExistingOrders();
-      setViewMode('orders');
-      setIsLoading(false);
     } else if (paymentMethod === 'cod') {
       toast.success('Print request submitted! Payment will be collected upon delivery.');
-      resetForm();
-      loadExistingOrders();
-      setViewMode('orders');
-      setIsLoading(false);
     }
+    
+    resetForm();
+    loadExistingOrders();
+    setViewMode('orders');
+    setIsLoading(false);
   };
   
   const startNewRequest = () => {
@@ -663,6 +776,8 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
     setReceiptFile(null);
     setCodConfirmed(false);
     setReferenceNumber('');
+    orderDetailsRef.current = null;
+    orderIdRef.current = '';
   };
   
   const canProceed = () => {
@@ -792,124 +907,133 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
         {/* New Request Form */}
         {viewMode === 'new_request' && (
           <>
-            {/* Step Indicator - Now 4 steps instead of 5 */}
+            {/* Step Indicator */}
             <div className="flex items-center justify-center gap-2 py-4">
               {[1, 2, 3, 4].map((s) => (
                 <div key={s} className="flex items-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                     step === s
-                      ? 'bg-brand text-primary-foreground'
+                      ? 'bg-brand text-brand-foreground'
                       : step > s
-                      ? 'bg-green-500 text-white'
-                      : 'bg-secondary text-muted-foreground'
+                        ? 'bg-green-500 text-white'
+                        : 'bg-secondary text-muted-foreground'
                   }`}>
                     {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
                   </div>
-                  {s < 4 && <div className={`w-6 h-0.5 ${step > s ? 'bg-green-500' : 'bg-secondary'}`} />}
+                  {s < 4 && (
+                    <div className={`w-8 h-0.5 ${step > s ? 'bg-green-500' : 'bg-secondary'}`} />
+                  )}
                 </div>
               ))}
             </div>
             
-            {/* Step 1: Subject & Topics (was Step 2) */}
+            {/* Step 1: Select Subject & Papers */}
             {step === 1 && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Select Subject & Model Papers</h3>
-                
-                <div className="space-y-2">
-                  <Label>Subject</Label>
-                  <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a subject" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {subjects.map((subject) => (
-                        <SelectItem key={subject.id} value={subject.id}>
-                          {subject.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="text-center mb-4">
+                  <h3 className="font-medium text-foreground">Select Papers to Print</h3>
+                  <p className="text-sm text-muted-foreground">Choose your subject and model papers</p>
                 </div>
                 
-                {selectedSubject && topics.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="allTopics"
-                        checked={allTopics}
-                        onCheckedChange={(checked) => {
-                          setAllTopics(!!checked);
-                          if (checked) setSelectedTopics([]);
-                        }}
-                      />
-                      <Label htmlFor="allTopics" className="cursor-pointer">All Topics</Label>
-                    </div>
-                    
-                    {!allTopics && (
-                      <div className="space-y-2 max-h-40 overflow-y-auto">
-                        {topics.map((topic) => (
-                          <div
-                            key={topic.id}
-                            className="flex items-center gap-2 cursor-pointer"
-                            onClick={() => {
-                              setSelectedTopics(prev =>
-                                prev.includes(topic.id)
-                                  ? prev.filter(t => t !== topic.id)
-                                  : [...prev, topic.id]
-                              );
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Subject</Label>
+                    <Select value={selectedSubject} onValueChange={setSelectedSubject}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select subject" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {subjects.map((subject) => (
+                          <SelectItem key={subject.id} value={subject.id}>
+                            {subject.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {subjects.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No subjects available for your enrollment</p>
+                    )}
+                  </div>
+                  
+                  {selectedSubject && topics.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Topics</Label>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="allTopics"
+                            checked={allTopics}
+                            onCheckedChange={(checked) => {
+                              setAllTopics(checked === true);
+                              if (checked) setSelectedTopics([]);
                             }}
-                          >
-                            <Checkbox checked={selectedTopics.includes(topic.id)} />
-                            <span className="text-sm">{topic.name}</span>
+                          />
+                          <label htmlFor="allTopics" className="text-sm text-muted-foreground cursor-pointer">
+                            All Topics
+                          </label>
+                        </div>
+                      </div>
+                      
+                      {!allTopics && (
+                        <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                          {topics.map((topic) => (
+                            <div key={topic.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={topic.id}
+                                checked={selectedTopics.includes(topic.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedTopics([...selectedTopics, topic.id]);
+                                  } else {
+                                    setSelectedTopics(selectedTopics.filter(id => id !== topic.id));
+                                  }
+                                }}
+                              />
+                              <label htmlFor={topic.id} className="text-sm cursor-pointer truncate">
+                                {topic.name}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {papers.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Model Papers ({papers.length})</Label>
+                        <span className="text-sm text-muted-foreground">
+                          {selectedPapers.length} selected • {totalPages} pages
+                        </span>
+                      </div>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {papers.map((paper) => (
+                          <div key={paper.id} className="flex items-center justify-between p-2 border border-border rounded">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={paper.id}
+                                checked={selectedPapers.includes(paper.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedPapers([...selectedPapers, paper.id]);
+                                  } else {
+                                    setSelectedPapers(selectedPapers.filter(id => id !== paper.id));
+                                  }
+                                }}
+                              />
+                              <FileText className="w-4 h-4 text-muted-foreground" />
+                              <label htmlFor={paper.id} className="text-sm cursor-pointer truncate max-w-[200px]">
+                                {paper.title}
+                              </label>
+                            </div>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {paper.page_count || 1} pages
+                            </span>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* Paper Selection */}
-                {papers.length > 0 && (
-                  <div className="space-y-3">
-                    <Label>Select Papers to Print</Label>
-                    <div className="space-y-2 max-h-40 overflow-y-auto border border-border rounded-lg p-2">
-                      {papers.map((paper) => (
-                        <div
-                          key={paper.id}
-                          className="flex items-center justify-between gap-2 p-2 hover:bg-secondary/50 rounded cursor-pointer"
-                          onClick={() => {
-                            setSelectedPapers(prev =>
-                              prev.includes(paper.id)
-                                ? prev.filter(p => p !== paper.id)
-                                : [...prev, paper.id]
-                            );
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox checked={selectedPapers.includes(paper.id)} />
-                            <span className="text-sm">{paper.title}</span>
-                          </div>
-                          <span className="text-xs text-muted-foreground">{paper.page_count || 1} pages</span>
-                        </div>
-                      ))}
                     </div>
-                  </div>
-                )}
-                
-                {/* Auto-calculated page count - read only */}
-                <div className="p-3 bg-secondary/50 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Total Pages (Auto-calculated)</Label>
-                      <p className="text-lg font-semibold text-foreground">{totalPages} pages</p>
-                    </div>
-                    <div className="text-right">
-                      <Label className="text-xs text-muted-foreground">Selected Papers</Label>
-                      <p className="text-lg font-semibold text-foreground">{selectedPapers.length}</p>
-                    </div>
-                  </div>
-                  {totalPages === 0 && selectedPapers.length === 0 && (allTopics || selectedTopics.length > 0) && (
-                    <p className="text-xs text-amber-500 mt-2">No papers available for selected topics</p>
                   )}
                 </div>
               </div>
@@ -918,58 +1042,55 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
             {/* Step 2: Delivery Info */}
             {step === 2 && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Delivery Information</h3>
+                <div className="text-center mb-4">
+                  <h3 className="font-medium text-foreground">Delivery Information</h3>
+                  <p className="text-sm text-muted-foreground">Where should we deliver your printouts?</p>
+                </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Full Name
+                    </Label>
                     <Input
-                      id="fullName"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Your full name"
-                      className="pl-10"
                     />
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="address">Delivery Address</Label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                    <Textarea
-                      id="address"
+                  
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Phone Number
+                    </Label>
+                    <Input
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="07X XXX XXXX"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      Delivery Address
+                    </Label>
+                    <Input
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
-                      placeholder="Street address, apartment, etc."
-                      className="pl-10 min-h-[80px]"
+                      placeholder="Full delivery address"
                     />
                   </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
+                  
                   <div className="space-y-2">
-                    <Label htmlFor="city">City</Label>
+                    <Label>City</Label>
                     <Input
-                      id="city"
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
                       placeholder="City"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <div className="relative">
-                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input
-                        id="phone"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="07X XXX XXXX"
-                        className="pl-10"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
@@ -978,107 +1099,92 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
             {/* Step 3: Payment Method */}
             {step === 3 && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Payment Method</h3>
+                <div className="text-center mb-4">
+                  <h3 className="font-medium text-foreground">Payment Method</h3>
+                  <p className="text-sm text-muted-foreground">Choose how you'd like to pay</p>
+                </div>
                 
                 <RadioGroup value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/50 cursor-pointer" onClick={() => setPaymentMethod('card')}>
+                  <div className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer ${paymentMethod === 'card' ? 'border-brand bg-brand/5' : 'border-border'}`}>
                     <RadioGroupItem value="card" id="card" />
-                    <CreditCard className="w-5 h-5 text-blue-500" />
-                    <div>
-                      <Label htmlFor="card" className="cursor-pointer font-medium">Card Payment</Label>
-                      <p className="text-xs text-muted-foreground">Pay now with debit/credit card</p>
-                    </div>
+                    <Label htmlFor="card" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <CreditCard className="w-4 h-4" />
+                      <div>
+                        <p className="font-medium">Card Payment</p>
+                        <p className="text-xs text-muted-foreground">Pay securely with Visa/Master</p>
+                      </div>
+                    </Label>
                   </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/50 cursor-pointer" onClick={() => setPaymentMethod('bank_transfer')}>
+                  
+                  <div className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer ${paymentMethod === 'bank_transfer' ? 'border-brand bg-brand/5' : 'border-border'}`}>
                     <RadioGroupItem value="bank_transfer" id="bank_transfer" />
-                    <Building2 className="w-5 h-5 text-purple-500" />
-                    <div>
-                      <Label htmlFor="bank_transfer" className="cursor-pointer font-medium">Bank Transfer</Label>
-                      <p className="text-xs text-muted-foreground">Transfer to our bank account</p>
-                    </div>
+                    <Label htmlFor="bank_transfer" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <Building2 className="w-4 h-4" />
+                      <div>
+                        <p className="font-medium">Bank Transfer</p>
+                        <p className="text-xs text-muted-foreground">Transfer and upload receipt</p>
+                      </div>
+                    </Label>
                   </div>
-                  <div className="flex items-center gap-3 p-3 rounded-lg border border-brand/50 bg-brand/5 cursor-pointer" onClick={() => setPaymentMethod('cod')}>
+                  
+                  <div className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer ${paymentMethod === 'cod' ? 'border-brand bg-brand/5' : 'border-border'}`}>
                     <RadioGroupItem value="cod" id="cod" />
-                    <Truck className="w-5 h-5 text-green-500" />
-                    <div className="flex-1">
-                      <Label htmlFor="cod" className="cursor-pointer font-medium">Cash on Delivery</Label>
-                      <p className="text-xs text-muted-foreground">Pay when you receive</p>
-                    </div>
-                    {settings && (
-                      <span className="text-xs text-orange-500">+Rs. {settings.cod_extra_fee}</span>
-                    )}
+                    <Label htmlFor="cod" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <Truck className="w-4 h-4" />
+                      <div>
+                        <p className="font-medium">Cash on Delivery</p>
+                        <p className="text-xs text-muted-foreground">Pay when you receive (+Rs.{settings?.cod_extra_fee || 0})</p>
+                      </div>
+                    </Label>
                   </div>
                 </RadioGroup>
                 
                 {/* Bank Transfer Details */}
                 {paymentMethod === 'bank_transfer' && bankSettings && (
-                  <div className="space-y-4 p-4 bg-purple-500/10 rounded-lg border border-purple-500/30">
-                    <h4 className="font-medium text-purple-400">Bank Transfer Details</h4>
-                    
+                  <div className="mt-4 p-4 bg-secondary/30 rounded-lg space-y-3">
+                    <h4 className="font-medium text-sm">Bank Details</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Bank</span>
-                        <span className="text-foreground">{bankSettings.bank_name}</span>
+                        <span className="text-muted-foreground">Bank:</span>
+                        <span>{bankSettings.bank_name}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Account</span>
-                        <span className="text-foreground font-mono">{bankSettings.account_number}</span>
+                        <span className="text-muted-foreground">Account:</span>
+                        <span className="font-mono">{bankSettings.account_number}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">Name</span>
-                        <span className="text-foreground">{bankSettings.account_holder}</span>
+                        <span className="text-muted-foreground">Name:</span>
+                        <span>{bankSettings.account_holder}</span>
                       </div>
-                      {bankSettings.branch_name && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Branch</span>
-                          <span className="text-foreground">{bankSettings.branch_name}</span>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="p-3 bg-background rounded-lg border border-border">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Reference Number</p>
-                          <p className="font-mono font-bold text-brand text-lg">{referenceNumber}</p>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={copyReference}>
-                          <Copy className="w-4 h-4" />
-                        </Button>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Branch:</span>
+                        <span>{bankSettings.branch_name}</span>
                       </div>
                     </div>
                     
-                    <div className="flex justify-between p-3 bg-brand/10 rounded-lg">
-                      <span className="font-medium">Amount to Transfer</span>
-                      <span className="font-bold text-brand">Rs. {calculateTotal().toLocaleString()}</span>
+                    <div className="pt-2 border-t border-border">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm text-muted-foreground">Reference:</span>
+                        <code className="px-2 py-0.5 bg-background rounded text-sm font-mono">{referenceNumber}</code>
+                        <button onClick={copyReference} className="p-1 hover:bg-secondary rounded">
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Use this reference when making the transfer</p>
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label>Upload Payment Receipt</Label>
-                      <div className="relative">
-                        <input
+                    <div className="pt-2">
+                      <Label className="text-sm mb-2 block">Upload Receipt</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
                           type="file"
-                          accept="image/*,.pdf"
+                          accept="image/png,image/jpeg,application/pdf"
                           onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                          className="hidden"
-                          id="receipt-upload"
+                          className="flex-1"
                         />
-                        <label
-                          htmlFor="receipt-upload"
-                          className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-border rounded-lg cursor-pointer hover:border-brand/50 transition-colors"
-                        >
-                          {receiptFile ? (
-                            <>
-                              <CheckCircle2 className="w-5 h-5 text-green-500" />
-                              <span className="text-sm text-green-500">{receiptFile.name}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="w-5 h-5 text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">Click to upload receipt</span>
-                            </>
-                          )}
-                        </label>
+                        {receiptFile && (
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1086,175 +1192,124 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
                 
                 {/* COD Confirmation */}
                 {paymentMethod === 'cod' && (
-                  <div className="space-y-4 p-4 bg-green-500/10 rounded-lg border border-green-500/30">
-                    <div className="flex items-center gap-3">
-                      <Truck className="w-8 h-8 text-green-500" />
-                      <div>
-                        <h4 className="font-medium text-green-400">Cash on Delivery</h4>
-                        <p className="text-xs text-muted-foreground">Payment will be collected upon delivery</p>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Delivery Address</span>
-                        <span className="text-foreground text-right max-w-[180px]">{address}</span>
-                      </div>
-                      {city && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">City</span>
-                          <span className="text-foreground">{city}</span>
-                        </div>
-                      )}
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Contact</span>
-                        <span className="text-foreground">{phone}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between p-3 bg-brand/10 rounded-lg">
-                      <span className="font-medium">Amount to Pay</span>
-                      <span className="font-bold text-brand">Rs. {calculateTotal().toLocaleString()}</span>
-                    </div>
-                    
-                    <div className="flex items-start gap-2 p-3 bg-background rounded-lg border border-border">
-                      <Checkbox 
-                        id="cod-confirm" 
+                  <div className="mt-4 p-4 bg-orange-500/10 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="codConfirm"
                         checked={codConfirmed}
-                        onCheckedChange={(checked) => setCodConfirmed(!!checked)}
+                        onCheckedChange={(checked) => setCodConfirmed(checked === true)}
                       />
-                      <Label htmlFor="cod-confirm" className="text-xs text-muted-foreground cursor-pointer">
-                        I understand that payment of Rs. {calculateTotal().toLocaleString()} will be collected upon delivery. Order will be cancelled if payment is refused.
-                      </Label>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Card Payment Note */}
-                {paymentMethod === 'card' && (
-                  <div className="p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                    <div className="flex items-center gap-2 text-blue-400">
-                      <CreditCard className="w-5 h-5" />
-                      <span className="text-sm font-medium">Secure Card Payment via PayHere</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      A secure payment popup will open after confirming your order. Please do not close it until payment is complete.
-                    </p>
-                    <div className="flex justify-between p-3 bg-brand/10 rounded-lg mt-3">
-                      <span className="font-medium">Amount to Pay</span>
-                      <span className="font-bold text-brand">Rs. {calculateTotal().toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Price Summary */}
-                {settings && (
-                  <div className="p-3 bg-secondary/50 rounded-lg space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Est. Print Cost</span>
-                      <span>Rs. {(calculateTotal() - settings.base_delivery_fee - (paymentMethod === 'cod' ? settings.cod_extra_fee : 0)).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Delivery</span>
-                      <span>Rs. {settings.base_delivery_fee}</span>
-                    </div>
-                    {paymentMethod === 'cod' && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">COD Fee</span>
-                        <span className="text-orange-500">Rs. {settings.cod_extra_fee}</span>
-                      </div>
-                    )}
-                    <hr className="border-border" />
-                    <div className="flex justify-between font-semibold">
-                      <span>Total</span>
-                      <span className="text-brand">Rs. {calculateTotal().toLocaleString()}</span>
+                      <label htmlFor="codConfirm" className="text-sm cursor-pointer">
+                        I understand that I will pay <strong>Rs. {calculateTotal().toLocaleString()}</strong> (including Rs. {settings?.cod_extra_fee || 0} COD fee) when the order is delivered.
+                      </label>
                     </div>
                   </div>
                 )}
               </div>
             )}
             
-            {/* Step 4: Confirmation */}
+            {/* Step 4: Review */}
             {step === 4 && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-foreground">Order Summary</h3>
-                
-                <div className="space-y-3 p-4 bg-secondary/50 rounded-lg">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Content Type</span>
-                    <span className="text-foreground font-medium">Model Papers</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subject</span>
-                    <span className="text-foreground font-medium">{subjects.find(s => s.id === selectedSubject)?.name}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Topics</span>
-                    <span className="text-foreground font-medium">{allTopics ? 'All Topics' : `${selectedTopics.length} selected`}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Papers / Pages</span>
-                    <span className="text-foreground font-medium">{selectedPapers.length} papers / {totalPages} pages</span>
-                  </div>
-                  <hr className="border-border" />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Delivery</span>
-                    <span className="text-foreground font-medium text-right max-w-[200px]">{address}, {city}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Phone</span>
-                    <span className="text-foreground font-medium">{phone}</span>
-                  </div>
-                  <hr className="border-border" />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Payment</span>
-                    <span className="text-foreground font-medium capitalize">{paymentMethod.replace(/_/g, ' ')}</span>
-                  </div>
-                  <hr className="border-border" />
-                  <div className="flex justify-between">
-                    <span className="font-semibold text-foreground">Total</span>
-                    <span className="font-bold text-brand text-lg">Rs. {calculateTotal().toLocaleString()}</span>
-                  </div>
+                <div className="text-center mb-4">
+                  <h3 className="font-medium text-foreground">Review Order</h3>
+                  <p className="text-sm text-muted-foreground">Please confirm your order details</p>
                 </div>
                 
-                <p className="text-xs text-muted-foreground text-center">
-                  Final price may vary based on actual page count. We'll confirm before printing.
-                </p>
+                <div className="space-y-3 p-4 bg-secondary/30 rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subject:</span>
+                    <span>{subjects.find(s => s.id === selectedSubject)?.name}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Papers:</span>
+                    <span>{selectedPapers.length} papers ({totalPages} pages)</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Delivery to:</span>
+                    <span className="text-right max-w-[200px]">{address}, {city}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Phone:</span>
+                    <span>{phone}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Payment:</span>
+                    <span className="capitalize">{paymentMethod.replace('_', ' ')}</span>
+                  </div>
+                  
+                  <div className="border-t border-border pt-3 mt-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Printing ({totalPages} pages × Rs.{settings?.model_paper_price_per_page}):</span>
+                      <span>Rs. {(totalPages * (settings?.model_paper_price_per_page || 0)).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Delivery Fee:</span>
+                      <span>Rs. {settings?.base_delivery_fee?.toLocaleString()}</span>
+                    </div>
+                    {paymentMethod === 'cod' && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">COD Fee:</span>
+                        <span>Rs. {settings?.cod_extra_fee?.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-medium text-lg pt-2 border-t border-border">
+                      <span>Total:</span>
+                      <span className="text-brand">Rs. {calculateTotal().toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
             
             {/* Navigation Buttons */}
-            <div className="flex gap-3 pt-4">
-              {step === 1 ? (
-                <Button variant="outline" onClick={() => setViewMode('orders')} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-              ) : (
-                <Button variant="outline" onClick={() => setStep(step - 1)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back
-                </Button>
-              )}
+            <div className="flex justify-between pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (step === 1) {
+                    setViewMode('orders');
+                    resetForm();
+                  } else {
+                    setStep(step - 1);
+                  }
+                }}
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                {step === 1 ? 'Cancel' : 'Back'}
+              </Button>
+              
               {step < 4 ? (
                 <Button
                   variant="brand"
                   onClick={() => setStep(step + 1)}
                   disabled={!canProceed()}
-                  className="flex-1"
                 >
-                  Continue
+                  Next
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               ) : (
                 <Button
                   variant="brand"
                   onClick={handleSubmit}
-                  disabled={isLoading || isUploading}
-                  className="flex-1"
+                  disabled={isLoading}
                 >
-                  {isLoading ? 'Processing...' : paymentMethod === 'card' ? 'Pay Now' : 'Submit Request'}
-                  <CheckCircle2 className="w-4 h-4 ml-2" />
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Processing...
+                    </>
+                  ) : paymentMethod === 'card' ? (
+                    <>
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      Pay Now
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Submit Order
+                    </>
+                  )}
                 </Button>
               )}
             </div>
