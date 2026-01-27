@@ -303,19 +303,42 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       .eq('medium', enrollment.medium)
       .eq('is_active', true);
     
-    // For A/L students, also filter by stream
-    if (enrollment.stream && !enrollment.grade.startsWith('ol_')) {
+    // If user has locked subjects, filter by those names only
+    if (subjectNames.length > 0) {
+      query = query.in('name', subjectNames);
+    } 
+    // For A/L students without locked subjects, filter by stream
+    else if (enrollment.stream && !enrollment.grade.startsWith('ol_')) {
       query = query.contains('streams', [enrollment.stream]);
     }
     
-    if (subjectNames.length > 0) {
-      query = query.in('name', subjectNames);
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error loading subjects:', error);
     }
     
-    const { data } = await query;
+    // If no data found, fallback to stream_subjects table
+    if (!data || data.length === 0) {
+      console.log('No subjects found in subjects table, falling back to stream_subjects');
+      const stream = enrollment.grade.startsWith('ol_') ? 'ol' : enrollment.stream;
+      if (stream) {
+        const { data: streamData } = await supabase
+          .from('stream_subjects')
+          .select('id, subject_name')
+          .eq('stream', stream)
+          .order('sort_order');
+        
+        if (streamData && streamData.length > 0) {
+          // Map stream_subjects to Subject interface
+          setSubjects(streamData.map(s => ({ id: s.id, name: s.subject_name })));
+          return;
+        }
+      }
+    }
     
-    // Additional deduplication by name (safety net)
-    if (data) {
+    // Deduplicate by name (safety net)
+    if (data && data.length > 0) {
       const uniqueSubjects = data.filter(
         (subject, index, self) =>
           index === self.findIndex(s => s.name === subject.name)
