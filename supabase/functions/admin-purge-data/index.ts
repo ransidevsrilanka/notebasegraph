@@ -193,7 +193,63 @@ serve(async (req) => {
       if (e18) console.error("profiles delete error:", e18);
     }
 
-    console.log("Purge completed successfully");
+    // Clear storage buckets (except 'notes')
+    const bucketsToClear = ['join-receipts', 'withdrawal-receipts', 'upgrade-receipts', 'print-receipts'];
+    
+    for (const bucketName of bucketsToClear) {
+      try {
+        // List all files in the bucket
+        const { data: files, error: listError } = await supabase.storage
+          .from(bucketName)
+          .list('', { limit: 1000 });
+        
+        if (listError) {
+          console.error(`Error listing files in ${bucketName}:`, listError);
+          continue;
+        }
+        
+        if (files && files.length > 0) {
+          // Get all file paths (including nested folders)
+          const filePaths: string[] = [];
+          
+          for (const file of files) {
+            if (file.id) {
+              // It's a file
+              filePaths.push(file.name);
+            } else {
+              // It's a folder, list its contents
+              const { data: folderFiles } = await supabase.storage
+                .from(bucketName)
+                .list(file.name, { limit: 1000 });
+              
+              if (folderFiles) {
+                for (const folderFile of folderFiles) {
+                  if (folderFile.id) {
+                    filePaths.push(`${file.name}/${folderFile.name}`);
+                  }
+                }
+              }
+            }
+          }
+          
+          if (filePaths.length > 0) {
+            const { error: deleteError } = await supabase.storage
+              .from(bucketName)
+              .remove(filePaths);
+            
+            if (deleteError) {
+              console.error(`Error deleting files from ${bucketName}:`, deleteError);
+            } else {
+              console.log(`Cleared ${filePaths.length} files from ${bucketName}`);
+            }
+          }
+        }
+      } catch (bucketError) {
+        console.error(`Error processing bucket ${bucketName}:`, bucketError);
+      }
+    }
+
+    console.log("Purge completed successfully (including storage buckets)");
 
     // Send completion notification
     await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
