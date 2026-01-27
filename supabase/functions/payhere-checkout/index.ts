@@ -309,6 +309,7 @@ serve(async (req) => {
             merchant_id: merchantId,
             hash: hash,
             sandbox: isSandbox,
+            order_id: body.order_id,
             custom_2: `print_${body.print_request_id}`,
           }),
           {
@@ -343,6 +344,7 @@ serve(async (req) => {
           merchant_id: merchantId,
           hash: hash,
           sandbox: isSandbox,
+          order_id: body.order_id,
         }),
         {
           status: 200,
