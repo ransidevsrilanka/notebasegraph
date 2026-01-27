@@ -66,6 +66,7 @@ interface Stats {
   lifetimeCount: number;
   cardPayments: number;
   bankPayments: number;
+  accessCodeRevenue: number;
   currentPhase: number;
   phaseName: string;
   // Student referral stats
@@ -82,6 +83,8 @@ interface Stats {
   cmoNetworkRevenue: number;
   // Print request stats
   printRevenue: number;
+  // Creator commissions
+  creatorCommissions: number;
 }
 
 interface TopCreator {
@@ -227,6 +230,7 @@ const AdminDashboard = () => {
     lifetimeCount: 0,
     cardPayments: 0,
     bankPayments: 0,
+    accessCodeRevenue: 0,
     currentPhase: 1,
     phaseName: 'Phase 1',
     totalUserReferrals: 0,
@@ -242,6 +246,8 @@ const AdminDashboard = () => {
     cmoNetworkRevenue: 0,
     // Print stats
     printRevenue: 0,
+    // Creator commissions
+    creatorCommissions: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
@@ -300,7 +306,7 @@ const AdminDashboard = () => {
 
       const { data: allPayments } = await supabase
         .from('payment_attributions')
-        .select('final_amount, payment_month, payment_type');
+        .select('final_amount, payment_month, payment_type, creator_commission_amount');
 
       const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
@@ -310,6 +316,14 @@ const AdminDashboard = () => {
       const bankPayments = (allPayments || [])
         .filter(p => p.payment_type === 'bank')
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      const accessCodeRevenue = (allPayments || [])
+        .filter(p => p.payment_type === 'access_code')
+        .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      
+      // Total creator commissions
+      const creatorCommissions = (allPayments || []).reduce(
+        (sum, p) => sum + Number(p.creator_commission_amount || 0), 0
+      );
 
       const currentMonth = new Date();
       currentMonth.setDate(1);
@@ -549,6 +563,7 @@ const AdminDashboard = () => {
         lifetimeCount,
         cardPayments,
         bankPayments,
+        accessCodeRevenue,
         currentPhase: businessPhase?.current_phase || 1,
         phaseName: businessPhase?.phase_name || 'Phase 1',
         totalUserReferrals: totalUserReferrals || 0,
@@ -561,6 +576,7 @@ const AdminDashboard = () => {
         cmoCreators: cmoCreators || 0,
         cmoNetworkRevenue,
         printRevenue,
+        creatorCommissions,
       });
 
     } catch (error) {
@@ -708,20 +724,54 @@ const AdminDashboard = () => {
 
           {/* Main Content */}
           <main className="p-6 space-y-6">
-            {/* Compact Metrics Grid */}
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
-              <MiniStatCard label="Total Revenue" value={stats.totalRevenue} format="currency" trend={revenueTrend !== 0 ? { value: Math.abs(revenueTrend), isPositive: revenueTrend > 0 } : undefined} />
+            {/* Net Profit Card - Primary Metric */}
+            {(() => {
+              const totalRevenue = stats.totalRevenue + stats.printRevenue;
+              const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
+              const profit = totalRevenue - payhereCommission - stats.creatorCommissions;
+              
+              return (
+                <div className="glass-card-premium p-6 bg-gradient-to-r from-green-500/10 via-brand/5 to-transparent border-green-500/30">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-muted-foreground font-medium">Net Profit</span>
+                      </div>
+                      <p className="text-3xl sm:text-4xl font-bold text-green-500">
+                        Rs. {profit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Total Revenue: Rs. {totalRevenue.toLocaleString()} − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K)
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Revenue</p>
+                        <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
+                      </div>
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">PayHere Fee</p>
+                        <p className="text-lg font-semibold text-orange-500">-Rs. {(payhereCommission / 1000).toFixed(1)}K</p>
+                      </div>
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Commissions</p>
+                        <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+            
+            {/* 6 Essential Metrics Grid (3x2) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <MiniStatCard label="Total Revenue" value={stats.totalRevenue + stats.printRevenue} format="currency" trend={revenueTrend !== 0 ? { value: Math.abs(revenueTrend), isPositive: revenueTrend > 0 } : undefined} />
               <MiniStatCard label="This Month" value={stats.thisMonthRevenue} format="currency" />
-              <MiniStatCard label="Last Month" value={stats.lastMonthRevenue} format="currency" />
-              <MiniStatCard label="Print Revenue" value={stats.printRevenue} format="currency" />
+              <MiniStatCard label="Active Students" value={stats.totalStudents} />
               <MiniStatCard label="Card Payments" value={stats.cardPayments} format="currency" />
               <MiniStatCard label="Bank Payments" value={stats.bankPayments} format="currency" />
-              <MiniStatCard label="Students" value={stats.totalStudents} />
-              <MiniStatCard label="Creators" value={stats.totalCreators} />
-              <MiniStatCard label="CMOs" value={stats.totalCMOs} />
-              <MiniStatCard label="Active Codes" value={stats.activeCodes} />
-              <MiniStatCard label="Pending Upgrades" value={stats.pendingUpgrades} highlight={stats.pendingUpgrades > 0} />
-              <MiniStatCard label="Pending Prints" value={stats.pendingPrintRequests} highlight={stats.pendingPrintRequests > 0} />
+              <MiniStatCard label="Print Revenue" value={stats.printRevenue} format="currency" />
             </div>
 
             {/* Conversion Funnel & Revenue Forecast */}
