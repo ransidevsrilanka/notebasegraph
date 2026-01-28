@@ -1,407 +1,372 @@
 
-# Comprehensive UI/UX Fixes & Print Payments System Plan
+# Comprehensive UI Enhancement Plan: About Page, ToS Note, HOO & CMO Dashboards
 
 ## Overview
 
-This plan addresses multiple issues: admin panel rating form, testimonials section redesign, FAQ consolidation, print payments tracking, cost calculation for print profits, and ensuring all financial metrics are correctly calculated.
+This plan addresses four key areas:
+1. Add a small ToS/Privacy Policy agreement note under all signup forms
+2. Redesign the About page with premium high-end styling
+3. Transform the Head of Operations (HOO) Dashboard to a premium UI
+4. Transform the CMO Dashboard to a premium high-end UI
 
 ---
 
-## Part 1: Fix Student Rating Form in Admin Panel
+## Part 1: ToS/Privacy Policy Note on Signup Forms
 
-### Issue
-The rating buttons in the student testimonial dialog are "blacked out" - they appear but can't be clicked. This is due to the `<button>` inside the dialog form not having proper styling.
+### Affected Pages
+1. `src/pages/Access.tsx` - Access code signup form
+2. `src/pages/PaidSignup.tsx` - Card payment signup form
+3. `src/pages/BankSignup.tsx` - Bank transfer signup form
 
-### Solution
-**File: `src/pages/admin/TestimonialsSettings.tsx`**
-
-Update lines 539-544 to add proper button styling with cursor-pointer and ensure the buttons are interactive:
+### Implementation
+Add a small, subtle note below the "Create Account" button in each form:
 
 ```tsx
-// Rating buttons - fix interactive state
-{[1, 2, 3, 4, 5].map((r) => (
-  <button 
-    key={r} 
-    type="button" 
-    onClick={() => setStudentForm({ ...studentForm, rating: r })}
-    className="cursor-pointer transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-brand/50 rounded"
-  >
-    <Star className={`w-6 h-6 transition-colors ${r <= studentForm.rating ? 'fill-amber-400 text-amber-400' : 'fill-muted/30 text-muted/30 hover:fill-amber-200 hover:text-amber-200'}`} />
-  </button>
-))}
+<p className="text-[11px] text-muted-foreground text-center mt-3">
+  By signing up, you agree to our{' '}
+  <Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
+  {' '}and{' '}
+  <Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>.
+</p>
 ```
+
+**Styling:**
+- Font size: 11px (very small)
+- Color: muted-foreground (subtle gray)
+- Centered text
+- Links in brand color with hover underline
 
 ---
 
-## Part 2: Redesign Testimonials Section (Professional Look)
+## Part 2: About Page Redesign
 
-### Issues
-1. Green & yellow colors look like a carnival
-2. No glow for profile picture frames
-3. Unprofessional overall appearance
+### Current Issues
+- Generic layout and styling
+- Basic stat cards
+- Not aligned with premium site aesthetic
+- Missing floating orbs/premium background effects
 
-### Solution
-Transform the section to use a sophisticated, monochromatic color scheme with subtle brand accents.
+### New Design Structure
 
-**File: `src/components/TestimonialsSection.tsx`**
+**Section 1: Premium Hero**
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Premium background with floating orbs                      │
+│                                                             │
+│  [About Notebase badge]                                     │
+│                                                             │
+│      Empowering Students to                                 │
+│      Achieve Academic Excellence                            │
+│                                                             │
+│  Notebase is Sri Lanka's premier educational platform,     │
+│  providing curated study materials for O/L and A/L students │
+│                                                             │
+│  [Key Stats in horizontal layout]                           │
+│  1000+ Resources  |  5 Streams  |  24/7 Access  |  Weekly+ │
+└─────────────────────────────────────────────────────────────┘
+```
 
-**Key Changes:**
+**Section 2: Mission & Vision (Split Layout)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  OUR MISSION                          OUR VISION            │
+│  ─────────────                        ─────────────         │
+│  To democratize quality              To become the most     │
+│  education by providing              trusted educational    │
+│  accessible, organized               resource platform      │
+│  study materials...                  in South Asia...       │
+│                                                             │
+│  [Icon + animated border card]       [Icon + animated card] │
+└─────────────────────────────────────────────────────────────┘
+```
 
-1. **Color Scheme**: Replace green/yellow with sophisticated neutrals + subtle brand blue accents
-2. **Teacher Cards**: 
-   - Use elegant silver/slate tones instead of emerald
-   - Add subtle ring glow to profile pictures (`ring-2 ring-white/20 shadow-lg shadow-white/10`)
-   - "RECOMMENDED" badge in muted slate/brand instead of green
-3. **Student Cards**:
-   - Keep gold stars but remove yellow background accents
-   - Use neutral card backgrounds with subtle brand glow on hover
-4. **General**:
-   - Reduce visual noise
-   - Consistent border styling
-   - Subtle backdrop blur
-   - Elegant quote typography
+**Section 3: What We Offer (Grid)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│              WHAT WE OFFER                                  │
+│                                                             │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│  │ 📚 Notes   │  │ 📝 Papers  │  │ 🧠 Quizzes │            │
+│  │ Curated    │  │ Model &    │  │ Interactive│            │
+│  │ study notes│  │ Past Papers│  │ testing    │            │
+│  └────────────┘  └────────────┘  └────────────┘            │
+│                                                             │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│  │ 🃏 Cards   │  │ 🤖 AI      │  │ 🖨️ Print   │            │
+│  │ Flashcards │  │ AI Tutor   │  │ Physical   │            │
+│  │ for review │  │ Assistant  │  │ copies     │            │
+│  └────────────┘  └────────────┘  └────────────┘            │
+└─────────────────────────────────────────────────────────────┘
+```
 
-**Color Palette Update:**
-- Teacher badge: `bg-white/10 border-white/20 text-white/90`
-- Teacher photo ring: `ring-2 ring-white/20 shadow-lg shadow-black/50`
-- Student stars: `fill-amber-400 text-amber-400` (keep gold, it's fine)
-- Card backgrounds: `bg-glass/20` with subtle `border-white/5`
-- Hover glow: `hover:border-brand/30` with `bg-gradient-to-br from-brand/5 to-transparent`
+**Section 4: Values (Premium Cards with Icons)**
+```
+┌─────────────────────────────────────────────────────────────┐
+│              OUR VALUES                                     │
+│                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ 🎯 Quality First    │  │ 🔒 Trust & Security │          │
+│  │ Every resource is   │  │ Your data and       │          │
+│  │ carefully verified  │  │ access is protected │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+│                                                             │
+│  ┌─────────────────────┐  ┌─────────────────────┐          │
+│  │ 🌟 Accessibility    │  │ 🚀 Innovation       │          │
+│  │ Affordable pricing  │  │ Continuous platform │          │
+│  │ for all students    │  │ improvements        │          │
+│  └─────────────────────┘  └─────────────────────┘          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Section 5: CTA**
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Ready to Excel?                                │
+│                                                             │
+│  Join thousands of successful students                      │
+│                                                             │
+│         [View Plans →]  [Enter Access Code]                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Premium Styling Features
+- Floating gradient orbs in background (brand/blue colors)
+- Glass cards with `glass-card-premium` styling
+- Animated number counters for stats
+- Staggered reveal animations on scroll
+- Gradient text for key headings
+- Subtle border glows on hover
+- Premium iconography with colored backgrounds
 
 ---
 
-## Part 3: FAQ Page Restructure
+## Part 3: Head of Operations (HOO) Dashboard Redesign
 
-### Current State
-- Full FAQ section exists on Index.tsx (id="faq")
-- Separate FAQ section exists on /pricing page
-- Navbar links to `/#faq`
+### Current Issues
+- Basic `glass-card` styling
+- Plain header without premium effects
+- No premium background
+- Standard tabs without visual hierarchy
+- Basic stat cards
 
-### New Structure
-1. Create dedicated `/faq` page with the full FAQ component
-2. Replace the Index.tsx FAQSection with a "Looking for FAQ?" CTA block
-3. Update Navbar to link to `/faq` instead of `/#faq`
-4. Remove FAQ section from /pricing page
+### New Premium Design
 
-### Files to Modify
-
-**1. Create new page: `src/pages/FAQ.tsx`**
+**Header Enhancement**
 ```tsx
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import FAQSection from "@/components/FAQSection";
-
-const FAQ = () => {
-  return (
-    <main className="min-h-screen bg-background">
-      <Navbar />
-      <div className="pt-24" />
-      <FAQSection />
-      <Footer />
-    </main>
-  );
-};
-
-export default FAQ;
+<header className="bg-gradient-to-r from-card via-card/95 to-card border-b border-border/50 backdrop-blur-xl sticky top-0 z-50">
+  <div className="absolute inset-0 bg-gradient-to-r from-brand/5 via-transparent to-purple-500/5" />
+  ...
+</header>
 ```
 
-**2. Create CTA component: `src/components/FAQCta.tsx`**
-```tsx
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { HelpCircle, ArrowRight } from "lucide-react";
-
-const FAQCta = () => {
-  return (
-    <section className="py-16 md:py-20">
-      <div className="container mx-auto px-4 sm:px-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
-            <HelpCircle className="w-8 h-8 text-brand" />
-          </div>
-          <h3 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-4">
-            Have Questions?
-          </h3>
-          <p className="text-muted-foreground mb-6">
-            Find answers to common questions about Notebase, pricing, content access, and more.
-          </p>
-          <Link to="/faq">
-            <Button variant="brand" size="lg" className="gap-2">
-              View FAQ
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-};
-
-export default FAQCta;
+**Premium Background**
+Add floating orbs similar to admin pages:
+```css
+.hoo-premium-bg {
+  position: relative;
+}
+.hoo-premium-bg::before {
+  content: '';
+  position: absolute;
+  top: 10%;
+  left: -5%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(234,179,8,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+.hoo-premium-bg::after {
+  content: '';
+  position: absolute;
+  bottom: 20%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
 ```
 
-**3. Update: `src/pages/Index.tsx`**
-- Replace `<FAQSection />` with `<FAQCta />`
-
-**4. Update: `src/pages/Pricing.tsx`**
-- Remove the entire FAQ section (lines 24-52)
-
-**5. Update: `src/components/Navbar.tsx`**
-- Change `{ name: "FAQ", path: "/#faq" }` to `{ name: "FAQ", path: "/faq" }`
-- Update handleNavClick to handle regular routes
-
-**6. Update: `src/App.tsx`**
-- Add route: `<Route path="/faq" element={<FAQ />} />`
-
----
-
-## Part 4: Print Payments Admin Page
-
-### Issue
-No dedicated panel to view payments from print requests.
-
-### Solution
-Add a "Print Payments" page under Finance section showing all completed print request payments.
-
-**1. Create: `src/pages/admin/PrintPayments.tsx`**
-
-Features:
-- List all print requests with payment_status = 'paid'
-- Show: Request #, Customer, Amount, Pages, Cost, Profit, Date
-- Filter by date range, payment method
-- Calculate totals: Revenue, Cost, Profit
-- Export capability
-
-**Key Financial Metrics per Request:**
+**Welcome Section Enhancement**
 ```tsx
-const printCostPerPage = settings.print_cost_per_page || 4; // New field
-const totalCost = request.estimated_pages * printCostPerPage;
-const profit = request.total_amount - totalCost;
-```
-
-**2. Update: `src/components/admin/AdminSidebar.tsx`**
-Add under Finance group:
-```tsx
-{ label: 'Print Payments', href: '/admin/print-payments', icon: Printer, badge: 0 },
-```
-
-**3. Update: `src/App.tsx`**
-Add route for `/admin/print-payments`
-
----
-
-## Part 5: Print Settings - Add Cost Per Page Field
-
-### Current Schema
-`print_settings` table has:
-- notes_price_per_page (selling price)
-- model_paper_price_per_page (selling price)
-- base_delivery_fee
-- cod_extra_fee
-
-### Required Addition
-Add a new column for actual printing cost:
-- `print_cost_per_page` (our cost to print a page)
-
-### Database Migration
-
-```sql
-ALTER TABLE print_settings
-ADD COLUMN print_cost_per_page NUMERIC DEFAULT 4;
-
-COMMENT ON COLUMN print_settings.print_cost_per_page IS 'Actual cost to print one page (for profit calculation)';
-```
-
-### Update PrintSettingsPanel
-
-**File: `src/components/dashboard/PrintSettingsPanel.tsx`**
-
-Add new input field for print cost:
-```tsx
-<div className="space-y-2">
-  <Label htmlFor="printCost">Print Cost (per page)</Label>
-  <p className="text-xs text-muted-foreground mb-1">Your actual cost to print one page</p>
-  <div className="relative">
-    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">Rs.</span>
-    <Input
-      id="printCost"
-      type="number"
-      value={printCost}
-      onChange={(e) => setPrintCost(parseFloat(e.target.value) || 0)}
-      className="pl-10"
-      min={0}
-      step={0.5}
-    />
-  </div>
-</div>
-```
-
----
-
-## Part 6: Admin Dashboard - Add Print Profit Card
-
-### Current State
-Net Profit calculation includes printRevenue but NOT the printing costs.
-
-### Required Change
-Add a dedicated "Print Profit" card showing:
-- Print Revenue
-- Print Costs (pages × cost_per_page)
-- Print Profit (Revenue - Costs)
-
-### Files to Modify
-
-**File: `src/pages/admin/AdminDashboard.tsx`**
-
-1. **Fetch print cost setting:**
-```tsx
-// In fetchStats
-const { data: printSettings } = await supabase
-  .from('print_settings')
-  .select('print_cost_per_page')
-  .eq('is_active', true)
-  .single();
-
-const printCostPerPage = printSettings?.print_cost_per_page || 4;
-
-// Calculate total pages from paid print requests
-const { data: paidPrintRequests } = await supabase
-  .from('print_requests')
-  .select('estimated_pages, total_amount')
-  .eq('payment_status', 'paid');
-
-const totalPrintPages = (paidPrintRequests || []).reduce(
-  (sum, p) => sum + (p.estimated_pages || 0), 0
-);
-const printRevenue = (paidPrintRequests || []).reduce(
-  (sum, p) => sum + Number(p.total_amount || 0), 0
-);
-const printCost = totalPrintPages * printCostPerPage;
-const printProfit = printRevenue - printCost;
-```
-
-2. **Add to stats state:**
-```tsx
-printCost: number;
-printProfit: number;
-```
-
-3. **Update Net Profit calculation:**
-```tsx
-// Net Profit should now include print profit
-const netProfit = (totalRevenue + stats.printProfit) - payhereCommission - stats.creatorCommissions;
-```
-
-4. **Add Print Profit Card:**
-```tsx
-<div className="glass-card-premium p-6 bg-gradient-to-r from-purple-500/10 via-brand/5 to-transparent border-purple-500/30">
-  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+<div className="mb-8">
+  <div className="flex items-center gap-3 mb-2">
+    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-brand-light flex items-center justify-center shadow-lg shadow-brand/25">
+      <Crown className="w-5 h-5 text-primary-foreground" />
+    </div>
     <div>
-      <div className="flex items-center gap-2 mb-1">
-        <Printer className="w-5 h-5 text-purple-500" />
-        <span className="text-sm text-muted-foreground font-medium">Print Profit</span>
-      </div>
-      <p className="text-3xl font-bold text-purple-500">
-        Rs. {stats.printProfit.toLocaleString()}
+      <h1 className="font-display text-2xl font-bold text-foreground">
+        Welcome back, {profile?.full_name}
+      </h1>
+      <p className="text-muted-foreground text-sm">
+        Head of Operations Dashboard
       </p>
-      <p className="text-xs text-muted-foreground mt-1">
-        Revenue: Rs. {stats.printRevenue.toLocaleString()} − Cost: Rs. {stats.printCost.toLocaleString()}
-      </p>
-    </div>
-    <div className="grid grid-cols-2 gap-4 text-center">
-      <div className="p-3 bg-secondary/50 rounded-lg">
-        <p className="text-xs text-muted-foreground">Pages Printed</p>
-        <p className="text-lg font-semibold text-foreground">{stats.totalPrintPages}</p>
-      </div>
-      <div className="p-3 bg-secondary/50 rounded-lg">
-        <p className="text-xs text-muted-foreground">Margin</p>
-        <p className="text-lg font-semibold text-green-500">
-          {stats.printRevenue > 0 ? Math.round((stats.printProfit / stats.printRevenue) * 100) : 0}%
-        </p>
-      </div>
     </div>
   </div>
 </div>
 ```
 
+**Stats Cards with Gradients**
+```tsx
+<div className="glass-card-premium p-5 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent border-purple-500/20">
+  <div className="w-11 h-11 rounded-xl bg-purple-500/20 flex items-center justify-center mb-3 ring-2 ring-purple-500/30">
+    <Users className="w-5 h-5 text-purple-500" />
+  </div>
+  <p className="text-2xl font-bold text-foreground">{myStats.totalCreators}</p>
+  <p className="text-xs text-muted-foreground mt-0.5">My Creators</p>
+</div>
+```
+
+**Enhanced Tab List**
+```tsx
+<TabsList className="grid grid-cols-3 md:grid-cols-7 w-full bg-secondary/30 p-1 gap-1">
+  <TabsTrigger 
+    value="my-performance"
+    className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm"
+  >
+    My Performance
+  </TabsTrigger>
+  ...
+</TabsList>
+```
+
+**Chart Enhancements**
+- Add gradient fills to area charts
+- Improve tooltip styling with glassmorphism
+- Add subtle grid lines
+
 ---
 
-## Part 7: Ensure Correct Payment & Commission Logic
+## Part 4: CMO Dashboard Redesign
 
-### Current Commission Flow
-1. Payment comes in via PayHere or Bank
-2. `finalize-payment-user` edge function creates `payment_attributions` record
-3. Creator commission is calculated based on tier and stored in `creator_commission_amount`
-4. Database trigger updates creator's `available_balance`
+### Current Issues
+- Similar to HOO - basic styling
+- No premium background effects
+- Plain stat cards
+- Standard header without visual distinction
 
-### Print Request Payments
-Currently, print request payments:
-- Are tracked separately in `print_requests` table
-- NOT linked to `payment_attributions`
-- NOT giving creators commission
+### New Premium Design
 
-### Decision Point: Should Print Requests Give Creator Commission?
+**Premium Background**
+```css
+.cmo-premium-bg {
+  position: relative;
+}
+.cmo-premium-bg::before {
+  content: '';
+  position: absolute;
+  top: 15%;
+  right: -10%;
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, rgba(168,85,247,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+.cmo-premium-bg::after {
+  content: '';
+  position: absolute;
+  bottom: 10%;
+  left: -5%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(234,179,8,0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+```
 
-Based on the existing system, print requests should **NOT** give creator commissions because:
-1. Print requests are a separate service
-2. They're not tied to subscription enrollments
-3. The profit model is different (physical goods vs digital access)
+**Enhanced Header with Gradient**
+```tsx
+<header className="bg-gradient-to-r from-card via-card/95 to-card border-b border-border/50 backdrop-blur-xl sticky top-0 z-50">
+  <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-transparent to-brand/5" />
+  <div className="container mx-auto px-4 py-4 relative">
+    ...
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+        <Users className="w-4 h-4 text-white" />
+      </div>
+      <span className="font-display text-xl font-bold text-foreground">CMO Dashboard</span>
+    </div>
+  </div>
+</header>
+```
 
-### Verification Checklist
-- [x] Print revenue is correctly calculated from `print_requests.total_amount WHERE payment_status = 'paid'`
-- [x] Print cost calculation uses new `print_cost_per_page` field
-- [x] Print profit = Revenue - Cost
-- [x] Net Profit includes print profit separately
-- [x] Creator commissions remain tied to `payment_attributions` only
+**Welcome Section with Icon**
+```tsx
+<div className="mb-8 flex items-center gap-4">
+  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center border border-purple-500/20">
+    <Users className="w-7 h-7 text-purple-500" />
+  </div>
+  <div>
+    <h1 className="font-display text-2xl font-bold text-foreground">
+      CMO Dashboard
+    </h1>
+    <p className="text-muted-foreground">
+      Manage your content creators and track performance
+    </p>
+  </div>
+</div>
+```
+
+**Stats Cards with Colored Gradients**
+Each stat card gets a unique color gradient:
+- Total Creators: Purple gradient
+- Paid Users This Month: Green gradient
+- Revenue Generated: Brand/gold gradient
+- Annual Paid Users: Blue gradient
+
+**Enhanced Glass Cards**
+```tsx
+<div className="glass-card-premium p-6 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent hover:border-purple-500/30 transition-all">
+```
+
+**Improved Charts**
+- Gradient area fills
+- Better axis styling
+- Enhanced tooltips with blur effect
+- Subtle animations
 
 ---
 
-## Summary of Changes
+## Files to Modify
 
-### Files to Create
-| File | Purpose |
-|------|---------|
-| `src/pages/FAQ.tsx` | Dedicated FAQ page |
-| `src/components/FAQCta.tsx` | CTA block for Index page |
-| `src/pages/admin/PrintPayments.tsx` | Print payments admin panel |
-
-### Files to Modify
 | File | Changes |
 |------|---------|
-| `src/pages/admin/TestimonialsSettings.tsx` | Fix star rating button interactivity |
-| `src/components/TestimonialsSection.tsx` | Professional redesign with neutral colors |
-| `src/pages/Index.tsx` | Replace FAQSection with FAQCta |
-| `src/pages/Pricing.tsx` | Remove FAQ section |
-| `src/components/Navbar.tsx` | Update FAQ link to /faq |
-| `src/App.tsx` | Add /faq and /admin/print-payments routes |
-| `src/components/dashboard/PrintSettingsPanel.tsx` | Add print cost per page field |
-| `src/components/admin/AdminSidebar.tsx` | Add Print Payments link |
-| `src/pages/admin/AdminDashboard.tsx` | Add print profit card and calculations |
-
-### Database Migration
-
-```sql
--- Add print cost per page field to print_settings
-ALTER TABLE print_settings
-ADD COLUMN IF NOT EXISTS print_cost_per_page NUMERIC DEFAULT 4;
-
-COMMENT ON COLUMN print_settings.print_cost_per_page IS 'Actual cost to print one page (for profit calculation)';
-```
+| `src/pages/Access.tsx` | Add ToS/Privacy Policy note after signup form |
+| `src/pages/PaidSignup.tsx` | Add ToS/Privacy Policy note after signup form |
+| `src/pages/BankSignup.tsx` | Add ToS/Privacy Policy note after signup form |
+| `src/pages/About.tsx` | Complete redesign with premium styling |
+| `src/pages/headops/HeadOpsDashboard.tsx` | Premium UI overhaul |
+| `src/pages/cmo/CMODashboard.tsx` | Premium UI overhaul |
+| `src/index.css` | Add .hoo-premium-bg and .cmo-premium-bg classes |
 
 ---
 
-## Testing Checklist
+## Design Consistency Checklist
 
-- [ ] Star rating buttons in student testimonial dialog work correctly
-- [ ] Testimonials section has professional, non-carnival appearance
-- [ ] FAQ page loads at /faq with all categories
-- [ ] Index page shows FAQ CTA that links to /faq (no reload)
-- [ ] Navbar FAQ link navigates to /faq (no reload)
-- [ ] /pricing page no longer has FAQ section
-- [ ] Print cost per page field appears in pricing settings
-- [ ] Print Payments admin page shows paid print requests
-- [ ] Admin dashboard shows Print Profit card with correct calculations
-- [ ] Net Profit correctly includes print profit
-- [ ] Creator commissions are NOT affected by print requests
-- [ ] All metrics update correctly when new print payments come in
-- [ ] Mobile responsiveness maintained throughout
+- All dashboards use premium floating orb backgrounds
+- Consistent gradient color scheme (brand gold, purple, blue, green)
+- Glass card styling with subtle border glows
+- Icon badges with ring shadows
+- Staggered reveal animations
+- Consistent spacing and typography
+- Mobile-responsive layouts
+- Accessibility maintained
+
+---
+
+## Technical Notes
+
+1. **About Page**: Will use `useBranding()` hook to pull dynamic site name
+2. **ToS Note**: Very small font (11px) to be unobtrusive
+3. **Dashboard Backgrounds**: Use CSS pseudo-elements for performance
+4. **Charts**: Keep existing Recharts implementation, just enhance styling
+5. **Mobile**: All changes will maintain responsive behavior
