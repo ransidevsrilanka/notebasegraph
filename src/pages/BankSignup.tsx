@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -548,6 +548,13 @@ const BankSignup = () => {
                     {isLoading ? "Creating..." : "Create Account"}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
+
+                  <p className="text-[11px] text-muted-foreground text-center mt-3">
+                    By signing up, you agree to our{' '}
+                    <Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>.
+                  </p>
                 </form>
               </div>
             )}

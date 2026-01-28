@@ -102,6 +102,86 @@
     --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
     --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
   }
+
+  /* Head of Operations Dashboard - Premium background */
+  .hoo-premium-bg {
+    position: relative;
+    background: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 3%) 100%);
+    min-height: 100vh;
+  }
+  
+  .hoo-premium-bg::before {
+    content: '';
+    position: fixed;
+    top: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .hoo-premium-bg::after {
+    content: '';
+    position: fixed;
+    bottom: 20%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, hsl(217 91% 60% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .hoo-premium-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* CMO Dashboard - Premium background */
+  .cmo-premium-bg {
+    position: relative;
+    background: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 3%) 100%);
+    min-height: 100vh;
+  }
+  
+  .cmo-premium-bg::before {
+    content: '';
+    position: fixed;
+    top: 15%;
+    right: -10%;
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, hsl(262 83% 58% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .cmo-premium-bg::after {
+    content: '';
+    position: fixed;
+    bottom: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .cmo-premium-bg > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 @layer base {
