@@ -26,6 +26,7 @@ import {
   HardDrive,
   Database,
   Share2,
+  Printer,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -83,6 +84,9 @@ interface Stats {
   cmoNetworkRevenue: number;
   // Print request stats
   printRevenue: number;
+  printCost: number;
+  printProfit: number;
+  totalPrintPages: number;
   // Creator commissions
   creatorCommissions: number;
 }
@@ -246,6 +250,9 @@ const AdminDashboard = () => {
     cmoNetworkRevenue: 0,
     // Print stats
     printRevenue: 0,
+    printCost: 0,
+    printProfit: 0,
+    totalPrintPages: 0,
     // Creator commissions
     creatorCommissions: 0,
   });
@@ -463,15 +470,29 @@ const AdminDashboard = () => {
         );
       }
 
-      // Print request revenue calculation
+      // Fetch print settings for cost calculation
+      const { data: printSettings } = await supabase
+        .from('print_settings')
+        .select('print_cost_per_page')
+        .eq('is_active', true)
+        .single();
+
+      const printCostPerPage = printSettings?.print_cost_per_page || 4;
+
+      // Print request revenue and pages calculation
       const { data: printPayments } = await supabase
         .from('print_requests')
-        .select('total_amount')
+        .select('total_amount, estimated_pages')
         .eq('payment_status', 'paid');
       
       const printRevenue = (printPayments || []).reduce(
         (sum, p) => sum + Number(p.total_amount || 0), 0
       );
+      const totalPrintPages = (printPayments || []).reduce(
+        (sum, p) => sum + (p.estimated_pages || 0), 0
+      );
+      const printCost = totalPrintPages * printCostPerPage;
+      const printProfit = printRevenue - printCost;
 
       // Weekly revenue calculations
       const now = new Date();
@@ -576,6 +597,9 @@ const AdminDashboard = () => {
         cmoCreators: cmoCreators || 0,
         cmoNetworkRevenue,
         printRevenue,
+        printCost,
+        printProfit,
+        totalPrintPages,
         creatorCommissions,
       });
 
