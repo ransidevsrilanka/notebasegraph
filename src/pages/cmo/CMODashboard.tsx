@@ -348,16 +348,20 @@ const CMODashboard = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme">
-      {/* Header */}
-      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
+    <main className="min-h-screen bg-background dashboard-theme cmo-premium-bg">
+      {/* Premium Header */}
+      <header className="bg-gradient-to-r from-card via-card/95 to-card border-b border-border/50 backdrop-blur-xl sticky top-0 z-50">
+        <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-transparent to-brand/5" />
+        <div className="container mx-auto px-4 py-4 relative">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link to="/" className="font-display text-xl font-bold text-foreground">
-                CMO Dashboard
-              </Link>
-              <span className="px-2 py-0.5 rounded bg-muted text-foreground text-xs font-medium">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/25">
+                  <Users className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-display text-xl font-bold text-foreground">CMO Dashboard</span>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-500 text-xs font-medium hidden sm:block">
                 CMO
               </span>
             </div>
@@ -380,69 +384,74 @@ const CMODashboard = () => {
           </p>
         </div>
 
-        {/* Welcome */}
-        <div className="mb-8">
-          <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-            CMO Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your content creators and track business performance
-          </p>
+        {/* Welcome with Icon Badge */}
+        <div className="mb-8 flex items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-purple-500/10 flex items-center justify-center border border-purple-500/20 ring-2 ring-purple-500/10">
+            <Users className="w-7 h-7 text-purple-500" />
+          </div>
+          <div>
+            <h1 className="font-display text-2xl font-bold text-foreground">
+              CMO Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Manage your content creators and track business performance
+            </p>
+          </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Premium Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+          <div className="glass-card-premium p-6 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent hover:border-purple-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center ring-2 ring-purple-500/30">
                 <Users className="w-6 h-6 text-purple-500" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.totalCreators}</p>
-            <p className="text-muted-foreground text-sm">Total Creators</p>
+            <p className="text-3xl font-bold text-foreground">{stats.totalCreators}</p>
+            <p className="text-muted-foreground text-sm mt-1">Total Creators</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+          <div className="glass-card-premium p-6 bg-gradient-to-br from-green-500/10 via-transparent to-transparent hover:border-green-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center ring-2 ring-green-500/30">
                 <TrendingUp className="w-6 h-6 text-green-500" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.totalPaidUsersThisMonth}</p>
-            <p className="text-muted-foreground text-sm">Paid Users This Month</p>
+            <p className="text-3xl font-bold text-foreground">{stats.totalPaidUsersThisMonth}</p>
+            <p className="text-muted-foreground text-sm mt-1">Paid Users This Month</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
+          <div className="glass-card-premium p-6 bg-gradient-to-br from-brand/10 via-transparent to-transparent hover:border-brand/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center ring-2 ring-brand/30">
                 <DollarSign className="w-6 h-6 text-brand" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">LKR {stats.totalRevenueGenerated.toLocaleString()}</p>
-            <p className="text-muted-foreground text-sm">Revenue Generated</p>
+            <p className="text-3xl font-bold text-foreground">LKR {stats.totalRevenueGenerated.toLocaleString()}</p>
+            <p className="text-muted-foreground text-sm mt-1">Revenue Generated</p>
           </div>
 
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
+          <div className="glass-card-premium p-6 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent hover:border-blue-500/30 transition-all">
+            <div className="flex items-center justify-between mb-3">
+              <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center ring-2 ring-blue-500/30">
                 <Calendar className="w-6 h-6 text-blue-500" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.annualPaidUsers}</p>
-            <p className="text-muted-foreground text-sm">Annual Paid Users</p>
+            <p className="text-3xl font-bold text-foreground">{stats.annualPaidUsers}</p>
+            <p className="text-muted-foreground text-sm mt-1">Annual Paid Users</p>
           </div>
         </div>
 
-        {/* Charts Row */}
+        {/* Premium Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Creator Growth Chart */}
-          <div className="glass-card p-6">
+          <div className="glass-card-premium p-6 hover:border-blue-500/30 transition-all">
             <h3 className="font-semibold text-foreground mb-4">Creator Growth</h3>
             {monthlyData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <AreaChart data={monthlyData}>
                   <defs>
-                    <linearGradient id="creatorsGradient" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="creatorsGradientCMO" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor={chartColors.secondary} stopOpacity={0.3}/>
                       <stop offset="95%" stopColor={chartColors.secondary} stopOpacity={0}/>
                     </linearGradient>
@@ -450,9 +459,9 @@ const CMODashboard = () => {
                   <XAxis dataKey="month" stroke="#888" fontSize={12} />
                   <YAxis stroke="#888" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', backdropFilter: 'blur(8px)' }}
                   />
-                  <Area type="monotone" dataKey="creators" stroke={chartColors.secondary} fill="url(#creatorsGradient)" name="Creators" />
+                  <Area type="monotone" dataKey="creators" stroke={chartColors.secondary} fill="url(#creatorsGradientCMO)" name="Creators" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -463,7 +472,7 @@ const CMODashboard = () => {
           </div>
 
           {/* Paid Users Trend */}
-          <div className="glass-card p-6">
+          <div className="glass-card-premium p-6 hover:border-green-500/30 transition-all">
             <h3 className="font-semibold text-foreground mb-4">Paid Users Trend</h3>
             {monthlyData.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -471,7 +480,7 @@ const CMODashboard = () => {
                   <XAxis dataKey="month" stroke="#888" fontSize={12} />
                   <YAxis stroke="#888" fontSize={12} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', backdropFilter: 'blur(8px)' }}
                   />
                   <Line type="monotone" dataKey="paid_users" stroke={chartColors.tertiary} strokeWidth={2} name="Paid Users" />
                 </LineChart>
@@ -484,10 +493,10 @@ const CMODashboard = () => {
           </div>
         </div>
 
-        {/* Bonus Progress, Goals & Commission Calculator */}
+        {/* Premium Bonus Progress, Goals & Commission Calculator */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           {/* Bonus Progress */}
-          <div className="glass-card p-6">
+          <div className="glass-card-premium p-6 hover:border-brand/30 transition-all">
             <h3 className="font-semibold text-foreground mb-4">Annual Bonus Progress</h3>
             <div className="flex items-center gap-6">
               <ProgressRing 
@@ -509,7 +518,7 @@ const CMODashboard = () => {
           </div>
 
           {/* Goals */}
-          <div className="glass-card p-6">
+          <div className="glass-card-premium p-6 hover:border-purple-500/30 transition-all">
             <h3 className="font-semibold text-foreground mb-4">Goals</h3>
             <div className="space-y-3">
               {goals.map((goal) => (
@@ -542,10 +551,10 @@ const CMODashboard = () => {
           />
         </div>
 
-        {/* Referral Link */}
-        <div className="glass-card p-6 mb-8">
+        {/* Premium Referral Link */}
+        <div className="glass-card-premium p-6 mb-8 hover:border-brand/30 transition-all">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center ring-2 ring-brand/30">
               <LinkIcon className="w-5 h-5 text-brand" />
             </div>
             <div>
@@ -557,20 +566,21 @@ const CMODashboard = () => {
             <Input 
               value={referralLink}
               readOnly
-              className="font-mono text-sm"
+              className="font-mono text-sm bg-secondary/50"
             />
             <Button 
               variant="outline" 
               onClick={() => copyToClipboard(referralLink, 'Referral link')}
+              className="hover:bg-brand/10 hover:border-brand/50"
             >
               <Copy className="w-4 h-4" />
             </Button>
           </div>
         </div>
 
-        {/* Top Creators Bar Chart */}
+        {/* Premium Top Creators Bar Chart */}
         {topCreators.length > 0 && (
-          <div className="glass-card p-6 mb-8">
+          <div className="glass-card-premium p-6 mb-8 hover:border-brand/30 transition-all">
             <h3 className="font-semibold text-foreground mb-4">Top Creators by Paid Users</h3>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={topCreators.map(c => ({ 
@@ -580,7 +590,7 @@ const CMODashboard = () => {
                 <XAxis dataKey="name" stroke="#888" fontSize={12} />
                 <YAxis stroke="#888" fontSize={12} />
                 <Tooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', backdropFilter: 'blur(8px)' }}
                 />
                 <Bar dataKey="value" fill={chartColors.primary} radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -588,8 +598,8 @@ const CMODashboard = () => {
           </div>
         )}
 
-        {/* Creators Table */}
-        <div className="glass-card overflow-hidden">
+        {/* Premium Creators Table */}
+        <div className="glass-card-premium overflow-hidden">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <h3 className="font-semibold text-foreground">Your Creators</h3>
             <span className="text-sm text-muted-foreground">{creators.length} creators</span>

@@ -439,6 +439,13 @@ const Access = () => {
                   >
                     {isLoading ? "Creating account..." : "Create Account"}
                   </Button>
+
+                  <p className="text-[11px] text-muted-foreground text-center mt-3">
+                    By signing up, you agree to our{' '}
+                    <Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
+                    {' '}and{' '}
+                    <Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>.
+                  </p>
                 </form>
 
                 <button 
