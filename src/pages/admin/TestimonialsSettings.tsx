@@ -522,10 +522,10 @@ const TestimonialsSettings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Stream (for A/L)</Label>
-                  <Select value={studentForm.stream} onValueChange={(v) => setStudentForm({ ...studentForm, stream: v })}>
+                  <Select value={studentForm.stream || 'none'} onValueChange={(v) => setStudentForm({ ...studentForm, stream: v === 'none' ? '' : v })}>
                     <SelectTrigger><SelectValue placeholder="Select stream" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       <SelectItem value="Science">Science</SelectItem>
                       <SelectItem value="Maths">Maths</SelectItem>
                       <SelectItem value="Commerce">Commerce</SelectItem>
