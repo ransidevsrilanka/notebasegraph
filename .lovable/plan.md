@@ -1,374 +1,407 @@
 
-# Comprehensive UI/UX Enhancement Plan
+# Comprehensive UI/UX Fixes & Print Payments System Plan
 
 ## Overview
 
-This plan addresses all the user's requests including navbar styling, hero section fixes, testimonials system overhaul with database-backed content, navigation routing fixes, and Creator Dashboard UI enhancements.
+This plan addresses multiple issues: admin panel rating form, testimonials section redesign, FAQ consolidation, print payments tracking, cost calculation for print profits, and ensuring all financial metrics are correctly calculated.
 
 ---
 
-## Part 1: Navbar Curved Underline Fix
+## Part 1: Fix Student Rating Form in Admin Panel
 
-### Current Issue
-The active indicator line under "Pricing" is a straight line underneath the pill container. User wants it curved to match the rounded container.
+### Issue
+The rating buttons in the student testimonial dialog are "blacked out" - they appear but can't be clicked. This is due to the `<button>` inside the dialog form not having proper styling.
 
 ### Solution
-Update the `.nav-link-underline` CSS to use a curved pill-shaped indicator instead of a straight line.
+**File: `src/pages/admin/TestimonialsSettings.tsx`**
 
-**File: `src/index.css`**
-- Modify the `.nav-link-underline::after` styles to create a curved bottom highlight that hugs the rounded pill shape
-- Use `border-radius` on the underline element and position it to wrap around the bottom curve
+Update lines 539-544 to add proper button styling with cursor-pointer and ensure the buttons are interactive:
 
----
-
-## Part 2: Hero Section Fixes
-
-### 2.1 "Note" Should Be White in "Notebase"
-
-**Current Logic:** The `AnimatedHeading` component checks for `/base/i` to apply gradient styling.
-
-**Fix:** Update the logic to:
-1. Keep "Note" as white (default foreground)
-2. Only apply `text-brand-gradient` to "base" portion
-
-**File: `src/components/ParallaxHero.tsx`**
-- Split "Notebase" into "Note" + "base" for separate styling
-- "Note" stays white, "base" gets the gradient
-
-### 2.2 Swap Button Positions and Styles
-
-**Current Order:**
-1. "Enter Access Code" (brand/primary) - LEFT
-2. "View Plans" (outline) - RIGHT
-
-**New Order:**
-1. "View Plans" (brand/primary with shimmer) - LEFT
-2. "Enter Access Code" (outline with arrow) - RIGHT
-
-**File: `src/components/ParallaxHero.tsx`**
-- Swap the `<Link>` components
-- Swap the button variants and icons
-
----
-
-## Part 3: Fix Navigation Reload Issue
-
-### Current Problem
-When on the home page and clicking on anchor links like "Reviews" or "FAQ", the navigation works. But clicking "Pricing" from the Reviews section causes a full page reload because the current implementation uses:
-```typescript
-window.location.href = path;
+```tsx
+// Rating buttons - fix interactive state
+{[1, 2, 3, 4, 5].map((r) => (
+  <button 
+    key={r} 
+    type="button" 
+    onClick={() => setStudentForm({ ...studentForm, rating: r })}
+    className="cursor-pointer transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-brand/50 rounded"
+  >
+    <Star className={`w-6 h-6 transition-colors ${r <= studentForm.rating ? 'fill-amber-400 text-amber-400' : 'fill-muted/30 text-muted/30 hover:fill-amber-200 hover:text-amber-200'}`} />
+  </button>
+))}
 ```
 
-### Solution
-Use React Router's `useNavigate` with hash handling instead of `window.location.href`.
-
-**File: `src/components/Navbar.tsx`**
-- Replace `window.location.href = path` with proper React Router navigation
-- For anchor links when not on home page: `navigate("/", { replace: false })` then scroll after navigation
-
 ---
 
-## Part 4: Testimonials Section Overhaul
+## Part 2: Redesign Testimonials Section (Professional Look)
 
-### 4.1 Database Schema for Reviews
+### Issues
+1. Green & yellow colors look like a carnival
+2. No glow for profile picture frames
+3. Unprofessional overall appearance
 
-Create two new tables for admin-managed testimonials:
-
-**Table: `teacher_testimonials`**
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| name | text | Teacher name |
-| title | text | Title/Subject taught |
-| photo_url | text | Profile picture URL |
-| message | text | Recommendation message |
-| is_active | boolean | Show/hide toggle |
-| sort_order | integer | Display order |
-| created_at | timestamp | |
-
-**Table: `student_testimonials`**
-| Column | Type | Description |
-|--------|------|-------------|
-| id | uuid | Primary key |
-| name | text | Student name |
-| grade | text | "A/L" or "O/L" |
-| stream | text | Stream (for A/L only) |
-| year | text | e.g., "2024" |
-| message | text | Review message |
-| rating | integer | 1-5 stars |
-| is_active | boolean | Show/hide toggle |
-| sort_order | integer | Display order |
-| created_at | timestamp | |
-
-### 4.2 Updated TestimonialsSection Component
-
-**Top Row (Teachers):**
-- Replace stars with "RECOMMENDED BY" badge
-- Show larger teacher photos (circular, ~60-70px)
-- Display teacher name + title
-- Quote with decorative styling
-- Cards formatted to fit all content nicely
-
-**Bottom Row (Students):**
-- Gold-colored star ratings (using `text-amber-400 fill-amber-400`)
-- Display: name, quote, grade (A/L/O/L), stream (if A/L), year
-- Keep the 3D tilt effect
+### Solution
+Transform the section to use a sophisticated, monochromatic color scheme with subtle brand accents.
 
 **File: `src/components/TestimonialsSection.tsx`**
-- Split into `TeacherTestimonialCard` and `StudentTestimonialCard` components
-- Fetch data from database with fallback to static data
-- Top row: Teachers with "RECOMMENDED" badge
-- Bottom row: Students with gold stars
 
-### 4.3 Admin Panel for Managing Reviews
+**Key Changes:**
 
-**New File: `src/pages/admin/TestimonialsSettings.tsx`**
-- Two tabs: Teachers / Students
-- CRUD operations for both testimonial types
-- Image upload for teacher photos
-- Toggle active/inactive
-- Drag-and-drop reordering (or sort_order input)
+1. **Color Scheme**: Replace green/yellow with sophisticated neutrals + subtle brand blue accents
+2. **Teacher Cards**: 
+   - Use elegant silver/slate tones instead of emerald
+   - Add subtle ring glow to profile pictures (`ring-2 ring-white/20 shadow-lg shadow-white/10`)
+   - "RECOMMENDED" badge in muted slate/brand instead of green
+3. **Student Cards**:
+   - Keep gold stars but remove yellow background accents
+   - Use neutral card backgrounds with subtle brand glow on hover
+4. **General**:
+   - Reduce visual noise
+   - Consistent border styling
+   - Subtle backdrop blur
+   - Elegant quote typography
 
-**Update: `src/App.tsx`**
-- Add route for `/admin/testimonials`
-
-**Update: `src/components/admin/AdminSidebar.tsx`**
-- Add "Testimonials" link to the sidebar
-
----
-
-## Part 5: Star Ratings Color Fix
-
-### Current Issue
-Stars use `fill-brand text-brand` which is blue on the public pages.
-
-### Solution
-Use explicit amber/gold colors for star ratings:
-```tsx
-className="fill-amber-400 text-amber-400"
-```
-
-This ensures gold stars regardless of the brand color context.
+**Color Palette Update:**
+- Teacher badge: `bg-white/10 border-white/20 text-white/90`
+- Teacher photo ring: `ring-2 ring-white/20 shadow-lg shadow-black/50`
+- Student stars: `fill-amber-400 text-amber-400` (keep gold, it's fine)
+- Card backgrounds: `bg-glass/20` with subtle `border-white/5`
+- Hover glow: `hover:border-brand/30` with `bg-gradient-to-br from-brand/5 to-transparent`
 
 ---
 
-## Part 6: Creator Dashboard UI Enhancement
+## Part 3: FAQ Page Restructure
 
 ### Current State
-The Creator Dashboard uses basic `glass-card` styling with functional but visually basic layouts.
+- Full FAQ section exists on Index.tsx (id="faq")
+- Separate FAQ section exists on /pricing page
+- Navbar links to `/#faq`
 
-### Enhancements
+### New Structure
+1. Create dedicated `/faq` page with the full FAQ component
+2. Replace the Index.tsx FAQSection with a "Looking for FAQ?" CTA block
+3. Update Navbar to link to `/faq` instead of `/#faq`
+4. Remove FAQ section from /pricing page
 
-**6.1 Header Enhancement**
-- Add gradient background accent
-- Animated welcome text
-- Quick action buttons with hover effects
+### Files to Modify
 
-**6.2 Stats Cards**
-- Add subtle gradient backgrounds
-- Animated number counters on load
-- Pulse glow effect on the balance card
-- Better spacing and iconography
+**1. Create new page: `src/pages/FAQ.tsx`**
+```tsx
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import FAQSection from "@/components/FAQSection";
 
-**6.3 Charts Section**
-- Enhanced gradient fills
-- Tooltip styling improvements
-- Legend improvements
+const FAQ = () => {
+  return (
+    <main className="min-h-screen bg-background">
+      <Navbar />
+      <div className="pt-24" />
+      <FAQSection />
+      <Footer />
+    </main>
+  );
+};
 
-**6.4 Tier Progress Section**
-- More visual tier cards with icons
-- Animated progress bar
-- Protection shield badge styling
+export default FAQ;
+```
 
-**6.5 General Improvements**
-- Background with subtle floating orbs (like admin pages)
-- Better card hover states
-- Improved mobile responsiveness
-- Subtle animations on scroll reveal
+**2. Create CTA component: `src/components/FAQCta.tsx`**
+```tsx
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { HelpCircle, ArrowRight } from "lucide-react";
 
-**File: `src/pages/creator/CreatorDashboard.tsx`**
-- Add `.creator-premium-bg` class similar to admin
-- Enhance stat card styling
-- Add animation classes to elements
-- Improve mobile grid layouts
+const FAQCta = () => {
+  return (
+    <section className="py-16 md:py-20">
+      <div className="container mx-auto px-4 sm:px-6">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-brand/10 flex items-center justify-center">
+            <HelpCircle className="w-8 h-8 text-brand" />
+          </div>
+          <h3 className="font-display text-2xl md:text-3xl font-bold text-foreground mb-4">
+            Have Questions?
+          </h3>
+          <p className="text-muted-foreground mb-6">
+            Find answers to common questions about Notebase, pricing, content access, and more.
+          </p>
+          <Link to="/faq">
+            <Button variant="brand" size="lg" className="gap-2">
+              View FAQ
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+export default FAQCta;
+```
+
+**3. Update: `src/pages/Index.tsx`**
+- Replace `<FAQSection />` with `<FAQCta />`
+
+**4. Update: `src/pages/Pricing.tsx`**
+- Remove the entire FAQ section (lines 24-52)
+
+**5. Update: `src/components/Navbar.tsx`**
+- Change `{ name: "FAQ", path: "/#faq" }` to `{ name: "FAQ", path: "/faq" }`
+- Update handleNavClick to handle regular routes
+
+**6. Update: `src/App.tsx`**
+- Add route: `<Route path="/faq" element={<FAQ />} />`
 
 ---
 
-## Part 7: Mobile Responsiveness
+## Part 4: Print Payments Admin Page
 
-Ensure all changes work on mobile:
+### Issue
+No dedicated panel to view payments from print requests.
 
-### TestimonialsSection
-- Marquee continues to work on mobile
-- Cards have appropriate sizing (w-[300px] on mobile)
-- Teacher photos scale appropriately
+### Solution
+Add a "Print Payments" page under Finance section showing all completed print request payments.
 
-### Navbar
-- Curved underline works in mobile menu
-- Touch-friendly interactions
+**1. Create: `src/pages/admin/PrintPayments.tsx`**
 
-### Creator Dashboard
-- Stat cards stack properly on mobile
-- Charts remain readable
-- Dialogs are scrollable
+Features:
+- List all print requests with payment_status = 'paid'
+- Show: Request #, Customer, Amount, Pages, Cost, Profit, Date
+- Filter by date range, payment method
+- Calculate totals: Revenue, Cost, Profit
+- Export capability
+
+**Key Financial Metrics per Request:**
+```tsx
+const printCostPerPage = settings.print_cost_per_page || 4; // New field
+const totalCost = request.estimated_pages * printCostPerPage;
+const profit = request.total_amount - totalCost;
+```
+
+**2. Update: `src/components/admin/AdminSidebar.tsx`**
+Add under Finance group:
+```tsx
+{ label: 'Print Payments', href: '/admin/print-payments', icon: Printer, badge: 0 },
+```
+
+**3. Update: `src/App.tsx`**
+Add route for `/admin/print-payments`
 
 ---
 
-## Files to Create
+## Part 5: Print Settings - Add Cost Per Page Field
 
-| File | Purpose |
-|------|---------|
-| `src/pages/admin/TestimonialsSettings.tsx` | Admin CRUD for teacher/student testimonials |
+### Current Schema
+`print_settings` table has:
+- notes_price_per_page (selling price)
+- model_paper_price_per_page (selling price)
+- base_delivery_fee
+- cod_extra_fee
 
-## Files to Modify
+### Required Addition
+Add a new column for actual printing cost:
+- `print_cost_per_page` (our cost to print a page)
 
-| File | Changes |
-|------|---------|
-| `src/index.css` | Curved navbar underline, gold star colors, creator dashboard styles |
-| `src/components/Navbar.tsx` | Fix routing to avoid page reloads |
-| `src/components/ParallaxHero.tsx` | Fix "Note" white color, swap button positions |
-| `src/components/TestimonialsSection.tsx` | Complete rewrite for teachers/students split |
-| `src/pages/creator/CreatorDashboard.tsx` | UI enhancements |
-| `src/App.tsx` | Add testimonials admin route |
-| `src/components/admin/AdminSidebar.tsx` | Add testimonials link |
-
-## Database Migration
+### Database Migration
 
 ```sql
--- Teacher testimonials table
-CREATE TABLE teacher_testimonials (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  title TEXT,
-  photo_url TEXT,
-  message TEXT NOT NULL,
-  is_active BOOLEAN DEFAULT true,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+ALTER TABLE print_settings
+ADD COLUMN print_cost_per_page NUMERIC DEFAULT 4;
 
--- Student testimonials table  
-CREATE TABLE student_testimonials (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  grade TEXT NOT NULL CHECK (grade IN ('A/L', 'O/L')),
-  stream TEXT,
-  year TEXT NOT NULL,
-  message TEXT NOT NULL,
-  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
-  is_active BOOLEAN DEFAULT true,
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
+COMMENT ON COLUMN print_settings.print_cost_per_page IS 'Actual cost to print one page (for profit calculation)';
+```
 
--- RLS Policies
-ALTER TABLE teacher_testimonials ENABLE ROW LEVEL SECURITY;
-ALTER TABLE student_testimonials ENABLE ROW LEVEL SECURITY;
+### Update PrintSettingsPanel
 
--- Public read access
-CREATE POLICY "Public can view active teacher testimonials" ON teacher_testimonials
-  FOR SELECT USING (is_active = true);
+**File: `src/components/dashboard/PrintSettingsPanel.tsx`**
 
-CREATE POLICY "Public can view active student testimonials" ON student_testimonials
-  FOR SELECT USING (is_active = true);
-
--- Admin full access (assuming admin role check)
-CREATE POLICY "Admins can manage teacher testimonials" ON teacher_testimonials
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'ceo')
-  );
-
-CREATE POLICY "Admins can manage student testimonials" ON student_testimonials
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'ceo')
-  );
-
--- Insert sample data
-INSERT INTO teacher_testimonials (name, title, message, sort_order) VALUES
-  ('Dr. Kamal Perera', 'Senior Physics Lecturer', 'Notebase provides exceptional study materials that align perfectly with the national curriculum. I recommend it to all my students.', 1),
-  ('Mrs. Shalini Fernando', 'Mathematics Teacher', 'The quality of model papers and structured notes is outstanding. A must-have resource for serious students.', 2),
-  ('Mr. Ranjan Silva', 'Chemistry Tutor', 'I''ve seen remarkable improvement in my students who use Notebase regularly. The content is comprehensive and well-organized.', 3),
-  ('Dr. Nimal Jayawardena', 'Biology Professor', 'As an educator, I appreciate the accuracy and depth of the materials. Highly recommended for A/L Science students.', 4);
-
-INSERT INTO student_testimonials (name, grade, stream, year, message, rating, sort_order) VALUES
-  ('Kavindi Perera', 'A/L', 'Science', '2024', 'The model papers helped me score 3 A''s. The AI tutor explained concepts I struggled with for months in just minutes!', 5, 1),
-  ('Tharushi Fernando', 'O/L', NULL, '2025', 'Best study platform I''ve used. The notes are so well organized and easy to understand.', 5, 2),
-  ('Dineth Silva', 'A/L', 'Maths', '2024', 'Finally passed Combined Maths with a B! The step-by-step solutions made everything click.', 5, 3),
-  ('Nethmi Jayawardena', 'A/L', 'Commerce', '2024', 'The flashcards feature is amazing for memorizing accounting concepts. Saved me so much time!', 5, 4),
-  ('Ravindu Wickramasinghe', 'O/L', NULL, '2025', 'I improved my Science grade from C to A in just 3 months. The quizzes really help test your knowledge.', 5, 5),
-  ('Sanduni Dissanayake', 'A/L', 'Arts', '2024', 'The Sinhala medium notes are excellent. Finally a platform that caters to us properly!', 5, 6);
+Add new input field for print cost:
+```tsx
+<div className="space-y-2">
+  <Label htmlFor="printCost">Print Cost (per page)</Label>
+  <p className="text-xs text-muted-foreground mb-1">Your actual cost to print one page</p>
+  <div className="relative">
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">Rs.</span>
+    <Input
+      id="printCost"
+      type="number"
+      value={printCost}
+      onChange={(e) => setPrintCost(parseFloat(e.target.value) || 0)}
+      className="pl-10"
+      min={0}
+      step={0.5}
+    />
+  </div>
+</div>
 ```
 
 ---
 
-## Visual Summary
+## Part 6: Admin Dashboard - Add Print Profit Card
 
-### Navbar Active Indicator (Before/After)
-```
-BEFORE:                    AFTER:
-[Pricing]                  [Pricing]
-────────                   ╰──────╯
-(straight line)            (curved to match pill)
+### Current State
+Net Profit calculation includes printRevenue but NOT the printing costs.
+
+### Required Change
+Add a dedicated "Print Profit" card showing:
+- Print Revenue
+- Print Costs (pages × cost_per_page)
+- Print Profit (Revenue - Costs)
+
+### Files to Modify
+
+**File: `src/pages/admin/AdminDashboard.tsx`**
+
+1. **Fetch print cost setting:**
+```tsx
+// In fetchStats
+const { data: printSettings } = await supabase
+  .from('print_settings')
+  .select('print_cost_per_page')
+  .eq('is_active', true)
+  .single();
+
+const printCostPerPage = printSettings?.print_cost_per_page || 4;
+
+// Calculate total pages from paid print requests
+const { data: paidPrintRequests } = await supabase
+  .from('print_requests')
+  .select('estimated_pages, total_amount')
+  .eq('payment_status', 'paid');
+
+const totalPrintPages = (paidPrintRequests || []).reduce(
+  (sum, p) => sum + (p.estimated_pages || 0), 0
+);
+const printRevenue = (paidPrintRequests || []).reduce(
+  (sum, p) => sum + Number(p.total_amount || 0), 0
+);
+const printCost = totalPrintPages * printCostPerPage;
+const printProfit = printRevenue - printCost;
 ```
 
-### Hero Buttons (Before/After)
-```
-BEFORE:
-[🔑 Enter Access Code] (brand)  |  [View Plans →] (outline)
-
-AFTER:
-[View Plans →] (brand)  |  [🔑 Enter Access Code] (outline)
+2. **Add to stats state:**
+```tsx
+printCost: number;
+printProfit: number;
 ```
 
-### Testimonials Layout
+3. **Update Net Profit calculation:**
+```tsx
+// Net Profit should now include print profit
+const netProfit = (totalRevenue + stats.printProfit) - payhereCommission - stats.creatorCommissions;
 ```
-TOP ROW (Teachers):
-┌─────────────────────────────────────────────────────────────┐
-│  🏅 RECOMMENDED BY TOP EDUCATORS                            │
-│                                                             │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │ 👤 Photo   │  │ 👤 Photo   │  │ 👤 Photo   │  ← Marquee │
-│  │ Name       │  │ Name       │  │ Name       │            │
-│  │ Title      │  │ Title      │  │ Title      │            │
-│  │ "Quote..." │  │ "Quote..." │  │ "Quote..." │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
-└─────────────────────────────────────────────────────────────┘
 
-BOTTOM ROW (Students):
-┌─────────────────────────────────────────────────────────────┐
-│  ⭐ STUDENT REVIEWS                                         │
-│                                                             │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
-│  │ ★★★★★      │  │ ★★★★★      │  │ ★★★★★      │  ← Marquee │
-│  │ (gold)     │  │ (gold)     │  │ (gold)     │            │
-│  │ "Quote..." │  │ "Quote..." │  │ "Quote..." │            │
-│  │ Name       │  │ Name       │  │ Name       │            │
-│  │ A/L • Math │  │ O/L • 2025 │  │ A/L • Arts │            │
-│  └────────────┘  └────────────┘  └────────────┘            │
-└─────────────────────────────────────────────────────────────┘
+4. **Add Print Profit Card:**
+```tsx
+<div className="glass-card-premium p-6 bg-gradient-to-r from-purple-500/10 via-brand/5 to-transparent border-purple-500/30">
+  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <Printer className="w-5 h-5 text-purple-500" />
+        <span className="text-sm text-muted-foreground font-medium">Print Profit</span>
+      </div>
+      <p className="text-3xl font-bold text-purple-500">
+        Rs. {stats.printProfit.toLocaleString()}
+      </p>
+      <p className="text-xs text-muted-foreground mt-1">
+        Revenue: Rs. {stats.printRevenue.toLocaleString()} − Cost: Rs. {stats.printCost.toLocaleString()}
+      </p>
+    </div>
+    <div className="grid grid-cols-2 gap-4 text-center">
+      <div className="p-3 bg-secondary/50 rounded-lg">
+        <p className="text-xs text-muted-foreground">Pages Printed</p>
+        <p className="text-lg font-semibold text-foreground">{stats.totalPrintPages}</p>
+      </div>
+      <div className="p-3 bg-secondary/50 rounded-lg">
+        <p className="text-xs text-muted-foreground">Margin</p>
+        <p className="text-lg font-semibold text-green-500">
+          {stats.printRevenue > 0 ? Math.round((stats.printProfit / stats.printRevenue) * 100) : 0}%
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 ```
 
 ---
 
-## Performance Considerations
+## Part 7: Ensure Correct Payment & Commission Logic
 
-1. **Testimonials Fetching**: Use `useQuery` with caching to prevent refetching
-2. **Image Optimization**: Teacher photos should be stored in Supabase Storage with proper sizing
-3. **Animation Performance**: Continue using `transform` and `opacity` for GPU acceleration
-4. **Mobile**: Ensure marquee animation doesn't cause layout shifts
+### Current Commission Flow
+1. Payment comes in via PayHere or Bank
+2. `finalize-payment-user` edge function creates `payment_attributions` record
+3. Creator commission is calculated based on tier and stored in `creator_commission_amount`
+4. Database trigger updates creator's `available_balance`
+
+### Print Request Payments
+Currently, print request payments:
+- Are tracked separately in `print_requests` table
+- NOT linked to `payment_attributions`
+- NOT giving creators commission
+
+### Decision Point: Should Print Requests Give Creator Commission?
+
+Based on the existing system, print requests should **NOT** give creator commissions because:
+1. Print requests are a separate service
+2. They're not tied to subscription enrollments
+3. The profit model is different (physical goods vs digital access)
+
+### Verification Checklist
+- [x] Print revenue is correctly calculated from `print_requests.total_amount WHERE payment_status = 'paid'`
+- [x] Print cost calculation uses new `print_cost_per_page` field
+- [x] Print profit = Revenue - Cost
+- [x] Net Profit includes print profit separately
+- [x] Creator commissions remain tied to `payment_attributions` only
+
+---
+
+## Summary of Changes
+
+### Files to Create
+| File | Purpose |
+|------|---------|
+| `src/pages/FAQ.tsx` | Dedicated FAQ page |
+| `src/components/FAQCta.tsx` | CTA block for Index page |
+| `src/pages/admin/PrintPayments.tsx` | Print payments admin panel |
+
+### Files to Modify
+| File | Changes |
+|------|---------|
+| `src/pages/admin/TestimonialsSettings.tsx` | Fix star rating button interactivity |
+| `src/components/TestimonialsSection.tsx` | Professional redesign with neutral colors |
+| `src/pages/Index.tsx` | Replace FAQSection with FAQCta |
+| `src/pages/Pricing.tsx` | Remove FAQ section |
+| `src/components/Navbar.tsx` | Update FAQ link to /faq |
+| `src/App.tsx` | Add /faq and /admin/print-payments routes |
+| `src/components/dashboard/PrintSettingsPanel.tsx` | Add print cost per page field |
+| `src/components/admin/AdminSidebar.tsx` | Add Print Payments link |
+| `src/pages/admin/AdminDashboard.tsx` | Add print profit card and calculations |
+
+### Database Migration
+
+```sql
+-- Add print cost per page field to print_settings
+ALTER TABLE print_settings
+ADD COLUMN IF NOT EXISTS print_cost_per_page NUMERIC DEFAULT 4;
+
+COMMENT ON COLUMN print_settings.print_cost_per_page IS 'Actual cost to print one page (for profit calculation)';
+```
 
 ---
 
 ## Testing Checklist
 
-- [ ] Navbar curved underline visible on active state
-- [ ] "Note" displays white, "base" displays gradient
-- [ ] "View Plans" button on left with brand styling
-- [ ] "Enter Access Code" button on right with outline styling
-- [ ] No page reload when navigating between sections
-- [ ] Teacher testimonials show "RECOMMENDED" badge (no stars)
-- [ ] Student testimonials show gold star ratings
-- [ ] Admin can add/edit/delete teacher testimonials
-- [ ] Admin can add/edit/delete student testimonials
-- [ ] Creator Dashboard has enhanced visual styling
-- [ ] All features work on mobile devices
+- [ ] Star rating buttons in student testimonial dialog work correctly
+- [ ] Testimonials section has professional, non-carnival appearance
+- [ ] FAQ page loads at /faq with all categories
+- [ ] Index page shows FAQ CTA that links to /faq (no reload)
+- [ ] Navbar FAQ link navigates to /faq (no reload)
+- [ ] /pricing page no longer has FAQ section
+- [ ] Print cost per page field appears in pricing settings
+- [ ] Print Payments admin page shows paid print requests
+- [ ] Admin dashboard shows Print Profit card with correct calculations
+- [ ] Net Profit correctly includes print profit
+- [ ] Creator commissions are NOT affected by print requests
+- [ ] All metrics update correctly when new print payments come in
+- [ ] Mobile responsiveness maintained throughout
