@@ -105,16 +105,18 @@ Deno.serve(async (req) => {
         if (newTierLevel !== currentTierLevel) {
           const isPromotion = newTierLevel > currentTierLevel;
           
+          // The tier change takes effect for the NEXT 30-day period
+          // Whether promoted or demoted, give them 30 days at the new tier
+          const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+          
           // Update the creator's tier
           const { error: updateError } = await supabase
             .from('creator_profiles')
             .update({
               current_tier_level: newTierLevel,
               monthly_paid_users: monthlyCount,
-              // If promoted, give 30 days protection for new tier
-              tier_protection_until: isPromotion 
-                ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
-                : null,
+              // ALWAYS give 30-day protection for the new tier (both promotion AND demotion)
+              tier_protection_until: thirtyDaysFromNow,
             })
             .eq('id', creator.id);
 

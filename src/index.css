@@ -728,6 +728,51 @@
   .stagger-delay-5 { animation-delay: 0.5s; }
   .stagger-delay-6 { animation-delay: 0.6s; }
 
+  /* Creator Dashboard Premium Background */
+  .creator-premium-bg {
+    position: relative;
+  }
+
+  .creator-premium-bg::before {
+    content: '';
+    position: absolute;
+    top: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+
+  .creator-premium-bg::after {
+    content: '';
+    position: absolute;
+    bottom: 20%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, hsl(217 91% 60% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+
+  /* Animated Border Flow - no glow */
+  @keyframes border-flow {
+    0% { border-color: hsl(var(--brand) / 0.3); }
+    25% { border-color: hsl(var(--brand) / 0.6); }
+    50% { border-color: hsl(var(--brand) / 1); }
+    75% { border-color: hsl(var(--brand) / 0.6); }
+    100% { border-color: hsl(var(--brand) / 0.3); }
+  }
+
+  .animate-border-flow {
+    animation: border-flow 2s ease-in-out infinite;
+    box-shadow: none !important;
+  }
+
   /* Reduced motion support */
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer,
@@ -736,6 +781,7 @@
     .animate-text-reveal,
     .animate-float,
     .animate-pulse-glow,
+    .animate-border-flow,
     .gradient-animate {
       animation: none;
     }
