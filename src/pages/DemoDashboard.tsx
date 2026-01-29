@@ -7,19 +7,19 @@ import {
   BookOpen, 
   ChevronRight, 
   Sparkles,
-  Users,
-  GraduationCap,
+  Crown,
   Lock,
   FileText,
-  BarChart3,
-  Target,
   Clock,
-  Award
+  Shield,
+  ArrowUpRight,
+  Share2,
+  Languages,
 } from 'lucide-react';
+import { useBranding } from '@/hooks/useBranding';
 import DemoTour from '@/components/demo/DemoTour';
-import LockedContent from '@/components/demo/LockedContent';
 import type { StreamType } from '@/types/database';
-import { STREAM_LABELS } from '@/types/database';
+import { STREAM_LABELS, TIER_LABELS, GRADE_LABELS, MEDIUM_LABELS } from '@/types/database';
 
 interface Subject {
   id: string;
@@ -37,11 +37,23 @@ interface Topic {
   subject_id: string;
 }
 
+interface Note {
+  id: string;
+  title: string;
+  description: string | null;
+  min_tier: string | null;
+  topic_id: string;
+  page_count: number | null;
+}
+
 const DemoDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { branding, isLoading: brandingLoading } = useBranding();
+  
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Record<string, Topic[]>>({});
+  const [notes, setNotes] = useState<Record<string, Note[]>>({});
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showTour, setShowTour] = useState(true);
@@ -50,6 +62,32 @@ const DemoDashboard = () => {
   const selectedSubjectIds = searchParams.get('subjects')?.split(',') || [];
   const selectedStream = searchParams.get('stream') as StreamType | null;
   const selectedGrade = searchParams.get('grade') || 'al';
+  const selectedMedium = 'english';
+
+  // Simulated enrollment for demo - starter tier
+  const simulatedEnrollment = {
+    tier: 'starter' as const,
+    grade: selectedGrade === 'al' ? 'al_year_1' : 'ol_grade_10',
+    stream: selectedStream || 'maths',
+    medium: selectedMedium,
+  };
+
+  // Tier order for access checking
+  const tierOrder = ['starter', 'standard', 'lifetime'];
+  
+  const isNoteLocked = (noteMinTier: string | null) => {
+    if (!noteMinTier || noteMinTier === 'starter') return false;
+    const demoTierIndex = tierOrder.indexOf(simulatedEnrollment.tier);
+    const noteTierIndex = tierOrder.indexOf(noteMinTier);
+    return noteTierIndex > demoTierIndex;
+  };
+
+  const getTierBadge = (tier: string | null) => {
+    if (!tier || tier === 'starter') return null;
+    if (tier === 'standard') return { label: 'Gold', color: 'bg-brand/20 text-brand border-brand/30' };
+    if (tier === 'lifetime') return { label: 'Platinum', color: 'bg-gold/20 text-gold border-gold/30' };
+    return null;
+  };
 
   useEffect(() => {
     if (selectedSubjectIds.length === 0) {
@@ -79,25 +117,65 @@ const DemoDashboard = () => {
 
       if (topicsData) {
         const topicsBySubject: Record<string, Topic[]> = {};
+        const topicIds: string[] = [];
+        
         topicsData.forEach((topic: any) => {
           if (!topicsBySubject[topic.subject_id]) {
             topicsBySubject[topic.subject_id] = [];
           }
           topicsBySubject[topic.subject_id].push(topic);
+          topicIds.push(topic.id);
         });
         setTopics(topicsBySubject);
+
+        // Fetch notes for all topics
+        if (topicIds.length > 0) {
+          const { data: notesData } = await supabase
+            .from('notes')
+            .select('id, title, description, min_tier, topic_id, page_count')
+            .in('topic_id', topicIds)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false });
+
+          if (notesData) {
+            const notesByTopic: Record<string, Note[]> = {};
+            notesData.forEach((note: any) => {
+              if (!notesByTopic[note.topic_id]) {
+                notesByTopic[note.topic_id] = [];
+              }
+              notesByTopic[note.topic_id].push(note);
+            });
+            setNotes(notesByTopic);
+          }
+        }
       }
     }
 
     setIsLoading(false);
   };
 
-  // Mock stats for demo
-  const mockStats = {
-    totalNotes: 156,
-    topicsCompleted: 0,
-    studyStreak: 0,
-    hoursStudied: 0
+  // Calculate stats
+  const totalTopics = Object.values(topics).flat().length;
+  const totalNotes = Object.values(notes).flat().length;
+  const lockedNotes = Object.values(notes).flat().filter(n => isNoteLocked(n.min_tier)).length;
+  const accessibleNotes = totalNotes - lockedNotes;
+
+  const tierColors = {
+    starter: 'bg-secondary',
+    standard: 'bg-brand/10',
+    lifetime: 'bg-gold/10',
+  };
+
+  const tierTextColors = {
+    starter: 'text-muted-foreground',
+    standard: 'text-brand',
+    lifetime: 'text-gold',
+  };
+
+  const tierBorder = {
+    starter: 'border border-border',
+    standard: 'border border-brand/40',
+    lifetime: 'border border-gold/50',
   };
 
   return (
@@ -105,19 +183,38 @@ const DemoDashboard = () => {
       {/* Tour Overlay */}
       {showTour && <DemoTour onComplete={() => setShowTour(false)} />}
 
-      {/* Header */}
+      {/* Header - Mirrors real dashboard */}
       <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <GraduationCap className="w-8 h-8 text-brand" />
-              <span className="font-display text-xl font-bold text-foreground">
-                Zen Notes
+            <Link to="/" className="flex items-center gap-3">
+              {!brandingLoading && branding.logoImage ? (
+                <img src={branding.logoImage} alt={branding.siteName} className="h-8 w-auto" />
+              ) : (
+                <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                  <BookOpen className="w-5 h-5 text-brand" />
+                </div>
+              )}
+              <span className="font-display font-bold text-foreground text-lg">
+                {branding.siteName || 'Dashboard'}
               </span>
-              <Badge className="bg-yellow-500/20 text-yellow-600 border-0">Demo Mode</Badge>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={() => navigate('/demo')}>
+            </Link>
+            
+            <div className="flex items-center gap-4">
+              {/* Demo Badge */}
+              <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30">
+                Demo Mode
+              </Badge>
+              
+              {/* Tier Badge */}
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${tierColors[simulatedEnrollment.tier]} ${tierBorder[simulatedEnrollment.tier]}`}>
+                <Crown className={`w-4 h-4 ${tierTextColors[simulatedEnrollment.tier]}`} />
+                <span className={`text-sm font-medium ${tierTextColors[simulatedEnrollment.tier]}`}>
+                  {TIER_LABELS[simulatedEnrollment.tier]}
+                </span>
+              </div>
+              
+              <Button variant="outline" size="sm" onClick={() => navigate('/demo')}>
                 Change Subjects
               </Button>
               <Button variant="brand" onClick={() => navigate('/paid-signup')} className="gap-2">
@@ -129,66 +226,101 @@ const DemoDashboard = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
-        {/* Welcome Banner */}
-        <div className="glass-card p-6 mb-8 bg-gradient-to-r from-brand/5 to-brand/10 border-brand/20">
-          <div className="flex items-center justify-between flex-wrap gap-4">
+      <section className="pt-8 pb-8">
+        <div className="container mx-auto px-4">
+          {/* Welcome Header */}
+          <header className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 py-6 mb-8">
             <div>
-              <h1 className="font-display text-2xl font-bold text-foreground mb-1">
-                Welcome to Your Demo Dashboard
+              <span className="text-brand text-sm font-medium uppercase tracking-wider">Demo Dashboard</span>
+              <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mt-1 tracking-tight">
+                Welcome to {branding.siteName}
               </h1>
-              <p className="text-muted-foreground">
-                Explore subjects and topics. Sign up to unlock notes and premium features.
+              <p className="text-muted-foreground mt-2">
+                Explore subjects and topics. Sign up to unlock all notes and premium features.
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-brand">1,200+</p>
-                <p className="text-xs text-muted-foreground">Students</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-brand">{mockStats.totalNotes}</p>
-                <p className="text-xs text-muted-foreground">Notes</p>
-              </div>
-            </div>
-          </div>
-        </div>
+          </header>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="glass-card p-5">
-            <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center mb-3">
-              <BookOpen className="w-5 h-5 text-brand" />
+          {/* Stats Row - Mirrors real dashboard */}
+          <section aria-label="Account overview" className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+            <div className="glass-card p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
+              <p className="text-2xl font-display font-bold text-foreground">{subjects.length}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Subjects</p>
             </div>
-            <p className="text-2xl font-bold text-foreground">{subjects.length}</p>
-            <p className="text-sm text-muted-foreground">Subjects</p>
-          </div>
-          <div className="glass-card p-5">
-            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center mb-3">
-              <Target className="w-5 h-5 text-green-500" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockStats.topicsCompleted}</p>
-            <p className="text-sm text-muted-foreground">Topics Completed</p>
-          </div>
-          <div className="glass-card p-5">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mb-3">
-              <Award className="w-5 h-5 text-purple-500" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockStats.studyStreak}</p>
-            <p className="text-sm text-muted-foreground">Day Streak</p>
-          </div>
-          <div className="glass-card p-5">
-            <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center mb-3">
-              <Clock className="w-5 h-5 text-blue-500" />
-            </div>
-            <p className="text-2xl font-bold text-foreground">{mockStats.hoursStudied}</p>
-            <p className="text-sm text-muted-foreground">Hours Studied</p>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Subjects & Topics */}
-          <div className="lg:col-span-2 space-y-6">
+            <div className="glass-card p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                  <Crown className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
+              <p className="text-2xl font-display font-bold text-foreground">
+                {selectedStream ? STREAM_LABELS[selectedStream] : selectedGrade === 'ol' ? 'O/L' : 'A/L'}
+              </p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">
+                {selectedStream ? 'Stream' : 'Level'}
+              </p>
+            </div>
+
+            <div className="glass-card p-5 border-brand/30">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-brand/10 flex items-center justify-center">
+                  <FileText className="w-4 h-4 text-brand" />
+                </div>
+              </div>
+              <p className="text-2xl font-display font-bold text-foreground">{accessibleNotes}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Accessible Notes</p>
+            </div>
+
+            <div className="glass-card p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
+                  <Lock className="w-4 h-4 text-muted-foreground" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-2xl font-display font-bold text-foreground">{lockedNotes}</p>
+                <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Locked (Upgrade)</p>
+            </div>
+          </section>
+
+          {/* Upgrade CTA Banner */}
+          <div className="glass-card p-6 mb-8 bg-gradient-to-r from-brand/5 via-brand/10 to-purple-500/5 border-brand/20">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center">
+                  <Sparkles className="w-6 h-6 text-brand" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Unlock Full Access</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Sign up to access all notes, quizzes, flashcards, and AI tutor
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" asChild>
+                  <Link to="/pricing">View Plans</Link>
+                </Button>
+                <Button variant="brand" asChild>
+                  <Link to="/paid-signup">
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Sign Up Now
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Subjects List */}
+          <div className="space-y-6">
             <h2 className="font-display text-xl font-bold text-foreground">Your Subjects</h2>
             
             {isLoading ? (
@@ -224,7 +356,7 @@ const DemoDashboard = () => {
                       }`} />
                     </button>
 
-                    {/* Topics */}
+                    {/* Topics & Notes */}
                     {selectedSubject?.id === subject.id && (
                       <div className="border-t border-border">
                         {(topics[subject.id] || []).length === 0 ? (
@@ -234,22 +366,71 @@ const DemoDashboard = () => {
                         ) : (
                           <div className="divide-y divide-border">
                             {(topics[subject.id] || []).map((topic) => (
-                              <div key={topic.id} className="p-4 hover:bg-secondary/30">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <FileText className="w-5 h-5 text-muted-foreground" />
-                                    <div>
-                                      <p className="font-medium text-foreground">{topic.name}</p>
-                                      {topic.description && (
-                                        <p className="text-xs text-muted-foreground">{topic.description}</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                    <Lock className="w-4 h-4 text-muted-foreground" />
-                                    <span className="text-xs text-muted-foreground">Locked</span>
+                              <div key={topic.id} className="p-4">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <FileText className="w-5 h-5 text-brand" />
+                                  <div>
+                                    <p className="font-medium text-foreground">{topic.name}</p>
+                                    {topic.description && (
+                                      <p className="text-xs text-muted-foreground">{topic.description}</p>
+                                    )}
                                   </div>
                                 </div>
+                                
+                                {/* Notes for this topic */}
+                                {(notes[topic.id] || []).length > 0 && (
+                                  <div className="ml-8 space-y-2">
+                                    {(notes[topic.id] || []).map((note) => {
+                                      const locked = isNoteLocked(note.min_tier);
+                                      const tierBadge = getTierBadge(note.min_tier);
+                                      
+                                      return (
+                                        <div 
+                                          key={note.id} 
+                                          className={`flex items-center justify-between p-3 rounded-lg ${
+                                            locked ? 'bg-muted/30 opacity-75' : 'bg-secondary/50 hover:bg-secondary/70'
+                                          } transition-colors`}
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            {locked ? (
+                                              <Lock className="w-4 h-4 text-muted-foreground" />
+                                            ) : (
+                                              <FileText className="w-4 h-4 text-muted-foreground" />
+                                            )}
+                                            <div>
+                                              <p className={`text-sm font-medium ${locked ? 'text-muted-foreground' : 'text-foreground'}`}>
+                                                {note.title}
+                                              </p>
+                                              {note.page_count && (
+                                                <p className="text-xs text-muted-foreground">{note.page_count} pages</p>
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                            {tierBadge && (
+                                              <Badge className={`text-[10px] ${tierBadge.color}`}>
+                                                {tierBadge.label}
+                                              </Badge>
+                                            )}
+                                            {locked && (
+                                              <Button 
+                                                variant="ghost" 
+                                                size="sm" 
+                                                className="text-xs h-7"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  navigate('/paid-signup');
+                                                }}
+                                              >
+                                                Unlock
+                                              </Button>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -261,41 +442,8 @@ const DemoDashboard = () => {
               </div>
             )}
           </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* CTA Card */}
-            <div className="glass-card p-6 bg-gradient-to-br from-brand/10 to-brand/5 border-brand/20">
-              <Sparkles className="w-8 h-8 text-brand mb-4" />
-              <h3 className="font-display text-lg font-bold text-foreground mb-2">
-                Unlock Full Access
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Get unlimited access to all notes, quizzes, flashcards, and premium features.
-              </p>
-              <Button variant="brand" className="w-full" onClick={() => navigate('/paid-signup')}>
-                Sign Up Now
-              </Button>
-            </div>
-
-            {/* Locked Features Preview */}
-            <LockedContent 
-              title="Study Notes"
-              description="Access comprehensive notes prepared by top educators"
-            />
-
-            <LockedContent 
-              title="Practice Quizzes"
-              description="Test your knowledge with MCQs and get instant feedback"
-            />
-
-            <LockedContent 
-              title="Flashcards"
-              description="Master key concepts with spaced repetition"
-            />
-          </div>
         </div>
-      </div>
+      </section>
 
       {/* Floating CTA */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">

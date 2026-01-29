@@ -11,6 +11,7 @@ const Footer = () => {
     { name: "Pricing", path: "/pricing" },
     { name: "About", path: "/about" },
     { name: "Enter Code", path: "/access" },
+    { name: "Become an Affiliate", path: "/apply-affiliate" },
   ];
 
   const legalLinks = [

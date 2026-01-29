@@ -8,10 +8,12 @@ import {
   ChevronRight, 
   Sparkles,
   Users,
-  GraduationCap,
   CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useBranding } from '@/hooks/useBranding';
+import Navbar from '@/components/Navbar';
+import Footer from '@/components/Footer';
 import type { StreamType, GradeGroup } from '@/types/database';
 import { STREAM_LABELS, GRADE_GROUPS } from '@/types/database';
 
@@ -26,6 +28,7 @@ interface Subject {
 
 const DemoSelection = () => {
   const navigate = useNavigate();
+  const { branding } = useBranding();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -102,25 +105,9 @@ const DemoSelection = () => {
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <GraduationCap className="w-8 h-8 text-brand" />
-              <span className="font-display text-xl font-bold text-foreground">
-                Zen Notes
-              </span>
-              <Badge className="bg-brand/20 text-brand border-0">Demo</Badge>
-            </div>
-            <Button variant="brand" onClick={() => navigate('/paid-signup')}>
-              Sign Up Now
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      <div className="container mx-auto px-4 py-12">
+      <Navbar />
+      
+      <div className="container mx-auto px-4 py-12 pt-24">
         {/* Hero Section */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-brand/10 rounded-full text-brand text-sm font-medium mb-4">
@@ -128,7 +115,7 @@ const DemoSelection = () => {
             Experience the platform before you commit
           </div>
           <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
-            Try Zen Notes for Free
+            Try {branding.siteName} for Free
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             Select your subjects and explore our dashboard, topics, and learning materials. 
@@ -272,12 +259,14 @@ const DemoSelection = () => {
                 <ChevronRight className="w-5 h-5" />
               </Button>
               <p className="text-sm text-muted-foreground mt-3">
-                You're just one step away from exploring Zen Notes!
+                You're just one step away from exploring {branding.siteName}!
               </p>
             </div>
           )}
         </div>
       </div>
+      
+      <Footer />
     </main>
   );
 };

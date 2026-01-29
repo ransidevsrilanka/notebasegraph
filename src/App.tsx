@@ -60,8 +60,8 @@ import TestimonialsSettings from "./pages/admin/TestimonialsSettings";
 import AIChat from "./pages/AIChat";
 import FAQ from "./pages/FAQ";
 import NotFound from "./pages/NotFound";
+import ApplyAffiliate from "./pages/ApplyAffiliate";
 import { ChatButton } from "./components/ai-chat";
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -96,6 +96,7 @@ const App = () => (
             <Route path="/creator-signup" element={<CreatorSignup />} />
             <Route path="/demo" element={<DemoSelection />} />
             <Route path="/demo/dashboard" element={<DemoDashboard />} />
+            <Route path="/apply-affiliate" element={<ApplyAffiliate />} />
             <Route path="/faq" element={<FAQ />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
