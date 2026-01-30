@@ -61,6 +61,7 @@ import AIChat from "./pages/AIChat";
 import FAQ from "./pages/FAQ";
 import NotFound from "./pages/NotFound";
 import ApplyAffiliate from "./pages/ApplyAffiliate";
+import GetStarted from "./pages/GetStarted";
 import { ChatButton } from "./components/ai-chat";
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -98,6 +99,8 @@ const App = () => (
             <Route path="/demo/dashboard" element={<DemoDashboard />} />
             <Route path="/apply-affiliate" element={<ApplyAffiliate />} />
             <Route path="/faq" element={<FAQ />} />
+            <Route path="/start" element={<GetStarted />} />
+            <Route path="/get-started" element={<GetStarted />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
             <Route path="/select-subjects" element={

@@ -119,11 +119,14 @@ const ApplyAffiliate = () => {
       // Wait a moment for profile to be created by trigger
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Set creator role without CMO (cmo_id = null)
+      // Generate referral code and set creator role without CMO (cmo_id = null)
+      const creatorRefCode = `CRT${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      
       const { error: roleError } = await supabase.rpc('set_creator_role', {
         _user_id: authData.user.id,
         _cmo_id: null,
         _display_name: name,
+        _referral_code: creatorRefCode,
       });
 
       if (roleError) {
@@ -332,9 +335,9 @@ const ApplyAffiliate = () => {
 
                 <p className="text-[11px] text-muted-foreground text-center">
                   By signing up, you agree to our{' '}
-                  <Link to="/terms" className="text-brand hover:underline">Terms of Service</Link>
+                  <Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
                   {' '}and{' '}
-                  <Link to="/privacy" className="text-brand hover:underline">Privacy Policy</Link>.
+                  <Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>.
                 </p>
               </form>
 
