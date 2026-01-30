@@ -1,464 +1,396 @@
 
+
 # Comprehensive Platform Enhancement Plan
 
 ## Overview
 
-This plan addresses multiple interconnected issues requiring a systematic site-wide audit and implementation:
-
-1. **CEO Dashboard Optimization** - Speed improvements via parallel queries
-2. **Demo Dashboard Fixes** - Proper filtering by grade, stream, medium
-3. **Demo Tour Fixes** - Replace "Zen Notes" with branding, remove tracking claims, fix button overflow
-4. **Onboarding Tour Fixes** - Fix button overflow issues
-5. **Payment Error Fix** - Remove "No payment found" error for new signups
-6. **Site-Wide Grade Toggle** - CEO option to enable/disable O/L content globally
-7. **Signup Flow UX Improvements** - Step-by-step grade/stream selection, consistent styling
-8. **Site Audit** - Identify all pages affected by grade selection changes
+This plan addresses the following requirements:
+1. **Demo Dashboard Fixes** - Show notes as locked properly
+2. **Demo Tour Simplification** - Remove "Sign Up Now" button, keep only "Explore Now"
+3. **Marketing Landing Page** - Bilingual (English/Sinhala) emotional storytelling page with QR code focus
+4. **Bug Audit & Fixes** - Identify and fix broken metrics and referral links
+5. **External Storage Integration** - Architecture for Mega/Dropbox/Google Drive to solve future storage scaling
 
 ---
 
-## Part 1: CEO Dashboard Performance Optimization
+## Part 1: Demo Dashboard - Show Notes as Locked
 
-### Current Problem
-The `fetchStats` function in `AdminDashboard.tsx` makes approximately 20+ sequential database queries, causing 3-5 second load times.
+### Current Issue
+From the screenshot, notes like "11" and "Algebra" under "Measurements" are showing without lock indicators. The `isNoteLocked` function exists but notes with `min_tier: 'starter'` return `false` since demo users simulate `starter` tier.
 
-### Solution
-Wrap all independent queries in `Promise.all()` blocks for parallel execution.
-
-**Current Sequential Pattern (slow):**
-```typescript
-const { data: allEnrollments } = await supabase.from('enrollments')...
-const { count: activeEnrollments } = await supabase.from('enrollments')...
-const { count: totalCodes } = await supabase.from('access_codes')...
-// ...20+ more sequential calls
-```
-
-**Optimized Parallel Pattern (fast):**
-```typescript
-const [
-  { data: allEnrollments },
-  { count: activeEnrollments },
-  { count: totalCodes },
-  { count: activeCodes },
-  { count: totalSubjects },
-  // ... all initial queries
-] = await Promise.all([
-  supabase.from('enrollments').select('user_id').eq('is_active', true),
-  supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
-  supabase.from('access_codes').select('*', { count: 'exact', head: true }),
-  // ...
-]);
-
-// Second batch for queries that depend on first batch results
-const [
-  { data: userRefAttributions },
-  { data: creatorsData },
-  // ...
-] = await Promise.all([
-  // Second batch queries
-]);
-```
-
-### Additional Optimizations
-1. Add loading skeleton components to show immediate feedback
-2. Cache results with React Query's `staleTime: 60000` (1 minute)
-3. Consolidate redundant payment queries into single batch
-
----
-
-## Part 2: Demo Dashboard - Filtering Fixes
-
-### Current Problem
-Shows 20 subjects mixing all grades (10, 11, 12, 13) and mediums (English, Sinhala) making it confusing.
+### Root Cause
+The current logic only locks notes that require HIGHER than starter tier. But if ALL notes in demo are `starter`, no locks appear.
 
 ### Solution
-Add explicit Grade and Medium selectors to `DemoSelection.tsx`:
+Modify demo to show SOME notes as locked to demonstrate the tier system. Two options:
 
-**New Selection Flow:**
-1. Select Grade (Grade 12 or Grade 13) - Only A/L if O/L is disabled
-2. Select Stream (Physical Science, Biology, etc.)
-3. Select Medium (English or Sinhala)
-4. Pick Subjects (filtered by all above)
-
-**File: `src/pages/DemoSelection.tsx`**
-
-Key changes:
-- Add `selectedGrade` state: `'al_grade12' | 'al_grade13'` (or O/L grades if enabled)
-- Add `selectedMedium` state: `'english' | 'sinhala'`
-- Update filter logic:
+**Option A (Recommended): Force demo to simulate "free" tier (below starter)**
 ```typescript
-const filteredSubjects = subjects.filter(s => {
-  // Grade filter
-  if (s.grade !== selectedGrade) return false;
-  
-  // Medium filter
-  if (s.medium !== selectedMedium) return false;
-  
-  // Stream filter (A/L only)
-  if (selectedStream) {
-    const subjectStreams = s.streams || [s.stream];
-    return subjectStreams.includes(selectedStream);
-  }
-  
+// In DemoDashboard.tsx - line 68
+const simulatedEnrollment = {
+  tier: 'free' as const, // NEW: tier below starter for demo purposes
+  // ...
+};
+
+// Update tier order to include 'free'
+const tierOrder = ['free', 'starter', 'standard', 'lifetime'];
+```
+This way, starter notes appear locked in demo.
+
+**Option B: Add visual indicators for ALL notes in demo**
+Show lock overlay on all notes with "Sign up to access" message, regardless of tier.
+
+### Recommended Approach
+Use **Option B** - In demo mode, ALL notes should show as "preview locked" since no one has an account. This creates urgency.
+
+**File: `src/pages/DemoDashboard.tsx`**
+```typescript
+// Line 78-83: Change isNoteLocked to always return true for demo
+const isNoteLocked = (noteMinTier: string | null) => {
+  // In demo mode, ALL notes are locked to encourage signup
   return true;
-});
+};
 ```
 
-**Remove "Choose your level" step** since O/L is conditionally hidden based on site settings.
+Also update the note row styling to show a blur preview with lock icon overlay.
 
 ---
 
-## Part 3: Demo Tour Fixes
+## Part 2: Demo Tour - Remove "Sign Up Now" Button
 
-### Current Problems
-1. Title says "Zen Notes" instead of actual site name
-2. Step 3 says "Track Your Progress" - we don't track journeys yet
-3. Buttons overflow outside card container on mobile
+### Current Issue
+At the end of the demo tour, there are two buttons: "Explore" and "Sign Up". Since users just started exploring, the "Sign Up" feels pushy.
 
 ### Solution
 
 **File: `src/components/demo/DemoTour.tsx`**
 
-1. **Use branding hook:**
+Change lines 142-151:
 ```typescript
-import { useBranding } from '@/hooks/useBranding';
-
-const DemoTour = ({ onComplete }: DemoTourProps) => {
-  const { branding } = useBranding();
-  
-  const tourSteps = [
-    {
-      id: 'welcome',
-      title: `Welcome to ${branding.siteName}!`,
-      description: 'Your personalized dashboard for accessing study materials and acing your exams.',
-      // ...
-    },
-    // ...
-  ];
+{isLastStep ? (
+  <Button variant="brand" size="sm" onClick={handleComplete} className="gap-1">
+    <Sparkles className="w-4 h-4" />
+    Explore Now
+  </Button>
+) : (
+  <Button variant="brand" size="sm" onClick={handleNext} className="gap-1">
+    Next
+    <ChevronRight className="w-4 h-4" />
+  </Button>
+)}
 ```
 
-2. **Replace "Track Your Progress" step:**
+Remove the entire `handleSignUp` function since it's no longer needed.
+
+---
+
+## Part 3: Marketing Landing Page - Bilingual Emotional Hook
+
+### Purpose
+Create a new page at `/start` (or `/get-started`) designed for QR code distribution. This page uses fear-based storytelling to connect with students' exam anxiety, then presents Notebase as the solution.
+
+### Design Structure
+
+**Section 1: The Problem (Fear/Trauma Hook)**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│  [🇱🇰 English | සිංහල toggle]                                          │
+│                                                                         │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                                         │
+│  ENGLISH VERSION:                                                       │
+│  ─────────────────                                                      │
+│  "It's 2 AM. Your exam is in 12 hours.                                 │
+│   You've been staring at the same page for 3 hours.                    │
+│   The notes don't make sense.                                          │
+│   Your friends are already asleep.                                      │
+│   Your heart is racing.                                                 │
+│   You're not ready."                                                    │
+│                                                                         │
+│  62% of A/L students say they felt                                     │
+│  "completely unprepared" the night before their exam.                  │
+│                                                                         │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ │
+│                                                                         │
+│  SINHALA VERSION:                                                       │
+│  ─────────────────                                                      │
+│  "රාත්‍රී 2 යි. පරීක්ෂණය පැය 12 කින්.                                   │
+│   ඔබ පැය 3ක් එකම පිටුවට බලාගෙන ඉන්නවා.                               │
+│   සටහන් තේරෙන්නේ නැහැ.                                                │
+│   ඔබේ යාළුවෝ දැනටමත් නිදාගෙන.                                         │
+│   ඔබේ හදවත වේගයෙන් ගැහෙනවා.                                          │
+│   ඔබ සූදානම් නැහැ."                                                    │
+│                                                                         │
+│  උසස් පෙළ සිසුන්ගෙන් 62%ක් පවසන්නේ                                    │
+│  පරීක්ෂණයට පෙර රාත්‍රියේ "සම්පූර්ණයෙන්ම සූදානම් නොවූ" බවයි.           │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Section 2: The Pain Points**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│  Sound familiar?                                                        │
+│                                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │ 📚 Scattered    │  │ 💸 Expensive    │  │ ⏰ No Time      │         │
+│  │ Notes           │  │ Tuition         │  │                 │         │
+│  │                 │  │                 │  │                 │         │
+│  │ Notes from      │  │ Monthly tuition │  │ You have to     │         │
+│  │ different       │  │ fees of LKR     │  │ work, help at   │         │
+│  │ sources that    │  │ 50,000+ that    │  │ home, and still │         │
+│  │ don't connect   │  │ your family     │  │ find time to    │         │
+│  │                 │  │ can't afford    │  │ study           │         │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘         │
+│                                                                         │
+│  ┌─────────────────┐  ┌─────────────────┐                              │
+│  │ 😰 Exam Stress  │  │ 🎯 No           │                              │
+│  │                 │  │ Direction       │                              │
+│  │                 │  │                 │                              │
+│  │ Panic attacks,  │  │ You don't know  │                              │
+│  │ sleepless       │  │ what to study   │                              │
+│  │ nights, crying  │  │ first or how    │                              │
+│  │ before exams    │  │ to prioritize   │                              │
+│  └─────────────────┘  └─────────────────┘                              │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Section 3: The Solution Reveal**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│  That's why we created Notebase.                                       │
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────────┐│
+│  │                                                                     ││
+│  │  [Notebase Logo]                                                    ││
+│  │                                                                     ││
+│  │  One platform. All your notes.                                     ││
+│  │  Organized by topic. Available 24/7.                               ││
+│  │                                                                     ││
+│  │  ✓ Curated notes by top teachers                                   ││
+│  │  ✓ 24/7 AI Tutor for instant help                                  ││
+│  │  ✓ Starting at just LKR 1,990 (one-time)                           ││
+│  │  ✓ That's less than ONE tuition class                              ││
+│  │                                                                     ││
+│  └─────────────────────────────────────────────────────────────────────┘│
+│                                                                         │
+│  "For the price of 2 kottu roti, you get access to                     │
+│   everything you need to pass your exams."                             │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Section 4: CTA**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│           Don't let exam night terror be your reality.                 │
+│                                                                         │
+│                    [ Try Demo Free →]                                  │
+│                                                                         │
+│           No account needed. See exactly what you get.                 │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Technical Implementation
+
+**New File: `src/pages/GetStarted.tsx`**
+
+Key features:
+- Language toggle (English/Sinhala) stored in localStorage
+- Emotional storytelling with typewriter effect
+- Statistics with animation on scroll
+- Pain point cards with subtle animations
+- Solution reveal with premium glass card styling
+- Single CTA to `/demo`
+- Mobile-optimized for QR code scanning
+
+**Route Addition to `src/App.tsx`**:
 ```typescript
-{
-  id: 'ai-tutor',
-  title: '24/7 AI Tutor',
-  description: 'Get instant help with any topic. Our AI tutor is available around the clock to answer your questions.',
-  icon: <Sparkles className="w-6 h-6" />,
-  position: 'center'
+<Route path="/start" element={<GetStarted />} />
+<Route path="/get-started" element={<GetStarted />} /> // Alias
+```
+
+---
+
+## Part 4: Bug Audit & Fixes
+
+### Identified Issues
+
+**Bug 1: ApplyAffiliate.tsx - Missing referral_code parameter**
+In `ApplyAffiliate.tsx` line 123-127, the RPC call doesn't include `_referral_code`:
+```typescript
+const { error: roleError } = await supabase.rpc('set_creator_role', {
+  _user_id: authData.user.id,
+  _cmo_id: null,
+  _display_name: name,
+  // MISSING: _referral_code parameter
+});
+```
+
+The `set_creator_role` function expects 4 parameters and will auto-generate if not provided, but it's better to be explicit.
+
+**Fix:**
+```typescript
+const creatorRefCode = `CRT${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+const { error: roleError } = await supabase.rpc('set_creator_role', {
+  _user_id: authData.user.id,
+  _cmo_id: null,
+  _display_name: name,
+  _referral_code: creatorRefCode,
+});
+```
+
+**Bug 2: ToS/Privacy links in ApplyAffiliate.tsx**
+Lines 335-337 link to `/terms` and `/privacy` but correct routes are `/terms-of-service` and `/privacy-policy`.
+
+**Fix:**
+```typescript
+<Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
+<Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>
+```
+
+**Bug 3: Student Referral Link Format**
+In `Dashboard.tsx`, the referral link uses `?ref=` but should clarify it's a student referral:
+- Current: `/signup?ref=${referralCode}`  
+- The `Signup.tsx` page correctly handles this and stores in `userReferrer`
+
+This is working correctly but could be renamed for clarity.
+
+**Bug 4: Missing error handling in DemoDashboard**
+If `subjects` query fails, there's no error state shown.
+
+**Fix:** Add error state handling in `DemoDashboard.tsx`.
+
+---
+
+## Part 5: External Storage Integration Architecture
+
+### Current Storage Situation
+- Notes are stored in Supabase Storage bucket `notes`
+- File URLs are stored as relative paths like `{topic_id}/{timestamp}.pdf`
+- `serve-pdf` edge function generates signed URLs for access
+
+### Future Scalability Problem
+- Supabase Storage has egress and storage limits
+- As user base grows, costs will increase significantly
+- Need hybrid storage solution
+
+### Proposed Architecture
+
+**Phase 1: Abstract Storage Layer (Immediate)**
+
+Create a storage abstraction that can route to different providers:
+
+**New File: `src/lib/storageProvider.ts`**
+```typescript
+export type StorageProvider = 'supabase' | 'google_drive' | 'mega' | 'dropbox';
+
+export interface StorageConfig {
+  provider: StorageProvider;
+  credentials?: {
+    apiKey?: string;
+    folderId?: string;  // For Google Drive
+    accessToken?: string;
+  };
+}
+
+export interface StorageFile {
+  id: string;
+  url: string;
+  provider: StorageProvider;
+  expiresAt?: Date;
+}
+
+export const getSignedUrl = async (
+  fileUrl: string, 
+  config: StorageConfig
+): Promise<StorageFile> => {
+  switch (config.provider) {
+    case 'supabase':
+      return getSupabaseSignedUrl(fileUrl);
+    case 'google_drive':
+      return getGoogleDriveUrl(fileUrl, config.credentials!);
+    case 'mega':
+      return getMegaUrl(fileUrl, config.credentials!);
+    case 'dropbox':
+      return getDropboxUrl(fileUrl, config.credentials!);
+    default:
+      throw new Error(`Unknown provider: ${config.provider}`);
+  }
+};
+```
+
+**Phase 2: Database Schema Update**
+
+Add `storage_provider` field to notes table:
+```sql
+ALTER TABLE notes 
+ADD COLUMN storage_provider TEXT DEFAULT 'supabase',
+ADD COLUMN external_file_id TEXT;
+```
+
+**Phase 3: Update serve-pdf Edge Function**
+
+Modify `serve-pdf/index.ts` to handle multiple storage providers:
+```typescript
+// Check storage provider
+const storageProvider = note.storage_provider || 'supabase';
+
+let signedUrl: string;
+
+switch (storageProvider) {
+  case 'supabase':
+    // Existing logic
+    const { data: signedData } = await supabaseAdmin.storage...
+    signedUrl = signedData.signedUrl;
+    break;
+    
+  case 'google_drive':
+    // Google Drive direct link with view-only embed
+    signedUrl = `https://drive.google.com/uc?export=view&id=${note.external_file_id}`;
+    break;
+    
+  case 'mega':
+    // MEGA.nz link (requires MEGA API for ephemeral links)
+    signedUrl = await getMegaEphemeralLink(note.external_file_id);
+    break;
+    
+  case 'dropbox':
+    // Dropbox direct link
+    signedUrl = note.file_url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+    break;
 }
 ```
 
-3. **Fix button overflow:**
-```tsx
-{/* Actions - fix overflow */}
-<div className="flex items-center gap-3 flex-wrap">
-  {!isFirstStep && (
-    <Button variant="ghost" onClick={handlePrev} size="sm" className="gap-1">
-      <ChevronLeft className="w-4 h-4" />
-      Back
-    </Button>
-  )}
-  <div className="flex-1 min-w-0" />
-  {isLastStep ? (
-    <div className="flex gap-2 flex-wrap justify-end">
-      <Button variant="outline" size="sm" onClick={handleComplete}>
-        Explore
-      </Button>
-      <Button variant="brand" size="sm" onClick={handleSignUp} className="gap-1">
-        <Sparkles className="w-4 h-4" />
-        Sign Up
-      </Button>
-    </div>
-  ) : (
-    <Button variant="brand" size="sm" onClick={handleNext} className="gap-1">
-      Next
-      <ChevronRight className="w-4 h-4" />
-    </Button>
-  )}
-</div>
-```
+**Phase 4: Admin Upload Interface**
 
----
+Update Content Management to support multiple upload destinations:
+- Upload to Supabase (default, small files)
+- Paste Google Drive link (for large files)
+- Paste MEGA link
+- Paste Dropbox link
 
-## Part 4: Onboarding Tour Button Fix
+### Recommended Providers by Use Case
 
-### Current Problem
-Creator onboarding tour buttons overflow outside container on small screens.
+| Provider | Best For | Pros | Cons |
+|----------|----------|------|------|
+| Supabase | Small files (<10MB), active files | Native integration, RLS | Limited free tier |
+| Google Drive | Large PDFs, model papers | 15GB free, familiar | Sharing limits, manual upload |
+| MEGA | Very large files, archives | 20GB free, E2E encrypted | API complexity |
+| Dropbox | Team collaboration files | 2GB free, good API | Limited free storage |
 
-### Solution
-
-**File: `src/components/onboarding/CreatorOnboardingTour.tsx`**
-
-Update navigation buttons (lines 466-494):
-```tsx
-{/* Navigation - with proper flex wrap */}
-<div className="flex items-center gap-3 flex-wrap">
-  {currentStep > 0 && (
-    <Button
-      variant="outline"
-      onClick={handleBack}
-      className="flex-1 min-w-[100px]"
-    >
-      <ArrowLeft className="w-4 h-4 mr-2" />
-      Back
-    </Button>
-  )}
-  <Button
-    variant="brand"
-    onClick={handleNext}
-    className="flex-1 min-w-[100px]"
-  >
-    {currentStep === steps.length - 1 ? (
-      <>
-        Let's Go!
-        <Rocket className="w-4 h-4 ml-2" />
-      </>
-    ) : (
-      <>
-        Next
-        <ArrowRight className="w-4 h-4 ml-2" />
-      </>
-    )}
-  </Button>
-</div>
-```
-
----
-
-## Part 5: Fix "No Payment Found" Error
-
-### Current Problem
-When a user navigates to `/paid-signup` without coming from pricing (no pending_payment in localStorage), they see "No payment found" error even if they just want to create an account.
-
-### Solution
-
-**File: `src/pages/PaidSignup.tsx`**
-
-Instead of redirecting immediately, show a better UX:
-```tsx
-// In useEffect checking for payment
-useEffect(() => {
-  const storedPayment = localStorage.getItem('pending_payment');
-  if (!storedPayment) {
-    // Don't show error, redirect silently to pricing
-    navigate('/pricing', { replace: true });
-    return;
-  }
-  // ... rest of logic
-}, [navigate]);
-```
-
-This removes the jarring toast.error message.
-
----
-
-## Part 6: Site-Wide Grade Level Toggle (CEO Panel)
-
-### Requirement
-Add option in CEO panel to toggle between:
-- A/L Only (default for now - Sri Lanka hasn't released new O/L syllabus)
-- Both A/L and O/L
-
-### Database Change
-
-**Add to `site_settings` table:**
-```sql
-INSERT INTO site_settings (key, value)
-VALUES ('grade_levels_enabled', '"al_only"')
-ON CONFLICT (key) DO NOTHING;
-
--- Possible values: "al_only" or "both"
-```
-
-### New Hook: `useGradeLevels`
-
-**File: `src/hooks/useGradeLevels.ts`**
-```typescript
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-
-export type GradeLevelMode = 'al_only' | 'both';
-
-export const useGradeLevels = () => {
-  const [mode, setMode] = useState<GradeLevelMode>('al_only');
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    fetchMode();
-  }, []);
-
-  const fetchMode = async () => {
-    const { data } = await supabase
-      .from('site_settings')
-      .select('value')
-      .eq('key', 'grade_levels_enabled')
-      .maybeSingle();
-    
-    if (data?.value) {
-      setMode(data.value as GradeLevelMode);
-    }
-    setIsLoading(false);
-  };
-
-  const isOLEnabled = mode === 'both';
-  const defaultGrade = 'al_grade12';
-
-  return { mode, isOLEnabled, isLoading, defaultGrade, refetch: fetchMode };
-};
-```
-
-### Admin UI for Toggle
-
-**File: `src/pages/admin/PricingSettings.tsx`** (or new BrandingSettings.tsx)
-
-Add section:
-```tsx
-<div className="glass-card p-6 mt-6">
-  <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-    <GraduationCap className="w-5 h-5" />
-    Grade Levels Available
-  </h3>
-  <p className="text-sm text-muted-foreground mb-4">
-    Control which grade levels are shown on signup, demo, and content pages.
-  </p>
-  <RadioGroup value={gradeMode} onValueChange={handleGradeModeChange}>
-    <div className="flex items-center space-x-2">
-      <RadioGroupItem value="al_only" id="al_only" />
-      <Label htmlFor="al_only">A/L Only (Advanced Level - Grades 12 & 13)</Label>
-    </div>
-    <div className="flex items-center space-x-2">
-      <RadioGroupItem value="both" id="both" />
-      <Label htmlFor="both">Both A/L and O/L (All Grades 10-13)</Label>
-    </div>
-  </RadioGroup>
-  <p className="text-xs text-muted-foreground mt-3">
-    Note: Set to A/L Only until O/L content is available.
-  </p>
-</div>
-```
-
----
-
-## Part 7: Site-Wide Audit - Pages Affected by Grade Toggle
-
-### All Pages Requiring Grade/Level Handling:
-
-| Page | File | Current Behavior | Required Change |
-|------|------|------------------|-----------------|
-| Demo Selection | `src/pages/DemoSelection.tsx` | Shows O/L and A/L buttons | Hide O/L when mode = al_only |
-| Demo Dashboard | `src/pages/DemoDashboard.tsx` | Shows all grades | Default to al_grade12 |
-| Bank Signup | `src/pages/BankSignup.tsx` | Shows all grades | Hide O/L options when disabled |
-| Paid Signup | `src/pages/PaidSignup.tsx` | Shows all grades | Hide O/L options when disabled |
-| Access Code Entry | `src/pages/Access.tsx` | May allow O/L codes | Validate against enabled levels |
-| Subject Selection | `src/pages/SubjectSelection.tsx` | Shows based on enrollment | Already respects enrollment grade |
-| Content Management | `src/pages/admin/ContentManagement.tsx` | Shows all grades | Admin can still manage all |
-| Access Codes Admin | `src/pages/admin/AccessCodes.tsx` | Creates codes for all grades | Warn if O/L disabled |
-
-### Implementation Pattern
-
-Each affected page should:
-```typescript
-import { useGradeLevels } from '@/hooks/useGradeLevels';
-
-const MyPage = () => {
-  const { isOLEnabled, isLoading } = useGradeLevels();
-  
-  // Filter grade options
-  const availableGrades = isOLEnabled 
-    ? GRADE_GROUPS 
-    : { al: GRADE_GROUPS.al };
-  
-  // Or for specific grades
-  const gradeOptions = isOLEnabled
-    ? ['ol_grade10', 'ol_grade11', 'al_grade12', 'al_grade13']
-    : ['al_grade12', 'al_grade13'];
-};
-```
-
----
-
-## Part 8: Signup Flow UX Improvements
-
-### Current Problem
-Bank signup shows grade and stream on same page with basic radio buttons. Card signup is similar but with different styling on subjects.
-
-### Solution - Step-by-Step Flow
-
-Break the enrollment step into sub-steps with smooth transitions:
-
-**Step 2a: Select Grade**
-```
-┌────────────────────────────────────────┐
-│  [GraduationCap Icon]                  │
-│                                        │
-│  What grade are you in?                │
-│                                        │
-│  ┌─────────────┐  ┌─────────────┐      │
-│  │  Grade 12   │  │  Grade 13   │      │
-│  │  (1st Year) │  │  (2nd Year) │      │
-│  └─────────────┘  └─────────────┘      │
-│                                        │
-│             [Continue →]               │
-└────────────────────────────────────────┘
-```
-
-**Step 2b: Select Stream**
-```
-┌────────────────────────────────────────┐
-│  [BookOpen Icon]                       │
-│                                        │
-│  Choose your stream                    │
-│                                        │
-│  ┌─────────────────────────────┐       │
-│  │ 🔬 Physical Science         │       │
-│  └─────────────────────────────┘       │
-│  ┌─────────────────────────────┐       │
-│  │ 🧬 Biological Science       │       │
-│  └─────────────────────────────┘       │
-│  ┌─────────────────────────────┐       │
-│  │ 💼 Commerce                 │       │
-│  └─────────────────────────────┘       │
-│  ... (more streams)                    │
-│                                        │
-│  [← Back]           [Continue →]       │
-└────────────────────────────────────────┘
-```
-
-**Step 2c: Select Medium**
-```
-┌────────────────────────────────────────┐
-│  [Languages Icon]                      │
-│                                        │
-│  Preferred medium of instruction       │
-│                                        │
-│  ┌─────────────┐  ┌─────────────┐      │
-│  │  English    │  │  සිංහල     │      │
-│  └─────────────┘  └─────────────┘      │
-│                                        │
-│  [← Back]      [Select Subjects →]     │
-└────────────────────────────────────────┘
-```
-
-### Implementation
-
-**Update step state:**
-```typescript
-type EnrollmentStep = 'grade' | 'stream' | 'medium' | 'subjects';
-const [enrollmentStep, setEnrollmentStep] = useState<EnrollmentStep>('grade');
-```
-
-**Consistent Card Styling:**
-Use the same `glass-card` with gradient orbs for all steps:
-```tsx
-<div className="glass-card p-6 relative overflow-hidden">
-  {/* Decorative gradient orbs */}
-  <div className="absolute -top-20 -right-20 w-40 h-40 bg-brand/20 rounded-full blur-3xl" />
-  <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
-  
-  <div className="relative z-10">
-    {/* Step content */}
-  </div>
-</div>
-```
+### Migration Strategy
+1. Keep existing files on Supabase
+2. New large files (>5MB) upload to Google Drive
+3. Add `storage_provider` column with default 'supabase'
+4. Update serve-pdf to handle both
 
 ---
 
@@ -466,54 +398,47 @@ Use the same `glass-card` with gradient orbs for all steps:
 
 | File | Purpose |
 |------|---------|
-| `src/hooks/useGradeLevels.ts` | Hook for grade level mode settings |
+| `src/pages/GetStarted.tsx` | Marketing landing page with bilingual emotional hook |
+| `src/lib/storageProvider.ts` | Storage abstraction layer for future multi-provider support |
 
 ## Summary of Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/pages/admin/AdminDashboard.tsx` | Parallel query optimization |
-| `src/pages/DemoSelection.tsx` | Add grade/medium selectors, hide O/L when disabled |
-| `src/pages/DemoDashboard.tsx` | Use grade/medium from URL params |
-| `src/components/demo/DemoTour.tsx` | Use branding, fix AI tutor step, fix button overflow |
-| `src/components/onboarding/CreatorOnboardingTour.tsx` | Fix button overflow |
-| `src/pages/PaidSignup.tsx` | Silent redirect, step-by-step enrollment UI |
-| `src/pages/BankSignup.tsx` | Step-by-step enrollment UI, hide O/L when disabled |
-| `src/pages/admin/BrandingSettings.tsx` | Add grade level toggle UI |
+| `src/pages/DemoDashboard.tsx` | Lock all notes in demo mode |
+| `src/components/demo/DemoTour.tsx` | Remove "Sign Up" button, keep only "Explore Now" |
+| `src/pages/ApplyAffiliate.tsx` | Fix missing referral_code, fix ToS/Privacy links |
+| `src/App.tsx` | Add `/start` and `/get-started` routes |
 
-## Database Migration
-
+## Database Changes
+Future migration for storage provider support:
 ```sql
--- Add grade levels mode setting
-INSERT INTO site_settings (key, value)
-VALUES ('grade_levels_enabled', '"al_only"')
-ON CONFLICT (key) DO NOTHING;
+ALTER TABLE notes 
+ADD COLUMN IF NOT EXISTS storage_provider TEXT DEFAULT 'supabase',
+ADD COLUMN IF NOT EXISTS external_file_id TEXT;
 ```
 
 ---
 
 ## Technical Notes
 
-1. **Performance**: Parallel queries should reduce CEO dashboard load from 3-5s to under 1s
-2. **Backward Compatibility**: Default to `al_only` so current users see no change
-3. **Admin Override**: Content admins can still manage O/L content even when hidden from public
-4. **Mobile First**: All UI changes tested for small screens with flex-wrap patterns
-5. **Progressive Enhancement**: Grade toggle affects frontend only; all data remains accessible
+1. **Marketing Page**: Uses CSS animations for typewriter effect, no external libraries
+2. **Language Toggle**: Stored in localStorage for persistence across visits
+3. **Storage Abstraction**: Designed for gradual migration, no breaking changes
+4. **QR Code Focus**: Page optimized for mobile-first since users will scan QR codes
+5. **Bilingual Content**: All strings stored in a translations object for easy maintenance
 
 ---
 
 ## Testing Checklist
 
-- [ ] CEO dashboard loads in under 1 second
-- [ ] Demo shows only A/L grades by default
-- [ ] Demo filters by grade, stream, AND medium correctly
-- [ ] Demo tour uses "Notebase" instead of "Zen Notes"
-- [ ] Demo tour mentions AI Tutor, not progress tracking
-- [ ] Demo tour buttons don't overflow on mobile
-- [ ] Creator onboarding buttons don't overflow on mobile
-- [ ] No "No payment found" error when navigating directly to /paid-signup
-- [ ] Grade level toggle saves and affects all public pages
-- [ ] Bank signup uses step-by-step flow with premium styling
-- [ ] Card signup uses consistent step-by-step flow
-- [ ] All pages hide O/L when mode is `al_only`
-- [ ] All features work on mobile devices
+- [ ] Demo dashboard shows ALL notes as locked
+- [ ] Demo tour ends with only "Explore Now" button
+- [ ] Marketing page displays correctly in both English and Sinhala
+- [ ] Language toggle persists across page refreshes
+- [ ] Marketing page CTA correctly routes to /demo
+- [ ] ApplyAffiliate signup creates creator with referral code
+- [ ] ToS/Privacy links work correctly
+- [ ] Storage abstraction layer compiles without errors
+- [ ] Mobile responsiveness on marketing page (QR code scanning)
+
