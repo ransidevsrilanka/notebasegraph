@@ -178,8 +178,8 @@ const PaidSignup = () => {
         navigate('/pricing');
       }
     } else {
-      toast.error("No payment found. Please complete payment first.");
-      navigate('/pricing');
+      // Silent redirect instead of error toast
+      navigate('/pricing', { replace: true });
     }
   }, [navigate, verifyPayment, verificationError]);
 

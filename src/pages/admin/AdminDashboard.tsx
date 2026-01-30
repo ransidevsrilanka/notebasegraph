@@ -266,6 +266,7 @@ const AdminDashboard = () => {
 
   const fetchStats = async () => {
     try {
+      // First, get non-student roles for filtering
       const { data: nonStudentRoles } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -273,20 +274,34 @@ const AdminDashboard = () => {
       
       const nonStudentUserIds = new Set((nonStudentRoles || []).map(r => r.user_id));
 
+      // BATCH 1: All independent queries in parallel (main optimization)
       const [
-        { data: allEnrollments },
-        { count: activeEnrollments },
-        { count: totalCodes },
-        { count: activeCodes },
-        { count: totalSubjects },
-        { count: pendingUpgrades },
-        { count: pendingJoinRequests },
-        { count: pendingWithdrawals },
-        { count: pendingHeadOpsRequests },
-        { count: pendingPrintRequests },
-        { count: totalCreators },
-        { data: enrollmentTiers },
-        { data: businessPhase },
+        allEnrollmentsResult,
+        activeEnrollmentsResult,
+        totalCodesResult,
+        activeCodesResult,
+        totalSubjectsResult,
+        pendingUpgradesResult,
+        pendingJoinRequestsResult,
+        pendingWithdrawalsResult,
+        pendingHeadOpsRequestsResult,
+        pendingPrintRequestsResult,
+        totalCreatorsResult,
+        enrollmentTiersResult,
+        businessPhaseResult,
+        allPaymentsResult,
+        totalSignupsResult,
+        totalUserReferralsResult,
+        userRefAttributionsResult,
+        userRewardsUnlockedResult,
+        creatorSignupsResult,
+        creatorPaymentsAllResult,
+        totalCMOsResult,
+        cmoCreatorsResult,
+        cmoCreatorIdsResult,
+        printSettingsResult,
+        printPaymentsResult,
+        creatorsDataResult,
       ] = await Promise.all([
         supabase.from('enrollments').select('user_id').eq('is_active', true),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -301,7 +316,47 @@ const AdminDashboard = () => {
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('tier').eq('is_active', true),
         supabase.from('business_phases').select('*').limit(1).maybeSingle(),
+        supabase.from('payment_attributions').select('final_amount, payment_month, payment_type, creator_commission_amount'),
+        supabase.from('user_attributions').select('*', { count: 'exact', head: true }),
+        supabase.from('user_attributions').select('*', { count: 'exact', head: true }).like('referral_source', 'USR%'),
+        supabase.from('user_attributions').select('user_id').like('referral_source', 'USR%'),
+        supabase.from('referral_rewards').select('*', { count: 'exact', head: true }).eq('is_claimed', true),
+        supabase.from('user_attributions').select('*', { count: 'exact', head: true }).not('discount_code_id', 'is', null),
+        supabase.from('payment_attributions').select('final_amount, creator_id').not('creator_id', 'is', null),
+        supabase.from('cmo_profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('creator_profiles').select('*', { count: 'exact', head: true }).not('cmo_id', 'is', null),
+        supabase.from('creator_profiles').select('id').not('cmo_id', 'is', null),
+        supabase.from('print_settings').select('print_cost_per_page').eq('is_active', true).single(),
+        supabase.from('print_requests').select('total_amount, estimated_pages').eq('payment_status', 'paid'),
+        supabase.from('creator_profiles').select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users').order('lifetime_paid_users', { ascending: false }).limit(10),
       ]);
+
+      // Extract data from results
+      const allEnrollments = allEnrollmentsResult.data;
+      const activeEnrollments = activeEnrollmentsResult.count;
+      const totalCodes = totalCodesResult.count;
+      const activeCodes = activeCodesResult.count;
+      const totalSubjects = totalSubjectsResult.count;
+      const pendingUpgrades = pendingUpgradesResult.count;
+      const pendingJoinRequests = pendingJoinRequestsResult.count;
+      const pendingWithdrawals = pendingWithdrawalsResult.count;
+      const pendingHeadOpsRequests = pendingHeadOpsRequestsResult.count;
+      const pendingPrintRequests = pendingPrintRequestsResult.count;
+      const totalCreators = totalCreatorsResult.count;
+      const enrollmentTiers = enrollmentTiersResult.data;
+      const businessPhase = businessPhaseResult.data;
+      const allPayments = allPaymentsResult.data;
+      const totalUserReferrals = totalUserReferralsResult.count;
+      const userRefAttributions = userRefAttributionsResult.data;
+      const userRewardsUnlocked = userRewardsUnlockedResult.count;
+      const creatorSignups = creatorSignupsResult.count;
+      const creatorPaymentsAll = creatorPaymentsAllResult.data;
+      const totalCMOs = totalCMOsResult.count;
+      const cmoCreators = cmoCreatorsResult.count;
+      const cmoCreatorIds = cmoCreatorIdsResult.data;
+      const printSettings = printSettingsResult.data;
+      const printPayments = printPaymentsResult.data;
+      const creatorsData = creatorsDataResult.data;
 
       const totalStudents = (allEnrollments || []).filter(
         e => !nonStudentUserIds.has(e.user_id)
@@ -311,10 +366,7 @@ const AdminDashboard = () => {
       const standardCount = (enrollmentTiers || []).filter(e => e.tier === 'standard').length;
       const lifetimeCount = (enrollmentTiers || []).filter(e => e.tier === 'lifetime').length;
 
-      const { data: allPayments } = await supabase
-        .from('payment_attributions')
-        .select('final_amount, payment_month, payment_type, creator_commission_amount');
-
+      // allPayments already fetched in parallel batch above
       const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
       const cardPayments = (allPayments || [])
@@ -383,32 +435,13 @@ const AdminDashboard = () => {
         };
       });
 
-      setRevenueData(chartData);
-      setEnrollmentData(enrollmentChartData);
-
-      // Fetch funnel stats - total signups from user_attributions and enrollments
-      const { count: totalSignups } = await supabase
-        .from('user_attributions')
-        .select('*', { count: 'exact', head: true });
-
+      // Process funnel stats
       setFunnelStats({
-        totalSignups: totalSignups || 0,
+        totalSignups: totalSignupsResult.count || 0,
         totalPaidUsers: activeEnrollments || 0,
       });
 
-      // Fetch student-to-student referral stats
-      // User referrals are stored with referral_source starting with 'USR'
-      const { count: totalUserReferrals } = await supabase
-        .from('user_attributions')
-        .select('*', { count: 'exact', head: true })
-        .like('referral_source', 'USR%');
-
-      // Count how many user referrals converted to paid
-      const { data: userRefAttributions } = await supabase
-        .from('user_attributions')
-        .select('user_id')
-        .like('referral_source', 'USR%');
-
+      // Count paid user referrals (BATCH 2 - depends on userRefAttributions)
       let paidUserReferrals = 0;
       if (userRefAttributions && userRefAttributions.length > 0) {
         const userIds = userRefAttributions.map(a => a.user_id);
@@ -419,45 +452,13 @@ const AdminDashboard = () => {
         paidUserReferrals = count || 0;
       }
 
-      // Count claimed referral rewards
-      const { count: userRewardsUnlocked } = await supabase
-        .from('referral_rewards')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_claimed', true);
-
-      // Creator referral stats - signups through creator codes
-      const { count: creatorSignups } = await supabase
-        .from('user_attributions')
-        .select('*', { count: 'exact', head: true })
-        .not('discount_code_id', 'is', null);
-
-      // Creator conversions and revenue - payments attributed to creators
-      const { data: creatorPaymentsAll } = await supabase
-        .from('payment_attributions')
-        .select('final_amount, creator_id')
-        .not('creator_id', 'is', null);
-
+      // Creator stats from already fetched data
       const creatorConversions = creatorPaymentsAll?.length || 0;
       const creatorRevenue = (creatorPaymentsAll || []).reduce(
         (sum, p) => sum + Number(p.final_amount || 0), 0
       );
 
-      // CMO stats
-      const { count: totalCMOs } = await supabase
-        .from('cmo_profiles')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: cmoCreators } = await supabase
-        .from('creator_profiles')
-        .select('*', { count: 'exact', head: true })
-        .not('cmo_id', 'is', null);
-
-      // CMO network revenue - revenue from creators under CMOs
-      const { data: cmoCreatorIds } = await supabase
-        .from('creator_profiles')
-        .select('id')
-        .not('cmo_id', 'is', null);
-
+      // CMO network revenue (BATCH 3 - depends on cmoCreatorIds)
       let cmoNetworkRevenue = 0;
       if (cmoCreatorIds && cmoCreatorIds.length > 0) {
         const creatorIdList = cmoCreatorIds.map(c => c.id);
@@ -470,21 +471,8 @@ const AdminDashboard = () => {
         );
       }
 
-      // Fetch print settings for cost calculation
-      const { data: printSettings } = await supabase
-        .from('print_settings')
-        .select('print_cost_per_page')
-        .eq('is_active', true)
-        .single();
-
+      // Print calculations from already fetched data
       const printCostPerPage = printSettings?.print_cost_per_page || 4;
-
-      // Print request revenue and pages calculation
-      const { data: printPayments } = await supabase
-        .from('print_requests')
-        .select('total_amount, estimated_pages')
-        .eq('payment_status', 'paid');
-      
       const printRevenue = (printPayments || []).reduce(
         (sum, p) => sum + Number(p.total_amount || 0), 0
       );
@@ -494,20 +482,17 @@ const AdminDashboard = () => {
       const printCost = totalPrintPages * printCostPerPage;
       const printProfit = printRevenue - printCost;
 
-      // Weekly revenue calculations
+      // Weekly revenue calculations (using already fetched allPayments)
       const now = new Date();
-      const dayOfWeek = now.getDay() || 7; // Sunday = 0, convert to 7
+      const dayOfWeek = now.getDay() || 7;
       
-      // Start of this week (Monday)
       const thisWeekStart = new Date(now);
       thisWeekStart.setDate(now.getDate() - dayOfWeek + 1);
       thisWeekStart.setHours(0, 0, 0, 0);
       
-      // Start of last week
       const lastWeekStart = new Date(thisWeekStart);
       lastWeekStart.setDate(lastWeekStart.getDate() - 7);
       
-      // Start of two weeks ago
       const twoWeeksAgoStart = new Date(lastWeekStart);
       twoWeeksAgoStart.setDate(twoWeeksAgoStart.getDate() - 7);
       
@@ -515,30 +500,19 @@ const AdminDashboard = () => {
       const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
       const twoWeeksAgoStartStr = twoWeeksAgoStart.toISOString().split('T')[0];
       
-      // Calculate this week's revenue
       const thisWeekRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= thisWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
       
-      // Calculate last week's revenue
       const lastWeekRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= lastWeekStartStr && p.payment_month < thisWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
       
-      // Calculate two weeks ago revenue
       const twoWeeksAgoRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= twoWeeksAgoStartStr && p.payment_month < lastWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
-      
-      // Days into current week (Monday = 1, Tuesday = 2, etc.)
-      const daysIntoWeek = dayOfWeek;
 
-      const { data: creatorsData } = await supabase
-        .from('creator_profiles')
-        .select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users')
-        .order('lifetime_paid_users', { ascending: false })
-        .limit(10);
-
+      // Top creators with revenue (BATCH 4 - parallel for each creator)
       if (creatorsData && creatorsData.length > 0) {
         const creatorsWithRevenue = await Promise.all(
           creatorsData.map(async (creator) => {
