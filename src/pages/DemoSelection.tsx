@@ -2,20 +2,22 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { 
   BookOpen, 
   ChevronRight, 
   Sparkles,
   Users,
-  CheckCircle2
+  CheckCircle2,
+  GraduationCap,
+  Languages
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useBranding } from '@/hooks/useBranding';
+import { useGradeLevels } from '@/hooks/useGradeLevels';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import type { StreamType, GradeGroup } from '@/types/database';
-import { STREAM_LABELS, GRADE_GROUPS } from '@/types/database';
+import type { StreamType, GradeLevel, MediumType } from '@/types/database';
+import { STREAM_LABELS, GRADE_LABELS, MEDIUM_LABELS } from '@/types/database';
 
 interface Subject {
   id: string;
@@ -29,12 +31,14 @@ interface Subject {
 const DemoSelection = () => {
   const navigate = useNavigate();
   const { branding } = useBranding();
+  const { isOLEnabled, isLoading: gradeLoading, availableGrades } = useGradeLevels();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Selection state
-  const [selectedGradeGroup, setSelectedGradeGroup] = useState<GradeGroup>('al');
+  // Selection state - now with specific grade and medium
+  const [selectedGrade, setSelectedGrade] = useState<GradeLevel>('al_grade12');
   const [selectedStream, setSelectedStream] = useState<StreamType | null>(null);
+  const [selectedMedium, setSelectedMedium] = useState<MediumType>('english');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
 
   useEffect(() => {
@@ -54,16 +58,19 @@ const DemoSelection = () => {
     setIsLoading(false);
   };
 
-  // Filter subjects based on selection
+  // Check if selected grade is A/L
+  const isALevel = selectedGrade.startsWith('al_');
+
+  // Filter subjects based on all selections
   const filteredSubjects = subjects.filter(s => {
-    const gradeMatches = selectedGradeGroup === 'al' 
-      ? s.grade?.startsWith('al_') 
-      : s.grade?.startsWith('ol_');
+    // Grade filter
+    if (s.grade !== selectedGrade) return false;
     
-    if (!gradeMatches) return false;
+    // Medium filter  
+    if (s.medium !== selectedMedium) return false;
     
     // For A/L, filter by stream
-    if (selectedGradeGroup === 'al' && selectedStream) {
+    if (isALevel && selectedStream) {
       const subjectStreams = s.streams || [s.stream];
       return subjectStreams.includes(selectedStream);
     }
@@ -71,15 +78,17 @@ const DemoSelection = () => {
     return true;
   });
 
-  // Get available streams for current grade group
+  // Get available streams for A/L
   const availableStreams: StreamType[] = ['maths', 'biology', 'commerce', 'arts', 'technology'];
+
+  // Get A/L grades only
+  const alGrades = availableGrades.filter(g => g.startsWith('al_')) as GradeLevel[];
 
   const handleSubjectToggle = (subjectId: string) => {
     setSelectedSubjects(prev => {
       if (prev.includes(subjectId)) {
         return prev.filter(id => id !== subjectId);
       }
-      // Limit to 3 subjects for demo
       if (prev.length >= 3) {
         toast.info('You can select up to 3 subjects for the demo');
         return prev;
@@ -94,14 +103,41 @@ const DemoSelection = () => {
       return;
     }
     
-    // Navigate to demo dashboard with selections
     const params = new URLSearchParams({
-      grade: selectedGradeGroup,
+      grade: selectedGrade,
       stream: selectedStream || '',
+      medium: selectedMedium,
       subjects: selectedSubjects.join(',')
     });
     navigate(`/demo/dashboard?${params.toString()}`);
   };
+
+  // Determine current step number based on selections
+  const getStepNumber = (step: 'grade' | 'stream' | 'medium' | 'subjects') => {
+    if (!isOLEnabled) {
+      // A/L only mode: Grade -> Stream -> Medium -> Subjects (1-4)
+      const steps = ['grade', 'stream', 'medium', 'subjects'];
+      return steps.indexOf(step) + 1;
+    } else {
+      // Both modes: Grade -> Stream (if A/L) -> Medium -> Subjects
+      if (step === 'grade') return 1;
+      if (step === 'stream') return 2;
+      if (step === 'medium') return isALevel ? 3 : 2;
+      if (step === 'subjects') return isALevel ? 4 : 3;
+    }
+    return 1;
+  };
+
+  if (gradeLoading) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Sparkles className="w-8 h-8 text-brand mx-auto animate-pulse mb-2" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background">
@@ -118,7 +154,7 @@ const DemoSelection = () => {
             Try {branding.siteName} for Free
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Select your subjects and explore our dashboard, topics, and learning materials. 
+            Select your grade, stream, medium, and subjects to explore our dashboard and learning materials. 
             No sign-up required.
           </p>
           
@@ -137,43 +173,52 @@ const DemoSelection = () => {
 
         {/* Selection Steps */}
         <div className="max-w-4xl mx-auto">
-          {/* Step 1: Grade Level */}
+          {/* Step 1: Grade */}
           <div className="glass-card p-6 mb-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold text-sm">
-                1
+                {getStepNumber('grade')}
               </div>
-              <h2 className="font-semibold text-foreground text-lg">Choose your level</h2>
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-brand" />
+                <h2 className="font-semibold text-foreground text-lg">Select your grade</h2>
+              </div>
             </div>
-            <div className="flex gap-4 flex-wrap">
-              {Object.entries(GRADE_GROUPS).map(([key, { label }]) => (
+            <div className="flex gap-3 flex-wrap">
+              {alGrades.map((grade) => (
                 <button
-                  key={key}
+                  key={grade}
                   onClick={() => {
-                    setSelectedGradeGroup(key as GradeGroup);
+                    setSelectedGrade(grade);
                     setSelectedStream(null);
                     setSelectedSubjects([]);
                   }}
                   className={`px-6 py-3 rounded-lg border-2 font-medium transition-all ${
-                    selectedGradeGroup === key
+                    selectedGrade === grade
                       ? 'border-brand bg-brand/10 text-brand'
                       : 'border-border bg-secondary hover:border-muted-foreground text-muted-foreground'
                   }`}
                 >
-                  {label}
+                  {GRADE_LABELS[grade]}
+                  <span className="text-xs block text-muted-foreground">
+                    {grade === 'al_grade12' ? '1st Year A/L' : '2nd Year A/L'}
+                  </span>
                 </button>
               ))}
             </div>
           </div>
 
           {/* Step 2: Stream (A/L only) */}
-          {selectedGradeGroup === 'al' && (
+          {isALevel && (
             <div className="glass-card p-6 mb-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold text-sm">
-                  2
+                  {getStepNumber('stream')}
                 </div>
-                <h2 className="font-semibold text-foreground text-lg">Select your stream</h2>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-brand" />
+                  <h2 className="font-semibold text-foreground text-lg">Select your stream</h2>
+                </div>
               </div>
               <div className="flex gap-3 flex-wrap">
                 {availableStreams.map((stream) => (
@@ -196,12 +241,45 @@ const DemoSelection = () => {
             </div>
           )}
 
-          {/* Step 3: Subjects */}
-          {(selectedGradeGroup === 'ol' || selectedStream) && (
+          {/* Step 3: Medium */}
+          {(isALevel ? selectedStream : true) && (
             <div className="glass-card p-6 mb-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold text-sm">
-                  {selectedGradeGroup === 'al' ? '3' : '2'}
+                  {getStepNumber('medium')}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Languages className="w-5 h-5 text-brand" />
+                  <h2 className="font-semibold text-foreground text-lg">Select your medium</h2>
+                </div>
+              </div>
+              <div className="flex gap-3 flex-wrap">
+                {(Object.entries(MEDIUM_LABELS) as [MediumType, string][]).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => {
+                      setSelectedMedium(value);
+                      setSelectedSubjects([]);
+                    }}
+                    className={`px-6 py-3 rounded-lg border-2 font-medium transition-all ${
+                      selectedMedium === value
+                        ? 'border-brand bg-brand/10 text-brand'
+                        : 'border-border bg-secondary hover:border-muted-foreground text-muted-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Subjects */}
+          {(isALevel ? selectedStream : true) && selectedMedium && (
+            <div className="glass-card p-6 mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 rounded-full bg-brand flex items-center justify-center text-white font-bold text-sm">
+                  {getStepNumber('subjects')}
                 </div>
                 <h2 className="font-semibold text-foreground text-lg">
                   Pick up to 3 subjects to explore
@@ -234,9 +312,6 @@ const DemoSelection = () => {
                         <BookOpen className={`w-5 h-5 mb-2 ${isSelected ? 'text-brand' : 'text-muted-foreground'}`} />
                         <p className={`font-medium text-sm ${isSelected ? 'text-brand' : 'text-foreground'}`}>
                           {subject.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {subject.medium === 'sinhala' ? 'සිංහල' : 'English'}
                         </p>
                       </button>
                     );

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Save, Upload, X, Image } from 'lucide-react';
+import { ArrowLeft, Save, Upload, X, Image, GraduationCap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { BrandingSettings as BrandingSettingsType } from '@/types/database';
+import type { Json } from '@/integrations/supabase/types';
 
 const defaultBranding: BrandingSettingsType = {
   siteName: 'StudyVAULT',
@@ -27,35 +30,40 @@ const defaultBranding: BrandingSettingsType = {
   },
 };
 
+type GradeLevelMode = 'al_only' | 'both';
+
 const BrandingSettings = () => {
   const [branding, setBranding] = useState<BrandingSettingsType>(defaultBranding);
+  const [gradeMode, setGradeMode] = useState<GradeLevelMode>('al_only');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchBranding();
+    fetchSettings();
   }, []);
 
-  const fetchBranding = async () => {
+  const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'branding')
-        .maybeSingle();
+      // Fetch both branding and grade level settings in parallel
+      const [brandingResult, gradeLevelResult] = await Promise.all([
+        supabase.from('site_settings').select('value').eq('key', 'branding').maybeSingle(),
+        supabase.from('site_settings').select('value').eq('key', 'grade_levels_enabled').maybeSingle(),
+      ]);
 
-      if (error) {
-        console.error('Failed to load branding:', error);
-        return;
+      if (brandingResult.data?.value) {
+        setBranding(brandingResult.data.value as unknown as BrandingSettingsType);
       }
 
-      if (data?.value) {
-        setBranding(data.value as unknown as BrandingSettingsType);
+      if (gradeLevelResult.data?.value) {
+        const value = typeof gradeLevelResult.data.value === 'string' 
+          ? gradeLevelResult.data.value.replace(/"/g, '') 
+          : gradeLevelResult.data.value;
+        setGradeMode(value as GradeLevelMode);
       }
     } catch (error) {
-      console.error('Error fetching branding:', error);
+      console.error('Error fetching settings:', error);
     } finally {
       setIsLoading(false);
     }
@@ -64,37 +72,53 @@ const BrandingSettings = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // First check if branding exists
-      const { data: existing } = await supabase
-        .from('site_settings')
-        .select('id')
-        .eq('key', 'branding')
-        .maybeSingle();
+      // Save both branding and grade level settings
+      const [brandingExisting, gradeLevelExisting] = await Promise.all([
+        supabase.from('site_settings').select('id').eq('key', 'branding').maybeSingle(),
+        supabase.from('site_settings').select('id').eq('key', 'grade_levels_enabled').maybeSingle(),
+      ]);
 
-      let error;
-      if (existing) {
-        // Update existing
-        const result = await supabase
-          .from('site_settings')
-          .update({
+      const saveOperations = [];
+
+      // Save branding
+      if (brandingExisting.data) {
+        saveOperations.push(
+          supabase.from('site_settings').update({
             value: JSON.parse(JSON.stringify(branding)),
             updated_at: new Date().toISOString(),
-          })
-          .eq('key', 'branding');
-        error = result.error;
+          }).eq('key', 'branding')
+        );
       } else {
-        // Insert new
-        const result = await supabase
-          .from('site_settings')
-          .insert([{
+        saveOperations.push(
+          supabase.from('site_settings').insert([{
             key: 'branding',
             value: JSON.parse(JSON.stringify(branding)),
-          }]);
-        error = result.error;
+          }])
+        );
       }
 
-      if (error) throw error;
-      toast.success('Branding settings saved!');
+      // Save grade level mode
+      if (gradeLevelExisting.data) {
+        saveOperations.push(
+          supabase.from('site_settings').update({
+            value: gradeMode as unknown as Json,
+            updated_at: new Date().toISOString(),
+          }).eq('key', 'grade_levels_enabled')
+        );
+      } else {
+        saveOperations.push(
+          supabase.from('site_settings').insert([{
+            key: 'grade_levels_enabled',
+            value: gradeMode as unknown as Json,
+          }])
+        );
+      }
+
+      const results = await Promise.all(saveOperations);
+      const hasError = results.some(r => r.error);
+      
+      if (hasError) throw new Error('Failed to save some settings');
+      toast.success('Settings saved!');
     } catch (error) {
       console.error('Save error:', error);
       toast.error('Failed to save settings');
@@ -176,6 +200,40 @@ const BrandingSettings = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* Grade Level Settings - NEW */}
+        <section className="glass-card p-6 mb-6">
+          <h2 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <GraduationCap className="w-5 h-5 text-brand" />
+            Grade Levels Available
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Control which grade levels are shown on signup, demo, and content pages across the entire site.
+          </p>
+          
+          <RadioGroup value={gradeMode} onValueChange={(v) => setGradeMode(v as GradeLevelMode)}>
+            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-brand/50 transition-colors">
+              <RadioGroupItem value="al_only" id="al_only" />
+              <Label htmlFor="al_only" className="cursor-pointer flex-1">
+                <span className="font-medium">A/L Only</span>
+                <span className="text-sm text-muted-foreground block">Advanced Level - Grades 12 & 13 only</span>
+              </Label>
+            </div>
+            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border hover:border-brand/50 transition-colors">
+              <RadioGroupItem value="both" id="both" />
+              <Label htmlFor="both" className="cursor-pointer flex-1">
+                <span className="font-medium">Both A/L and O/L</span>
+                <span className="text-sm text-muted-foreground block">All grades 10-13</span>
+              </Label>
+            </div>
+          </RadioGroup>
+          
+          <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <p className="text-xs text-amber-300">
+              <strong>Note:</strong> Set to A/L Only until O/L syllabus content is available. This affects signup pages, demo, and all public-facing grade selectors.
+            </p>
+          </div>
+        </section>
+
         {/* Site Identity */}
         <section className="glass-card p-6 mb-6">
           <h2 className="font-display text-lg font-semibold text-foreground mb-4">Site Identity</h2>

@@ -105,8 +105,8 @@ const BankSignup = () => {
         navigate('/pricing');
       }
     } else {
-      toast.error("No payment session found.");
-      navigate('/pricing');
+      // Silent redirect instead of error toast
+      navigate('/pricing', { replace: true });
     }
   }, [navigate]);
 
