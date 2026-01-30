@@ -75,11 +75,9 @@ const DemoDashboard = () => {
   // Tier order for access checking
   const tierOrder = ['starter', 'standard', 'lifetime'];
   
-  const isNoteLocked = (noteMinTier: string | null) => {
-    if (!noteMinTier || noteMinTier === 'starter') return false;
-    const demoTierIndex = tierOrder.indexOf(simulatedEnrollment.tier);
-    const noteTierIndex = tierOrder.indexOf(noteMinTier);
-    return noteTierIndex > demoTierIndex;
+  // In demo mode, ALL notes are locked to encourage signup
+  const isNoteLocked = (_noteMinTier: string | null) => {
+    return true;
   };
 
   const getTierBadge = (tier: string | null) => {

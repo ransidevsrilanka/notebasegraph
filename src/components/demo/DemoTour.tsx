@@ -79,9 +79,6 @@ const DemoTour = ({ onComplete }: DemoTourProps) => {
     onComplete();
   };
 
-  const handleSignUp = () => {
-    navigate('/paid-signup');
-  };
 
   if (!isVisible) return null;
 
@@ -140,15 +137,10 @@ const DemoTour = ({ onComplete }: DemoTourProps) => {
             )}
             <div className="flex-1 min-w-0" />
             {isLastStep ? (
-              <div className="flex gap-2 flex-wrap justify-end">
-                <Button variant="outline" size="sm" onClick={handleComplete}>
-                  Explore
-                </Button>
-                <Button variant="brand" size="sm" onClick={handleSignUp} className="gap-1">
-                  <Sparkles className="w-4 h-4" />
-                  Sign Up
-                </Button>
-              </div>
+              <Button variant="brand" size="sm" onClick={handleComplete} className="gap-1">
+                <Sparkles className="w-4 h-4" />
+                Explore Now
+              </Button>
             ) : (
               <Button variant="brand" size="sm" onClick={handleNext} className="gap-1">
                 Next

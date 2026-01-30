@@ -1017,6 +1017,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           download_count: number | null
+          external_file_id: string | null
           file_size: number | null
           file_url: string | null
           id: string
@@ -1024,6 +1025,7 @@ export type Database = {
           is_model_paper: boolean | null
           min_tier: string | null
           page_count: number | null
+          storage_provider: string | null
           title: string
           topic_id: string | null
           updated_at: string
@@ -1034,6 +1036,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           download_count?: number | null
+          external_file_id?: string | null
           file_size?: number | null
           file_url?: string | null
           id?: string
@@ -1041,6 +1044,7 @@ export type Database = {
           is_model_paper?: boolean | null
           min_tier?: string | null
           page_count?: number | null
+          storage_provider?: string | null
           title: string
           topic_id?: string | null
           updated_at?: string
@@ -1051,6 +1055,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           download_count?: number | null
+          external_file_id?: string | null
           file_size?: number | null
           file_url?: string | null
           id?: string
@@ -1058,6 +1063,7 @@ export type Database = {
           is_model_paper?: boolean | null
           min_tier?: string | null
           page_count?: number | null
+          storage_provider?: string | null
           title?: string
           topic_id?: string | null
           updated_at?: string
