@@ -3,522 +3,461 @@
 
 ## Overview
 
-This plan addresses multiple requests including border animations, commission notifications, tier system logic clarification, CEO dashboard performance optimization, Creator Dashboard redesign, CMO contact functionality, Demo Dashboard improvements, Footer affiliate link, and standalone creator signup.
+This plan addresses multiple interconnected issues requiring a systematic site-wide audit and implementation:
+
+1. **CEO Dashboard Optimization** - Speed improvements via parallel queries
+2. **Demo Dashboard Fixes** - Proper filtering by grade, stream, medium
+3. **Demo Tour Fixes** - Replace "Zen Notes" with branding, remove tracking claims, fix button overflow
+4. **Onboarding Tour Fixes** - Fix button overflow issues
+5. **Payment Error Fix** - Remove "No payment found" error for new signups
+6. **Site-Wide Grade Toggle** - CEO option to enable/disable O/L content globally
+7. **Signup Flow UX Improvements** - Step-by-step grade/stream selection, consistent styling
+8. **Site Audit** - Identify all pages affected by grade selection changes
 
 ---
 
-## Part 1: Replace Glow with Loading Border Animation
+## Part 1: CEO Dashboard Performance Optimization
 
-### Current Issue
-The Available Balance card uses `animate-pulse-glow` which creates an outer glow/shadow effect that the user wants removed.
+### Current Problem
+The `fetchStats` function in `AdminDashboard.tsx` makes approximately 20+ sequential database queries, causing 3-5 second load times.
 
 ### Solution
-Create a new CSS class `animate-border-flow` that animates the border color in a loading/rotating pattern WITHOUT any outer glow or shadow.
+Wrap all independent queries in `Promise.all()` blocks for parallel execution.
 
-**File: `src/index.css`**
-```css
-/* Animated border flow - no glow */
-@keyframes border-flow {
-  0% { border-color: hsl(var(--brand) / 0.3); }
-  25% { border-color: hsl(var(--brand) / 0.6); }
-  50% { border-color: hsl(var(--brand) / 1); }
-  75% { border-color: hsl(var(--brand) / 0.6); }
-  100% { border-color: hsl(var(--brand) / 0.3); }
-}
-
-.animate-border-flow {
-  animation: border-flow 2s ease-in-out infinite;
-  box-shadow: none !important;
-}
-
-/* Alternative: Rotating gradient border */
-@keyframes rotating-border {
-  0% { 
-    background-position: 0% 50%;
-  }
-  50% { 
-    background-position: 100% 50%;
-  }
-  100% { 
-    background-position: 0% 50%;
-  }
-}
-
-.animate-rotating-border {
-  position: relative;
-  background: linear-gradient(90deg, hsl(var(--brand)), hsl(var(--brand-light)), hsl(var(--brand)));
-  background-size: 200% 200%;
-  animation: rotating-border 2s ease infinite;
-  padding: 2px;
-  border-radius: var(--radius);
-}
-
-.animate-rotating-border > * {
-  background: hsl(var(--card));
-  border-radius: calc(var(--radius) - 2px);
-}
-```
-
-**File: `src/pages/creator/CreatorDashboard.tsx`**
-- Line 740: Replace `animate-pulse-glow` with `animate-border-flow`
-- Remove any `hover:shadow-*` classes from the balance card
-
----
-
-## Part 2: Creator Commission Notification System
-
-### Current Flow
-When a user makes a purchase via a creator's referral, `payment_attributions` is created with `creator_commission_amount`.
-
-### Required Addition
-Automatically send inbox notification to the creator when they earn a commission.
-
-**Implementation Approach:**
-Use a database trigger or update the payment processing edge function to insert a message into the `messages` table for the creator.
-
-**Database Migration - Create Trigger Function:**
-```sql
-CREATE OR REPLACE FUNCTION notify_creator_on_commission()
-RETURNS TRIGGER AS $$
-DECLARE
-  creator_user_id UUID;
-  tier_name TEXT;
-  commission_amount NUMERIC;
-BEGIN
-  -- Only process if there's a creator_id and commission
-  IF NEW.creator_id IS NOT NULL AND NEW.creator_commission_amount > 0 THEN
-    -- Get creator's user_id
-    SELECT user_id INTO creator_user_id
-    FROM creator_profiles
-    WHERE id = NEW.creator_id;
-    
-    IF creator_user_id IS NOT NULL THEN
-      -- Get tier name
-      tier_name := CASE NEW.tier
-        WHEN 'starter' THEN 'Silver'
-        WHEN 'standard' THEN 'Gold'
-        WHEN 'lifetime' THEN 'Platinum'
-        ELSE NEW.tier
-      END;
-      
-      commission_amount := NEW.creator_commission_amount;
-      
-      -- Insert notification message
-      INSERT INTO messages (user_id, title, content, type, is_read)
-      VALUES (
-        creator_user_id,
-        '💰 New Commission Earned!',
-        'A user just purchased ' || tier_name || ' Access. You earned LKR ' || 
-        TO_CHAR(commission_amount, 'FM9,999,999.00') || ' in commission!',
-        'success',
-        false
-      );
-    END IF;
-  END IF;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Create trigger
-DROP TRIGGER IF EXISTS trigger_notify_creator_commission ON payment_attributions;
-CREATE TRIGGER trigger_notify_creator_commission
-  AFTER INSERT ON payment_attributions
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_creator_on_commission();
-```
-
----
-
-## Part 3: Commission Tier System Logic Clarification
-
-### Current Understanding (from edge function):
-- Start at Tier 2 (12%) with 30-day protection
-- After protection expires, evaluate based on rolling 30-day performance
-- Promote if threshold met, demote if not
-
-### User's Desired Logic:
-1. **Initial State**: Creator starts at Tier 2 (12%) with 30-day protection
-2. **After 30 days, evaluate performance:**
-   - If 100+ users in rolling 30 days → KEEP 12% for NEXT 30 days
-   - If <100 users → DEMOTE to 8% for NEXT 30 days  
-   - If 250+ users → PROMOTE to 15% for NEXT 30 days
-   - If 500+ users → PROMOTE to 20% for NEXT 30 days
-3. **After each evaluation**, the new tier applies for the NEXT 30-day period
-
-### Required Updates to `evaluate-creator-tiers/index.ts`:
-
-**Key Logic Changes:**
+**Current Sequential Pattern (slow):**
 ```typescript
-// The tier change takes effect for the NEXT 30-day period
-// Whether promoted or demoted, give them 30 days at the new tier
-const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-// Update the creator's tier
-const { error: updateError } = await supabase
-  .from('creator_profiles')
-  .update({
-    current_tier_level: newTierLevel,
-    monthly_paid_users: monthlyCount,
-    // ALWAYS give 30-day protection for the new tier (both promotion AND demotion)
-    tier_protection_until: thirtyDaysFromNow,
-  })
-  .eq('id', creator.id);
+const { data: allEnrollments } = await supabase.from('enrollments')...
+const { count: activeEnrollments } = await supabase.from('enrollments')...
+const { count: totalCodes } = await supabase.from('access_codes')...
+// ...20+ more sequential calls
 ```
 
-This ensures:
-- Demoted creators stay at lower tier for full 30 days before re-evaluation
-- Promoted creators stay at higher tier for full 30 days before re-evaluation
-- "Rolling 30 days" is effectively a month-to-month evaluation cycle
-
----
-
-## Part 4: CEO Dashboard Performance Optimization
-
-### Current Issues
-The `fetchStats` function in `AdminDashboard.tsx` makes too many sequential database calls, causing slow loading.
-
-### Optimization Strategy
-
-**1. Parallel Query Execution:**
-Group all independent queries into `Promise.all()` blocks.
-
-**2. Add RPC Function for Dashboard Stats:**
-Create a single database function that returns all stats in one call:
-
-```sql
--- Already exists: get_admin_dashboard_stats()
--- We need to ensure it returns all needed fields efficiently
-```
-
-**3. Add Loading Skeleton States:**
-Show skeleton placeholders while data loads instead of blank state.
-
-**4. Use React Query Caching:**
-The existing QueryClient already has `refetchOnWindowFocus: false`, but we should add:
-- `staleTime: 60000` (1 minute cache)
-- Optimistic updates where possible
-
-**5. Reduce Redundant Queries:**
-Currently fetching print data separately. Consolidate into single batch.
-
-**File Changes to `src/pages/admin/AdminDashboard.tsx`:**
+**Optimized Parallel Pattern (fast):**
 ```typescript
-// Wrap all independent queries in Promise.all
 const [
-  enrollmentResults,
-  paymentData,
-  printData,
-  // ... etc
+  { data: allEnrollments },
+  { count: activeEnrollments },
+  { count: totalCodes },
+  { count: activeCodes },
+  { count: totalSubjects },
+  // ... all initial queries
 ] = await Promise.all([
-  // All queries here
+  supabase.from('enrollments').select('user_id').eq('is_active', true),
+  supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
+  supabase.from('access_codes').select('*', { count: 'exact', head: true }),
+  // ...
 ]);
 
-// Add skeleton loading state
-if (isLoading) {
-  return (
-    <AdminDashboardSkeleton />
-  );
+// Second batch for queries that depend on first batch results
+const [
+  { data: userRefAttributions },
+  { data: creatorsData },
+  // ...
+] = await Promise.all([
+  // Second batch queries
+]);
+```
+
+### Additional Optimizations
+1. Add loading skeleton components to show immediate feedback
+2. Cache results with React Query's `staleTime: 60000` (1 minute)
+3. Consolidate redundant payment queries into single batch
+
+---
+
+## Part 2: Demo Dashboard - Filtering Fixes
+
+### Current Problem
+Shows 20 subjects mixing all grades (10, 11, 12, 13) and mediums (English, Sinhala) making it confusing.
+
+### Solution
+Add explicit Grade and Medium selectors to `DemoSelection.tsx`:
+
+**New Selection Flow:**
+1. Select Grade (Grade 12 or Grade 13) - Only A/L if O/L is disabled
+2. Select Stream (Physical Science, Biology, etc.)
+3. Select Medium (English or Sinhala)
+4. Pick Subjects (filtered by all above)
+
+**File: `src/pages/DemoSelection.tsx`**
+
+Key changes:
+- Add `selectedGrade` state: `'al_grade12' | 'al_grade13'` (or O/L grades if enabled)
+- Add `selectedMedium` state: `'english' | 'sinhala'`
+- Update filter logic:
+```typescript
+const filteredSubjects = subjects.filter(s => {
+  // Grade filter
+  if (s.grade !== selectedGrade) return false;
+  
+  // Medium filter
+  if (s.medium !== selectedMedium) return false;
+  
+  // Stream filter (A/L only)
+  if (selectedStream) {
+    const subjectStreams = s.streams || [s.stream];
+    return subjectStreams.includes(selectedStream);
+  }
+  
+  return true;
+});
+```
+
+**Remove "Choose your level" step** since O/L is conditionally hidden based on site settings.
+
+---
+
+## Part 3: Demo Tour Fixes
+
+### Current Problems
+1. Title says "Zen Notes" instead of actual site name
+2. Step 3 says "Track Your Progress" - we don't track journeys yet
+3. Buttons overflow outside card container on mobile
+
+### Solution
+
+**File: `src/components/demo/DemoTour.tsx`**
+
+1. **Use branding hook:**
+```typescript
+import { useBranding } from '@/hooks/useBranding';
+
+const DemoTour = ({ onComplete }: DemoTourProps) => {
+  const { branding } = useBranding();
+  
+  const tourSteps = [
+    {
+      id: 'welcome',
+      title: `Welcome to ${branding.siteName}!`,
+      description: 'Your personalized dashboard for accessing study materials and acing your exams.',
+      // ...
+    },
+    // ...
+  ];
+```
+
+2. **Replace "Track Your Progress" step:**
+```typescript
+{
+  id: 'ai-tutor',
+  title: '24/7 AI Tutor',
+  description: 'Get instant help with any topic. Our AI tutor is available around the clock to answer your questions.',
+  icon: <Sparkles className="w-6 h-6" />,
+  position: 'center'
 }
 ```
 
----
-
-## Part 5: Creator Dashboard Complete Redesign
-
-### Current Issues (from screenshot):
-- Basic card styling
-- Unprofessional layout
-- Glow effects instead of clean borders
-- Missing CMO contact functionality
-- Cluttered visual hierarchy
-
-### Design Improvements:
-
-**1. Premium Background**
-Add `.creator-premium-bg` class with subtle floating orbs (similar to admin).
-
-**2. Enhanced Header**
-- Gradient overlay
-- Better badge styling
-- Add "Contact Support" button linking to CMO
-
-**3. Stats Cards Redesign**
-- Remove outer glows
-- Use clean animated borders
-- Better icon badges with ring styling
-- Consistent color scheme per card type
-
-**4. Visual Hierarchy**
-- Larger section headings
-- Better card grouping
-- Improved spacing (gap-8 instead of gap-6)
-
-**5. Contact CMO Section**
-New card at bottom of stats row with:
-- CMO name display
-- Contact buttons: Email, WhatsApp, Instagram, In-app Chat
-- Professional styling
-
-**File: `src/pages/creator/CreatorDashboard.tsx`**
-
-Key UI Changes:
-- Replace `animate-pulse-glow` with `animate-border-flow`
-- Add Contact CMO card
-- Improve stat card styling
-- Add premium background class
-- Better mobile responsiveness
-
-**New Contact CMO Component Structure:**
+3. **Fix button overflow:**
 ```tsx
-{creatorData?.cmo_id && creatorData?.cmo_name && (
-  <div className="glass-card p-6 mb-8">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
-          <HeadphonesIcon className="w-6 h-6 text-purple-500" />
-        </div>
-        <div>
-          <h3 className="font-semibold text-foreground">Need Support?</h3>
-          <p className="text-sm text-muted-foreground">Contact your CMO: {creatorData.cmo_name}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        {cmoContactInfo?.email && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={`mailto:${cmoContactInfo.email}`}>
-              <Mail className="w-4 h-4" />
-            </a>
-          </Button>
-        )}
-        {cmoContactInfo?.whatsapp && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={`https://wa.me/${cmoContactInfo.whatsapp}`} target="_blank">
-              <MessageCircle className="w-4 h-4" />
-            </a>
-          </Button>
-        )}
-        {cmoContactInfo?.instagram && (
-          <Button variant="outline" size="sm" asChild>
-            <a href={`https://instagram.com/${cmoContactInfo.instagram}`} target="_blank">
-              <Instagram className="w-4 h-4" />
-            </a>
-          </Button>
-        )}
-        <Button variant="brand" size="sm" onClick={() => openInboxChat(cmoUserId)}>
-          <MessageSquare className="w-4 h-4 mr-1" />
-          Chat
-        </Button>
-      </div>
+{/* Actions - fix overflow */}
+<div className="flex items-center gap-3 flex-wrap">
+  {!isFirstStep && (
+    <Button variant="ghost" onClick={handlePrev} size="sm" className="gap-1">
+      <ChevronLeft className="w-4 h-4" />
+      Back
+    </Button>
+  )}
+  <div className="flex-1 min-w-0" />
+  {isLastStep ? (
+    <div className="flex gap-2 flex-wrap justify-end">
+      <Button variant="outline" size="sm" onClick={handleComplete}>
+        Explore
+      </Button>
+      <Button variant="brand" size="sm" onClick={handleSignUp} className="gap-1">
+        <Sparkles className="w-4 h-4" />
+        Sign Up
+      </Button>
     </div>
-  </div>
-)}
+  ) : (
+    <Button variant="brand" size="sm" onClick={handleNext} className="gap-1">
+      Next
+      <ChevronRight className="w-4 h-4" />
+    </Button>
+  )}
+</div>
 ```
 
-**Database Change - Add CMO Contact Fields:**
+---
+
+## Part 4: Onboarding Tour Button Fix
+
+### Current Problem
+Creator onboarding tour buttons overflow outside container on small screens.
+
+### Solution
+
+**File: `src/components/onboarding/CreatorOnboardingTour.tsx`**
+
+Update navigation buttons (lines 466-494):
+```tsx
+{/* Navigation - with proper flex wrap */}
+<div className="flex items-center gap-3 flex-wrap">
+  {currentStep > 0 && (
+    <Button
+      variant="outline"
+      onClick={handleBack}
+      className="flex-1 min-w-[100px]"
+    >
+      <ArrowLeft className="w-4 h-4 mr-2" />
+      Back
+    </Button>
+  )}
+  <Button
+    variant="brand"
+    onClick={handleNext}
+    className="flex-1 min-w-[100px]"
+  >
+    {currentStep === steps.length - 1 ? (
+      <>
+        Let's Go!
+        <Rocket className="w-4 h-4 ml-2" />
+      </>
+    ) : (
+      <>
+        Next
+        <ArrowRight className="w-4 h-4 ml-2" />
+      </>
+    )}
+  </Button>
+</div>
+```
+
+---
+
+## Part 5: Fix "No Payment Found" Error
+
+### Current Problem
+When a user navigates to `/paid-signup` without coming from pricing (no pending_payment in localStorage), they see "No payment found" error even if they just want to create an account.
+
+### Solution
+
+**File: `src/pages/PaidSignup.tsx`**
+
+Instead of redirecting immediately, show a better UX:
+```tsx
+// In useEffect checking for payment
+useEffect(() => {
+  const storedPayment = localStorage.getItem('pending_payment');
+  if (!storedPayment) {
+    // Don't show error, redirect silently to pricing
+    navigate('/pricing', { replace: true });
+    return;
+  }
+  // ... rest of logic
+}, [navigate]);
+```
+
+This removes the jarring toast.error message.
+
+---
+
+## Part 6: Site-Wide Grade Level Toggle (CEO Panel)
+
+### Requirement
+Add option in CEO panel to toggle between:
+- A/L Only (default for now - Sri Lanka hasn't released new O/L syllabus)
+- Both A/L and O/L
+
+### Database Change
+
+**Add to `site_settings` table:**
 ```sql
-ALTER TABLE cmo_profiles
-ADD COLUMN IF NOT EXISTS email TEXT,
-ADD COLUMN IF NOT EXISTS whatsapp TEXT,
-ADD COLUMN IF NOT EXISTS instagram TEXT;
+INSERT INTO site_settings (key, value)
+VALUES ('grade_levels_enabled', '"al_only"')
+ON CONFLICT (key) DO NOTHING;
+
+-- Possible values: "al_only" or "both"
 ```
 
----
+### New Hook: `useGradeLevels`
 
-## Part 6: Demo Dashboard Overhaul
-
-### Current Issues:
-- Hardcoded "Zen Notes" branding
-- Basic UI not matching real dashboard
-- Doesn't reflect actual `/dashboard` structure
-- Not professional enough
-
-### New Requirements:
-1. Mirror the exact `/dashboard` UI and styling
-2. Same topics, subjects, notes structure
-3. Notes are locked based on demo tier simulation
-4. No account required to view
-5. Professional high-end design
-
-### Implementation:
-
-**Create New `/demo` Route Structure:**
-- `/demo` - Selection page (keep current)
-- `/demo/dashboard` - Mirrors `/dashboard` exactly
-
-**File: `src/pages/DemoDashboard.tsx` - Complete Rewrite:**
-
-1. **Import and use the same components as Dashboard:**
-   - Same header structure with branding hook
-   - Same stats cards layout
-   - Same subject/topic display
-
-2. **Simulated Enrollment State:**
+**File: `src/hooks/useGradeLevels.ts`**
 ```typescript
-const simulatedEnrollment = {
-  tier: 'starter', // Demo users see starter tier view
-  grade: selectedGrade,
-  stream: selectedStream,
-  medium: 'english',
-};
-```
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
-3. **Topic/Note Access Logic:**
-```typescript
-// Notes have tier requirements
-// In demo mode, show all notes but lock those above starter tier
-const isNoteLocked = (noteMinTier: string) => {
-  const tierOrder = ['starter', 'standard', 'lifetime'];
-  const demoTierIndex = tierOrder.indexOf(simulatedEnrollment.tier);
-  const noteTierIndex = tierOrder.indexOf(noteMinTier);
-  return noteTierIndex > demoTierIndex;
-};
-```
+export type GradeLevelMode = 'al_only' | 'both';
 
-4. **UI Elements:**
-- Show "Demo Mode" badge in header
-- Use same glass cards, stat cards, subject cards
-- Add lock icons on premium-tier notes
-- CTA buttons to sign up scattered throughout
-- Floating CTA at bottom
+export const useGradeLevels = () => {
+  const [mode, setMode] = useState<GradeLevelMode>('al_only');
+  const [isLoading, setIsLoading] = useState(true);
 
-5. **Professional Styling:**
-- Premium background orbs
-- Smooth animations
-- Proper loading states
-- Responsive design
+  useEffect(() => {
+    fetchMode();
+  }, []);
 
----
-
-## Part 7: Footer - Add Affiliate Program Link
-
-### Current Footer Structure:
-- Quick Links: Home, Pricing, About, Enter Code
-- Legal: Privacy, Terms, Refund
-
-### Required Addition:
-Add "Apply for Affiliate Program" under Quick Links that navigates to `/apply-affiliate`
-
-**File: `src/components/Footer.tsx`**
-
-```tsx
-const quickLinks = [
-  { name: "Home", path: "/" },
-  { name: "Pricing", path: "/pricing" },
-  { name: "About", path: "/about" },
-  { name: "Enter Code", path: "/access" },
-  { name: "Become an Affiliate", path: "/apply-affiliate" }, // NEW
-];
-```
-
----
-
-## Part 8: Standalone Creator Signup (Without CMO)
-
-### Current System:
-- Creators MUST have a CMO referral link (`ref_cmo=XXXXXX`)
-- If no valid ref_cmo, they see "Invalid Referral Link" error
-
-### Required Change:
-Allow creators to sign up independently through `/apply-affiliate` page.
-
-**New Page: `src/pages/ApplyAffiliate.tsx`**
-
-Features:
-1. Professional landing page explaining the affiliate/creator program
-2. Benefits listed (12% starting commission, tiered system, etc.)
-3. Signup form (name, email, password)
-4. NO CMO required - cmo_id will be NULL
-5. After signup, redirect to onboarding
-
-**Key Differences from CMO-referred signup:**
-- No `ref_cmo` validation needed
-- `cmo_id` is set to NULL in creator_profiles
-- Same referral code generation
-- Same role assignment via `set_creator_role` RPC (with `_cmo_id` = NULL)
-
-**File Structure:**
-```tsx
-// ApplyAffiliate.tsx
-const ApplyAffiliate = () => {
-  // Form state
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    // Sign up user
-    // Call set_creator_role with _cmo_id: null
-    // Redirect to onboarding
+  const fetchMode = async () => {
+    const { data } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'grade_levels_enabled')
+      .maybeSingle();
+    
+    if (data?.value) {
+      setMode(data.value as GradeLevelMode);
+    }
+    setIsLoading(false);
   };
-  
-  return (
-    <main className="min-h-screen bg-background">
-      <Navbar />
-      
-      {/* Hero Section */}
-      <section className="pt-28 pb-16 relative">
-        <div className="container mx-auto px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <Badge className="mb-4">Affiliate Program</Badge>
-            <h1 className="font-display text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Earn Money Sharing <span className="text-brand-gradient">Notebase</span>
-            </h1>
-            <p className="text-muted-foreground text-lg mb-8">
-              Join our affiliate program and earn up to 20% commission on every sale you refer.
-            </p>
-          </div>
-        </div>
-      </section>
-      
-      {/* Benefits Grid */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            <BenefitCard 
-              icon={DollarSign}
-              title="12-20% Commission"
-              description="Start at 12% and unlock higher tiers as you grow"
-            />
-            <BenefitCard 
-              icon={Users}
-              title="Lifetime Attribution"
-              description="Earn from all purchases by your referrals"
-            />
-            <BenefitCard 
-              icon={Wallet}
-              title="Easy Withdrawals"
-              description="Request payouts anytime with low minimum threshold"
-            />
-          </div>
-        </div>
-      </section>
-      
-      {/* Signup Form */}
-      <section className="py-12">
-        <div className="container mx-auto px-4">
-          <div className="max-w-md mx-auto glass-card p-6">
-            <h2 className="font-display text-xl font-bold text-center mb-6">
-              Apply Now
-            </h2>
-            <form onSubmit={handleSubmit}>
-              {/* Form fields */}
-            </form>
-          </div>
-        </div>
-      </section>
-      
-      <Footer />
-    </main>
-  );
+
+  const isOLEnabled = mode === 'both';
+  const defaultGrade = 'al_grade12';
+
+  return { mode, isOLEnabled, isLoading, defaultGrade, refetch: fetchMode };
 };
 ```
 
-**Update App.tsx:**
+### Admin UI for Toggle
+
+**File: `src/pages/admin/PricingSettings.tsx`** (or new BrandingSettings.tsx)
+
+Add section:
 ```tsx
-import ApplyAffiliate from "./pages/ApplyAffiliate";
-// ...
-<Route path="/apply-affiliate" element={<ApplyAffiliate />} />
+<div className="glass-card p-6 mt-6">
+  <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+    <GraduationCap className="w-5 h-5" />
+    Grade Levels Available
+  </h3>
+  <p className="text-sm text-muted-foreground mb-4">
+    Control which grade levels are shown on signup, demo, and content pages.
+  </p>
+  <RadioGroup value={gradeMode} onValueChange={handleGradeModeChange}>
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="al_only" id="al_only" />
+      <Label htmlFor="al_only">A/L Only (Advanced Level - Grades 12 & 13)</Label>
+    </div>
+    <div className="flex items-center space-x-2">
+      <RadioGroupItem value="both" id="both" />
+      <Label htmlFor="both">Both A/L and O/L (All Grades 10-13)</Label>
+    </div>
+  </RadioGroup>
+  <p className="text-xs text-muted-foreground mt-3">
+    Note: Set to A/L Only until O/L content is available.
+  </p>
+</div>
+```
+
+---
+
+## Part 7: Site-Wide Audit - Pages Affected by Grade Toggle
+
+### All Pages Requiring Grade/Level Handling:
+
+| Page | File | Current Behavior | Required Change |
+|------|------|------------------|-----------------|
+| Demo Selection | `src/pages/DemoSelection.tsx` | Shows O/L and A/L buttons | Hide O/L when mode = al_only |
+| Demo Dashboard | `src/pages/DemoDashboard.tsx` | Shows all grades | Default to al_grade12 |
+| Bank Signup | `src/pages/BankSignup.tsx` | Shows all grades | Hide O/L options when disabled |
+| Paid Signup | `src/pages/PaidSignup.tsx` | Shows all grades | Hide O/L options when disabled |
+| Access Code Entry | `src/pages/Access.tsx` | May allow O/L codes | Validate against enabled levels |
+| Subject Selection | `src/pages/SubjectSelection.tsx` | Shows based on enrollment | Already respects enrollment grade |
+| Content Management | `src/pages/admin/ContentManagement.tsx` | Shows all grades | Admin can still manage all |
+| Access Codes Admin | `src/pages/admin/AccessCodes.tsx` | Creates codes for all grades | Warn if O/L disabled |
+
+### Implementation Pattern
+
+Each affected page should:
+```typescript
+import { useGradeLevels } from '@/hooks/useGradeLevels';
+
+const MyPage = () => {
+  const { isOLEnabled, isLoading } = useGradeLevels();
+  
+  // Filter grade options
+  const availableGrades = isOLEnabled 
+    ? GRADE_GROUPS 
+    : { al: GRADE_GROUPS.al };
+  
+  // Or for specific grades
+  const gradeOptions = isOLEnabled
+    ? ['ol_grade10', 'ol_grade11', 'al_grade12', 'al_grade13']
+    : ['al_grade12', 'al_grade13'];
+};
+```
+
+---
+
+## Part 8: Signup Flow UX Improvements
+
+### Current Problem
+Bank signup shows grade and stream on same page with basic radio buttons. Card signup is similar but with different styling on subjects.
+
+### Solution - Step-by-Step Flow
+
+Break the enrollment step into sub-steps with smooth transitions:
+
+**Step 2a: Select Grade**
+```
+┌────────────────────────────────────────┐
+│  [GraduationCap Icon]                  │
+│                                        │
+│  What grade are you in?                │
+│                                        │
+│  ┌─────────────┐  ┌─────────────┐      │
+│  │  Grade 12   │  │  Grade 13   │      │
+│  │  (1st Year) │  │  (2nd Year) │      │
+│  └─────────────┘  └─────────────┘      │
+│                                        │
+│             [Continue →]               │
+└────────────────────────────────────────┘
+```
+
+**Step 2b: Select Stream**
+```
+┌────────────────────────────────────────┐
+│  [BookOpen Icon]                       │
+│                                        │
+│  Choose your stream                    │
+│                                        │
+│  ┌─────────────────────────────┐       │
+│  │ 🔬 Physical Science         │       │
+│  └─────────────────────────────┘       │
+│  ┌─────────────────────────────┐       │
+│  │ 🧬 Biological Science       │       │
+│  └─────────────────────────────┘       │
+│  ┌─────────────────────────────┐       │
+│  │ 💼 Commerce                 │       │
+│  └─────────────────────────────┘       │
+│  ... (more streams)                    │
+│                                        │
+│  [← Back]           [Continue →]       │
+└────────────────────────────────────────┘
+```
+
+**Step 2c: Select Medium**
+```
+┌────────────────────────────────────────┐
+│  [Languages Icon]                      │
+│                                        │
+│  Preferred medium of instruction       │
+│                                        │
+│  ┌─────────────┐  ┌─────────────┐      │
+│  │  English    │  │  සිංහල     │      │
+│  └─────────────┘  └─────────────┘      │
+│                                        │
+│  [← Back]      [Select Subjects →]     │
+└────────────────────────────────────────┘
+```
+
+### Implementation
+
+**Update step state:**
+```typescript
+type EnrollmentStep = 'grade' | 'stream' | 'medium' | 'subjects';
+const [enrollmentStep, setEnrollmentStep] = useState<EnrollmentStep>('grade');
+```
+
+**Consistent Card Styling:**
+Use the same `glass-card` with gradient orbs for all steps:
+```tsx
+<div className="glass-card p-6 relative overflow-hidden">
+  {/* Decorative gradient orbs */}
+  <div className="absolute -top-20 -right-20 w-40 h-40 bg-brand/20 rounded-full blur-3xl" />
+  <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
+  
+  <div className="relative z-10">
+    {/* Step content */}
+  </div>
+</div>
 ```
 
 ---
@@ -527,67 +466,54 @@ import ApplyAffiliate from "./pages/ApplyAffiliate";
 
 | File | Purpose |
 |------|---------|
-| `src/pages/ApplyAffiliate.tsx` | Standalone creator signup page |
+| `src/hooks/useGradeLevels.ts` | Hook for grade level mode settings |
 
 ## Summary of Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/index.css` | Add `animate-border-flow` CSS animation |
-| `src/pages/creator/CreatorDashboard.tsx` | Complete UI redesign, add Contact CMO, replace glows with border animation |
-| `src/pages/admin/AdminDashboard.tsx` | Performance optimization with parallel queries |
-| `src/pages/DemoDashboard.tsx` | Complete rewrite to mirror real dashboard |
-| `src/pages/DemoSelection.tsx` | Use branding hook, professional styling |
-| `src/components/Footer.tsx` | Add "Become an Affiliate" link |
-| `src/App.tsx` | Add `/apply-affiliate` route |
-| `supabase/functions/evaluate-creator-tiers/index.ts` | Update tier logic for 30-day periods on both promotion AND demotion |
+| `src/pages/admin/AdminDashboard.tsx` | Parallel query optimization |
+| `src/pages/DemoSelection.tsx` | Add grade/medium selectors, hide O/L when disabled |
+| `src/pages/DemoDashboard.tsx` | Use grade/medium from URL params |
+| `src/components/demo/DemoTour.tsx` | Use branding, fix AI tutor step, fix button overflow |
+| `src/components/onboarding/CreatorOnboardingTour.tsx` | Fix button overflow |
+| `src/pages/PaidSignup.tsx` | Silent redirect, step-by-step enrollment UI |
+| `src/pages/BankSignup.tsx` | Step-by-step enrollment UI, hide O/L when disabled |
+| `src/pages/admin/BrandingSettings.tsx` | Add grade level toggle UI |
 
-## Database Migrations
+## Database Migration
 
-1. **Add CMO contact fields:**
 ```sql
-ALTER TABLE cmo_profiles
-ADD COLUMN IF NOT EXISTS email TEXT,
-ADD COLUMN IF NOT EXISTS whatsapp TEXT,
-ADD COLUMN IF NOT EXISTS instagram TEXT;
-```
-
-2. **Create commission notification trigger:**
-```sql
-CREATE OR REPLACE FUNCTION notify_creator_on_commission()
-RETURNS TRIGGER AS $$ ... $$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE TRIGGER trigger_notify_creator_commission
-  AFTER INSERT ON payment_attributions
-  FOR EACH ROW
-  EXECUTE FUNCTION notify_creator_on_commission();
+-- Add grade levels mode setting
+INSERT INTO site_settings (key, value)
+VALUES ('grade_levels_enabled', '"al_only"')
+ON CONFLICT (key) DO NOTHING;
 ```
 
 ---
 
 ## Technical Notes
 
-1. **Border Animation**: Using CSS only, no JavaScript, for smooth 60fps animation
-2. **Demo Dashboard**: Shares logic with real dashboard but with simulated enrollment
-3. **Tier System**: 30-day rolling period applies to BOTH promotions and demotions
-4. **CMO Contact**: Falls back gracefully if CMO has no contact info set
-5. **Performance**: Admin dashboard queries consolidated for faster loading
-6. **Affiliate Signup**: Uses existing `set_creator_role` RPC with null CMO
+1. **Performance**: Parallel queries should reduce CEO dashboard load from 3-5s to under 1s
+2. **Backward Compatibility**: Default to `al_only` so current users see no change
+3. **Admin Override**: Content admins can still manage O/L content even when hidden from public
+4. **Mobile First**: All UI changes tested for small screens with flex-wrap patterns
+5. **Progressive Enhancement**: Grade toggle affects frontend only; all data remains accessible
 
 ---
 
 ## Testing Checklist
 
-- [ ] Balance card has animated border without glow/shadow
-- [ ] Creators receive inbox notification when earning commission
-- [ ] Tier demotion applies 30-day lock at new tier
-- [ ] Tier promotion applies 30-day protection at new tier
-- [ ] CEO dashboard loads metrics significantly faster
-- [ ] Creator Dashboard has professional, clean appearance
-- [ ] Contact CMO buttons work (email, WhatsApp, Instagram, chat)
-- [ ] Demo dashboard mirrors real dashboard exactly
-- [ ] Demo notes show lock icons based on tier
-- [ ] Footer shows "Become an Affiliate" link
-- [ ] `/apply-affiliate` page allows signup without CMO
-- [ ] Creators signed up via affiliate page have cmo_id = NULL
+- [ ] CEO dashboard loads in under 1 second
+- [ ] Demo shows only A/L grades by default
+- [ ] Demo filters by grade, stream, AND medium correctly
+- [ ] Demo tour uses "Notebase" instead of "Zen Notes"
+- [ ] Demo tour mentions AI Tutor, not progress tracking
+- [ ] Demo tour buttons don't overflow on mobile
+- [ ] Creator onboarding buttons don't overflow on mobile
+- [ ] No "No payment found" error when navigating directly to /paid-signup
+- [ ] Grade level toggle saves and affects all public pages
+- [ ] Bank signup uses step-by-step flow with premium styling
+- [ ] Card signup uses consistent step-by-step flow
+- [ ] All pages hide O/L when mode is `al_only`
 - [ ] All features work on mobile devices
