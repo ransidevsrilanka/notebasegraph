@@ -426,6 +426,7 @@ const AdminDashboard = () => {
           value,
         };
       });
+      setRevenueData(chartData);
 
       const enrollmentChartData = Object.entries(monthlyEnrollments).map(([key, value]) => {
         const date = new Date(key + '-01');
@@ -434,6 +435,7 @@ const AdminDashboard = () => {
           value,
         };
       });
+      setEnrollmentData(enrollmentChartData);
 
       // Process funnel stats
       setFunnelStats({
@@ -722,39 +724,73 @@ const AdminDashboard = () => {
 
           {/* Main Content */}
           <main className="p-6 space-y-6">
-            {/* Net Profit Card - Primary Metric */}
+            {/* Net Profit Card - Primary Metric with Tax Calculation */}
             {(() => {
               const totalRevenue = stats.totalRevenue + stats.printRevenue;
               const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
-              const profit = totalRevenue - payhereCommission - stats.creatorCommissions;
+              const grossProfit = totalRevenue - payhereCommission - stats.creatorCommissions - stats.printCost;
+              
+              // Sri Lankan Corporate Tax Rate (2025/2026) - Standard rate 30%
+              // Reference: https://www.ird.gov.lk/en/publications/SitePages/tax_chart_2526.aspx
+              const CORPORATE_TAX_RATE = 0.30;
+              const estimatedTax = Math.max(0, grossProfit * CORPORATE_TAX_RATE);
+              const netProfitAfterTax = grossProfit - estimatedTax;
               
               return (
                 <div className="glass-card-premium p-6 bg-gradient-to-r from-green-500/10 via-brand/5 to-transparent border-green-500/30">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <TrendingUp className="w-5 h-5 text-green-500" />
-                        <span className="text-sm text-muted-foreground font-medium">Net Profit</span>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <TrendingUp className="w-5 h-5 text-green-500" />
+                          <span className="text-sm text-muted-foreground font-medium">Gross Profit (Before Tax)</span>
+                        </div>
+                        <p className="text-3xl sm:text-4xl font-bold text-green-500">
+                          Rs. {grossProfit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Revenue: Rs. {totalRevenue.toLocaleString()} − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K) − Print Cost ({(stats.printCost / 1000).toFixed(1)}K)
+                        </p>
                       </div>
-                      <p className="text-3xl sm:text-4xl font-bold text-green-500">
-                        Rs. {profit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Total Revenue: Rs. {totalRevenue.toLocaleString()} − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K)
-                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                        <div className="p-3 bg-secondary/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Revenue</p>
+                          <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
+                        </div>
+                        <div className="p-3 bg-secondary/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground">PayHere Fee</p>
+                          <p className="text-lg font-semibold text-orange-500">-Rs. {(payhereCommission / 1000).toFixed(1)}K</p>
+                        </div>
+                        <div className="p-3 bg-secondary/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Commissions</p>
+                          <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
+                        </div>
+                        <div className="p-3 bg-secondary/50 rounded-lg">
+                          <p className="text-xs text-muted-foreground">Print Cost</p>
+                          <p className="text-lg font-semibold text-blue-500">-Rs. {(stats.printCost / 1000).toFixed(1)}K</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="p-3 bg-secondary/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Revenue</p>
-                        <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
-                      </div>
-                      <div className="p-3 bg-secondary/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">PayHere Fee</p>
-                        <p className="text-lg font-semibold text-orange-500">-Rs. {(payhereCommission / 1000).toFixed(1)}K</p>
-                      </div>
-                      <div className="p-3 bg-secondary/50 rounded-lg">
-                        <p className="text-xs text-muted-foreground">Commissions</p>
-                        <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
+                    
+                    {/* Tax & Final Profit Section */}
+                    <div className="border-t border-border/50 pt-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              Est. Corporate Tax (30%)
+                              <span className="text-[10px] text-muted-foreground/70">*</span>
+                            </p>
+                            <p className="text-lg font-semibold text-red-400">-Rs. {(estimatedTax / 1000).toFixed(1)}K</p>
+                          </div>
+                          <div className="p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
+                            <p className="text-xs text-muted-foreground">Net After Tax</p>
+                            <p className="text-lg font-bold text-emerald-400">Rs. {(netProfitAfterTax / 1000).toFixed(1)}K</p>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/60 max-w-xs">
+                          *Estimate based on Sri Lankan Corporate Tax 2025/26. Consult a tax professional for accurate filings.
+                        </p>
                       </div>
                     </div>
                   </div>

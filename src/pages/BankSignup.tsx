@@ -559,72 +559,141 @@ const BankSignup = () => {
               </div>
             )}
 
-            {/* Step 2: Enrollment Options */}
+            {/* Step 2: Enrollment Options - Premium Design */}
             {step === 'enrollment' && (
-              <div className="glass-card p-6">
-                <div className="w-12 h-12 rounded-xl bg-brand/20 flex items-center justify-center mb-4">
-                  <GraduationCap className="w-6 h-6 text-brand" />
-                </div>
-                <h1 className="font-display text-xl font-bold text-foreground mb-1">
-                  Your Study Details
-                </h1>
-                <p className="text-muted-foreground text-sm mb-6">
-                  Tell us about your educational level.
-                </p>
-
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <Label>Grade Level</Label>
-                    <RadioGroup value={selectedGrade} onValueChange={setSelectedGrade}>
-                      {Object.entries(GRADE_GROUPS).map(([groupKey, { label: groupLabel, grades }]) => (
-                        <div key={groupKey} className="space-y-2">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{groupLabel}</p>
-                          {grades.map((gradeValue) => (
-                            <div key={gradeValue} className="flex items-center space-x-2 ml-2">
-                              <RadioGroupItem value={gradeValue} id={gradeValue} />
-                              <Label htmlFor={gradeValue} className="cursor-pointer">{GRADE_LABELS[gradeValue]}</Label>
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </RadioGroup>
+              <div className="glass-card p-6 relative overflow-hidden">
+                {/* Decorative gradient orbs */}
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-brand/20 rounded-full blur-3xl" />
+                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl" />
+                
+                <div className="relative z-10">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/30 to-brand/10 flex items-center justify-center mb-4 border border-brand/20">
+                    <GraduationCap className="w-6 h-6 text-brand" />
                   </div>
+                  <h1 className="font-display text-xl font-bold text-foreground mb-1">
+                    Your Study Details
+                  </h1>
+                  <p className="text-muted-foreground text-sm mb-6">
+                    Tell us about your educational level.
+                  </p>
 
-                  {selectedGrade.startsWith('al_') && (
-                    <div className="space-y-3">
-                      <Label>Stream</Label>
-                      <RadioGroup value={selectedStream} onValueChange={setSelectedStream}>
-                        {Object.entries(STREAM_LABELS).map(([value, label]) => (
-                          <div key={value} className="flex items-center space-x-2">
-                            <RadioGroupItem value={value} id={`stream-${value}`} />
-                            <Label htmlFor={`stream-${value}`} className="cursor-pointer">{label}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
+                  <div className="space-y-6">
+                    {/* Grade Selection Cards */}
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-brand" />
+                        Select Your Grade
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(GRADE_GROUPS).flatMap(([_, { grades }]) =>
+                          grades.map((gradeValue) => {
+                            const isSelected = selectedGrade === gradeValue;
+                            return (
+                              <div
+                                key={gradeValue}
+                                onClick={() => setSelectedGrade(gradeValue)}
+                                className={`
+                                  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+                                  ${isSelected 
+                                    ? 'border-brand bg-brand/10 shadow-lg shadow-brand/20' 
+                                    : 'border-border bg-card/50 hover:border-brand/50'
+                                  }
+                                `}
+                              >
+                                {isSelected && (
+                                  <div className="absolute top-3 right-3">
+                                    <CheckCircle2 className="w-5 h-5 text-brand" />
+                                  </div>
+                                )}
+                                <p className="font-medium text-foreground">{GRADE_LABELS[gradeValue]}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {gradeValue === 'al_grade12' ? '1st Year A/L' : gradeValue === 'al_grade13' ? '2nd Year A/L' : 'O/L'}
+                                </p>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
-                  )}
 
-                  <div className="space-y-3">
-                    <Label>Medium of Instruction</Label>
-                    <RadioGroup value={selectedMedium} onValueChange={setSelectedMedium}>
-                      {Object.entries(MEDIUM_LABELS).map(([value, label]) => (
-                        <div key={value} className="flex items-center space-x-2">
-                          <RadioGroupItem value={value} id={`medium-${value}`} />
-                          <Label htmlFor={`medium-${value}`} className="cursor-pointer">{label}</Label>
+                    {/* Stream Selection Cards */}
+                    {selectedGrade.startsWith('al_') && (
+                      <div>
+                        <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                          Select Your Stream
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3">
+                          {Object.entries(STREAM_LABELS).map(([value, label]) => {
+                            const isSelected = selectedStream === value;
+                            return (
+                              <div
+                                key={value}
+                                onClick={() => setSelectedStream(value)}
+                                className={`
+                                  relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+                                  ${isSelected 
+                                    ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/20' 
+                                    : 'border-border bg-card/50 hover:border-purple-500/50'
+                                  }
+                                `}
+                              >
+                                {isSelected && (
+                                  <div className="absolute top-3 right-3">
+                                    <CheckCircle2 className="w-5 h-5 text-purple-500" />
+                                  </div>
+                                )}
+                                <p className="font-medium text-foreground">{label}</p>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
-                    </RadioGroup>
-                  </div>
+                      </div>
+                    )}
 
-                  <Button 
-                    variant="brand" 
-                    className="w-full" 
-                    onClick={handleEnrollmentChoice}
-                    disabled={!selectedGrade || !selectedMedium || (isALevel && !selectedStream)}
-                  >
-                    {isALevel ? 'Select Subjects' : 'Continue'}
-                    <ArrowRight className="w-4 h-4 ml-2" />
-                  </Button>
+                    {/* Medium Selection Cards */}
+                    <div>
+                      <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        Medium of Instruction
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {Object.entries(MEDIUM_LABELS).map(([value, label]) => {
+                          const isSelected = selectedMedium === value;
+                          return (
+                            <div
+                              key={value}
+                              onClick={() => setSelectedMedium(value)}
+                              className={`
+                                relative overflow-hidden rounded-xl p-4 border-2 transition-all cursor-pointer
+                                ${isSelected 
+                                  ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/20' 
+                                  : 'border-border bg-card/50 hover:border-emerald-500/50'
+                                }
+                              `}
+                            >
+                              {isSelected && (
+                                <div className="absolute top-3 right-3">
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                </div>
+                              )}
+                              <p className="font-medium text-foreground">{label}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <Button 
+                      variant="brand" 
+                      className="w-full" 
+                      onClick={handleEnrollmentChoice}
+                      disabled={!selectedGrade || !selectedMedium || (isALevel && !selectedStream)}
+                    >
+                      {isALevel ? 'Select Subjects' : 'Continue'}
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

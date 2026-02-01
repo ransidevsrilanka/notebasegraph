@@ -460,8 +460,10 @@ const WithdrawalRequests = () => {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       {request.withdrawal_method?.method_type === 'bank' ? (
                         <><Building2 className="w-3 h-3" /> Bank Transfer</>
-                      ) : (
+                      ) : request.withdrawal_method?.method_type === 'crypto' ? (
                         <><Wallet className="w-3 h-3" /> {request.withdrawal_method?.crypto_type || 'Crypto'}</>
+                      ) : (
+                        <span className="text-muted-foreground/70">Method not found</span>
                       )}
                       <span>•</span>
                       <span>{format(new Date(request.created_at), 'MMM d, yyyy h:mm a')}</span>
