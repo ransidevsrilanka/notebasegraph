@@ -83,14 +83,15 @@ export const OTPVerificationDialog = ({
               value={otpCode}
               onChange={setOtpCode}
               disabled={isLoading}
+              className="otp-password-mask"
             >
               <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
+                <InputOTPSlot index={0} className="[&>*]:text-security-disc" />
+                <InputOTPSlot index={1} className="[&>*]:text-security-disc" />
+                <InputOTPSlot index={2} className="[&>*]:text-security-disc" />
+                <InputOTPSlot index={3} className="[&>*]:text-security-disc" />
+                <InputOTPSlot index={4} className="[&>*]:text-security-disc" />
+                <InputOTPSlot index={5} className="[&>*]:text-security-disc" />
               </InputOTPGroup>
             </InputOTP>
 

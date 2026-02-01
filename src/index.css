@@ -832,6 +832,18 @@
     box-shadow: none !important;
   }
 
+  /* OTP Password Masking - Hide 2FA codes while typing */
+  .otp-password-mask [data-input-otp] {
+    -webkit-text-security: disc;
+    text-security: disc;
+  }
+  
+  .\[\&\>\*\]\:text-security-disc > * {
+    -webkit-text-security: disc !important;
+    text-security: disc !important;
+    font-family: disc, sans-serif;
+  }
+
   /* Reduced motion support */
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer,

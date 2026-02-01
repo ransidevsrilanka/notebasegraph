@@ -286,21 +286,31 @@ const CreatorDashboard = () => {
           ? new Date(creatorProfile.tier_protection_until) > new Date()
           : false;
         
-        let currentCommissionRate = 12; // Default for new creators (Tier 2)
+        // Start with the creator's stored tier level (new creators start at level 2 = 12%)
         let effectiveTierLevel = creatorProfile.current_tier_level || 2;
         
-        if (isInProtectionPeriod) {
-          // During protection period, use the protected tier rate
-          const protectedTier = commissionTiers.find(t => t.tier_level === effectiveTierLevel);
-          currentCommissionRate = protectedTier?.commission_rate || 12;
-        } else {
-          // After protection period, calculate based on monthly performance
+        // Get the commission rate for the effective tier
+        const getCurrentTierRate = (level: number) => {
+          const tier = commissionTiers.find(t => t.tier_level === level);
+          return tier?.commission_rate || 12; // Default 12% for new creators
+        };
+        
+        let currentCommissionRate = getCurrentTierRate(effectiveTierLevel);
+        
+        if (!isInProtectionPeriod && commissionTiers.length > 0) {
+          // After protection period, evaluate based on monthly performance
+          // Find the highest tier they qualify for based on performance
+          let qualifiedTierLevel = 1; // Base tier
           for (const tier of commissionTiers) {
             if (monthlyCount >= tier.monthly_user_threshold) {
-              currentCommissionRate = tier.commission_rate;
-              effectiveTierLevel = tier.tier_level;
+              qualifiedTierLevel = tier.tier_level;
             }
           }
+          
+          // New creators (tier 2+) can only go down if they don't maintain performance
+          // But they keep their protected tier during protection period
+          effectiveTierLevel = Math.max(qualifiedTierLevel, 1);
+          currentCommissionRate = getCurrentTierRate(effectiveTierLevel);
         }
 
         // Build analytics object
@@ -1325,9 +1335,18 @@ const CreatorDashboard = () => {
             <div className="flex gap-2">
               <Input
                 type="number"
-                placeholder="Amount"
+                placeholder={`Max: LKR ${availableBalance.toLocaleString()}`}
                 value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  // Cap the amount to available balance
+                  if (val > availableBalance) {
+                    setWithdrawAmount(availableBalance.toString());
+                  } else {
+                    setWithdrawAmount(e.target.value);
+                  }
+                }}
+                max={availableBalance}
               />
               <Button variant="outline" onClick={handleWithdrawAll}>
                 Max
