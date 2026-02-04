@@ -43,6 +43,7 @@ import {
   Mail,
   MessageCircle,
   MessageSquare,
+  Send,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -139,6 +140,8 @@ const CreatorDashboard = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [dailyEarnings, setDailyEarnings] = useState<{ date: string; amount: number }[]>([]);
   const [cmoContactInfo, setCmoContactInfo] = useState<{ email?: string; whatsapp?: string; instagram?: string; userId?: string } | null>(null);
+  const [telegramChatId, setTelegramChatId] = useState<string>('');
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -336,6 +339,7 @@ const CreatorDashboard = () => {
         };
 
         setCreatorData(analyticsData);
+        setTelegramChatId(creatorProfile.telegram_chat_id || '');
 
         // Fetch discount codes
         const { data: dcData } = await supabase
@@ -571,6 +575,30 @@ const CreatorDashboard = () => {
     } catch (error: any) {
       console.error('Error deleting discount code:', error);
       toast.error(error.message || 'Failed to delete discount code');
+    }
+  };
+
+  const handleSaveTelegramChatId = async () => {
+    if (!creatorData) return;
+    
+    setIsSavingTelegram(true);
+    try {
+      const { error } = await supabase
+        .from('creator_profiles')
+        .update({ telegram_chat_id: telegramChatId.trim() || null })
+        .eq('id', creatorData.id);
+
+      if (error) throw error;
+
+      toast.success(telegramChatId.trim() 
+        ? 'Telegram notifications enabled!' 
+        : 'Telegram notifications disabled'
+      );
+    } catch (error: any) {
+      console.error('Error saving Telegram Chat ID:', error);
+      toast.error(error.message || 'Failed to save Telegram settings');
+    } finally {
+      setIsSavingTelegram(false);
     }
   };
 
@@ -1019,6 +1047,59 @@ const CreatorDashboard = () => {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Referral Code: <span className="font-mono font-medium">{creatorData?.referral_code}</span>
+          </p>
+        </div>
+
+        {/* Telegram Notifications */}
+        <div className="glass-card p-6 mb-8 border-blue-500/20 hover:border-blue-500/30 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+              <Send className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Telegram Notifications</h3>
+              <p className="text-sm text-muted-foreground">Get instant alerts on your phone</p>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-blue-500/5 rounded-lg border border-blue-500/20 mb-4">
+            <p className="text-sm text-foreground mb-3">
+              <strong>How to set up:</strong>
+            </p>
+            <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>Open Telegram and search for <span className="font-mono text-blue-400">@NotebaseCreatorBot</span></li>
+              <li>Start a chat and send <span className="font-mono text-blue-400">/start</span></li>
+              <li>The bot will reply with your Chat ID - copy it</li>
+              <li>Paste the Chat ID below and save</li>
+            </ol>
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder="Enter your Telegram Chat ID (e.g., 123456789)"
+              value={telegramChatId}
+              onChange={(e) => setTelegramChatId(e.target.value)}
+              className="font-mono"
+            />
+            <Button 
+              onClick={handleSaveTelegramChatId} 
+              disabled={isSavingTelegram}
+              variant={telegramChatId ? 'default' : 'outline'}
+            >
+              {isSavingTelegram ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+
+          {telegramChatId && (
+            <div className="mt-3 flex items-center gap-2 text-green-500 text-sm">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Connected - You'll receive notifications for commissions and withdrawals</span>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-3">
+            💡 You'll receive brief alerts. Full details are always in your inbox.
           </p>
         </div>
 

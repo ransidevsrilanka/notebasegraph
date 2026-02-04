@@ -727,14 +727,30 @@ const AdminDashboard = () => {
             {/* Net Profit Card - Primary Metric with Tax Calculation */}
             {(() => {
               const totalRevenue = stats.totalRevenue + stats.printRevenue;
+              
+              // SSCL (2.5% on turnover - Service Provider rate at 100% liability)
+              // Reference: SSCL Act No. 25 of 2022, effective 1 Oct 2022
+              // For service providers, 100% of turnover is liable
+              const SSCL_RATE = 0.025; // 2.5%
+              const ssclTax = totalRevenue * SSCL_RATE;
+              
+              // Operating Expenses
               const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
-              const grossProfit = totalRevenue - payhereCommission - stats.creatorCommissions - stats.printCost;
+              const operatingCosts = payhereCommission + stats.creatorCommissions + stats.printCost;
+              
+              // Gross Profit (before corporate tax, SSCL is a tax so deducted here)
+              const grossProfit = totalRevenue - operatingCosts - ssclTax;
               
               // Sri Lankan Corporate Tax Rate (2025/2026) - Standard rate 30%
               // Reference: https://www.ird.gov.lk/en/publications/SitePages/tax_chart_2526.aspx
               const CORPORATE_TAX_RATE = 0.30;
-              const estimatedTax = Math.max(0, grossProfit * CORPORATE_TAX_RATE);
-              const netProfitAfterTax = grossProfit - estimatedTax;
+              const corporateTax = Math.max(0, grossProfit * CORPORATE_TAX_RATE);
+              
+              // Net Profit After All Taxes
+              const netProfitAfterTax = grossProfit - corporateTax;
+              
+              // Total Tax Burden
+              const totalTaxBurden = ssclTax + corporateTax;
               
               return (
                 <div className="glass-card-premium p-6 bg-gradient-to-r from-green-500/10 via-brand/5 to-transparent border-green-500/30">
@@ -749,13 +765,17 @@ const AdminDashboard = () => {
                           Rs. {grossProfit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Revenue: Rs. {totalRevenue.toLocaleString()} − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K) − Print Cost ({(stats.printCost / 1000).toFixed(1)}K)
+                          Revenue: Rs. {totalRevenue.toLocaleString()} − SSCL ({(ssclTax / 1000).toFixed(1)}K) − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K) − Print ({(stats.printCost / 1000).toFixed(1)}K)
                         </p>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                         <div className="p-3 bg-secondary/50 rounded-lg">
                           <p className="text-xs text-muted-foreground">Revenue</p>
                           <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
+                        </div>
+                        <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                          <p className="text-xs text-muted-foreground">SSCL (2.5%)</p>
+                          <p className="text-lg font-semibold text-amber-500">-Rs. {(ssclTax / 1000).toFixed(1)}K</p>
                         </div>
                         <div className="p-3 bg-secondary/50 rounded-lg">
                           <p className="text-xs text-muted-foreground">PayHere Fee</p>
@@ -765,33 +785,37 @@ const AdminDashboard = () => {
                           <p className="text-xs text-muted-foreground">Commissions</p>
                           <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
                         </div>
-                        <div className="p-3 bg-secondary/50 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Print Cost</p>
-                          <p className="text-lg font-semibold text-blue-500">-Rs. {(stats.printCost / 1000).toFixed(1)}K</p>
-                        </div>
                       </div>
                     </div>
                     
                     {/* Tax & Final Profit Section */}
                     <div className="border-t border-border/50 pt-4">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                            <p className="text-xs text-muted-foreground">SSCL (2.5%)</p>
+                            <p className="text-lg font-semibold text-amber-400">-Rs. {(ssclTax / 1000).toFixed(1)}K</p>
+                          </div>
                           <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              Est. Corporate Tax (30%)
+                              Corp Tax (30%)
                               <span className="text-[10px] text-muted-foreground/70">*</span>
                             </p>
-                            <p className="text-lg font-semibold text-red-400">-Rs. {(estimatedTax / 1000).toFixed(1)}K</p>
+                            <p className="text-lg font-semibold text-red-400">-Rs. {(corporateTax / 1000).toFixed(1)}K</p>
+                          </div>
+                          <div className="p-3 bg-red-500/5 rounded-lg border border-red-500/10">
+                            <p className="text-xs text-muted-foreground">Total Tax Burden</p>
+                            <p className="text-lg font-semibold text-red-300">-Rs. {(totalTaxBurden / 1000).toFixed(1)}K</p>
                           </div>
                           <div className="p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-                            <p className="text-xs text-muted-foreground">Net After Tax</p>
+                            <p className="text-xs text-muted-foreground">Net After All Taxes</p>
                             <p className="text-lg font-bold text-emerald-400">Rs. {(netProfitAfterTax / 1000).toFixed(1)}K</p>
                           </div>
                         </div>
-                        <p className="text-[10px] text-muted-foreground/60 max-w-xs">
-                          *Estimate based on Sri Lankan Corporate Tax 2025/26. Consult a tax professional for accurate filings.
-                        </p>
                       </div>
+                      <p className="text-[10px] text-muted-foreground/60 mt-3">
+                        * SSCL: 2.5% on revenue (SSCL Act 2022). Corp Tax: 30% on profit (IRD 2025/26). Estimates only - consult a tax professional.
+                      </p>
                     </div>
                   </div>
                 </div>

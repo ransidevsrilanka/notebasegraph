@@ -530,6 +530,7 @@ export type Database = {
           lifetime_paid_users: number | null
           monthly_paid_users: number | null
           referral_code: string
+          telegram_chat_id: string | null
           tier_protection_until: string | null
           total_withdrawn: number | null
           trial_expires_at: string | null
@@ -547,6 +548,7 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code: string
+          telegram_chat_id?: string | null
           tier_protection_until?: string | null
           total_withdrawn?: number | null
           trial_expires_at?: string | null
@@ -564,6 +566,7 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code?: string
+          telegram_chat_id?: string | null
           tier_protection_until?: string | null
           total_withdrawn?: number | null
           trial_expires_at?: string | null
