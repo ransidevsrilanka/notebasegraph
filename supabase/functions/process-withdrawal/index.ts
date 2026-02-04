@@ -1,6 +1,33 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { notifyWithdrawalRequest, notifyEdgeFunctionError, sendNotification } from "../_shared/notify.ts";
 
+// Helper function to send creator Telegram notification
+async function sendCreatorTelegram(
+  supabaseUrl: string, 
+  supabaseServiceKey: string, 
+  creatorId: string, 
+  type: string, 
+  amount?: number
+) {
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        creator_id: creatorId,
+        type,
+        amount,
+      }),
+    });
+  } catch (error) {
+    console.error('Failed to send creator Telegram notification:', error);
+    // Don't throw - this is a non-critical notification
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -417,6 +444,9 @@ async function handleApprove(
     priority: 'medium',
   });
 
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_approved', request.net_amount);
+
   return new Response(JSON.stringify({ 
     success: true, 
     message: 'Withdrawal approved successfully',
@@ -578,6 +608,9 @@ async function handleMarkPaid(
     priority: 'medium',
   });
 
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_paid', request.net_amount);
+
   return new Response(JSON.stringify({ 
     success: true, 
     message: 'Marked as paid successfully',
@@ -709,6 +742,9 @@ async function handleReject(
     },
     priority: 'medium',
   });
+
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_rejected', request.amount);
 
   return new Response(JSON.stringify({ 
     success: true, 
