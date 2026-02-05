@@ -81,12 +81,15 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Get monthly paid users count for this creator
+      // Get paid users count for this creator using ROLLING 30-day window
+      // This ensures fair evaluation regardless of when the creator signed up
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
         const { count: monthlyPaidUsers } = await supabase
           .from('payment_attributions')
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', creator.id)
-          .gte('created_at', currentMonthStart.toISOString());
+        .gte('created_at', thirtyDaysAgo.toISOString());
 
         const monthlyCount = monthlyPaidUsers || 0;
         const currentTierLevel = creator.current_tier_level || 2; // Default Tier 2

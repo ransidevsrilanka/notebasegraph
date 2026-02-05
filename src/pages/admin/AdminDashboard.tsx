@@ -14,6 +14,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -27,6 +32,8 @@ import {
   Database,
   Share2,
   Printer,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -263,6 +270,9 @@ const AdminDashboard = () => {
   const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [funnelStats, setFunnelStats] = useState<FunnelStats>({ totalSignups: 0, totalPaidUsers: 0 });
+  const [showDistribution, setShowDistribution] = useState(false);
+  const [showReferrals, setShowReferrals] = useState(false);
+  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const fetchStats = async () => {
     try {
@@ -869,107 +879,121 @@ const AdminDashboard = () => {
             </div>
 
             {/* Tier & Payment Breakdown */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Tier Distribution */}
-              <div className="glass-card-premium p-6">
-                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-gold" />
-                  Tier Distribution
-                </h3>
-                <div className="flex items-center justify-center mb-4">
-                  <ProgressRing
-                    progress={stats.activeEnrollments > 0 ? (stats.lifetimeCount / stats.activeEnrollments) * 100 : 0}
-                    size={120}
-                    strokeWidth={12}
-                    color="hsl(var(--gold))"
-                    label="Lifetime"
+            {/* Distribution & Details (Collapsible) */}
+            <Collapsible open={showDistribution} onOpenChange={setShowDistribution}>
+              <CollapsibleTrigger asChild>
+                <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-gold" />
+                    <span className="font-semibold text-foreground">Distribution & Details</span>
+                    <span className="text-xs text-muted-foreground ml-2">Tiers, Payments, Storage</span>
+                  </div>
+                  {showDistribution ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+                  {/* Tier Distribution */}
+                  <div className="glass-card-premium p-6">
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-gold" />
+                      Tier Distribution
+                    </h3>
+                    <div className="flex items-center justify-center mb-4">
+                      <ProgressRing
+                        progress={stats.activeEnrollments > 0 ? (stats.lifetimeCount / stats.activeEnrollments) * 100 : 0}
+                        size={120}
+                        strokeWidth={12}
+                        color="hsl(var(--gold))"
+                        label="Lifetime"
+                      />
+                    </div>
+                    <ChartLegend
+                      items={[
+                        { name: 'Starter', value: stats.starterCount, color: 'bg-muted-foreground' },
+                        { name: 'Standard', value: stats.standardCount, color: 'bg-brand' },
+                        { name: 'Lifetime', value: stats.lifetimeCount, color: 'bg-gold' },
+                      ]}
+                    />
+                  </div>
+
+                  {/* Payment Methods */}
+                  <div className="glass-card-premium p-6">
+                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                      <Database className="w-5 h-5 text-brand" />
+                      Payment Methods
+                    </h3>
+                    <div className="space-y-3 mt-6">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Card Payments</span>
+                        <span className="font-medium text-foreground">Rs. {stats.cardPayments.toLocaleString()}</span>
+                      </div>
+                      <Progress value={stats.totalRevenue > 0 ? (stats.cardPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
+                      <div className="flex justify-between items-center mt-4">
+                        <span className="text-sm text-muted-foreground">Bank Transfers</span>
+                        <span className="font-medium text-foreground">Rs. {stats.bankPayments.toLocaleString()}</span>
+                      </div>
+                      <Progress value={stats.totalRevenue > 0 ? (stats.bankPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
+                    </div>
+                  </div>
+
+                  {/* Storage Usage */}
+                  <StorageUsageCard />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Referral Insights (Collapsible) */}
+            <Collapsible open={showReferrals} onOpenChange={setShowReferrals}>
+              <CollapsibleTrigger asChild>
+                <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="w-5 h-5 text-brand" />
+                    <span className="font-semibold text-foreground">Referral Network</span>
+                    <span className="text-xs text-muted-foreground ml-2">{stats.totalUserReferrals} user referrals, {stats.creatorConversions} creator conversions</span>
+                  </div>
+                  {showReferrals ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="mt-4">
+                  <ReferralNetworkBreakdown 
+                    stats={{
+                      userSignups: stats.totalUserReferrals,
+                      userConversions: stats.paidUserReferrals,
+                      userRewardsClaimed: stats.userRewardsUnlocked,
+                      creatorSignups: stats.creatorSignups,
+                      creatorConversions: stats.creatorConversions,
+                      creatorRevenue: stats.creatorRevenue,
+                      totalCMOs: stats.totalCMOs,
+                      cmoCreators: stats.cmoCreators,
+                      cmoNetworkRevenue: stats.cmoNetworkRevenue,
+                    }}
                   />
                 </div>
-                <ChartLegend
-                  items={[
-                    { name: 'Starter', value: stats.starterCount, color: 'bg-muted-foreground' },
-                    { name: 'Standard', value: stats.standardCount, color: 'bg-brand' },
-                    { name: 'Lifetime', value: stats.lifetimeCount, color: 'bg-gold' },
-                  ]}
-                />
-              </div>
+              </CollapsibleContent>
+            </Collapsible>
 
-              {/* Payment Methods */}
-              <div className="glass-card-premium p-6">
-                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                  <Database className="w-5 h-5 text-green-400" />
-                  Payment Methods
-                </h3>
-                <div className="space-y-3 mt-6">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Card Payments</span>
-                    <span className="font-medium text-foreground">Rs. {stats.cardPayments.toLocaleString()}</span>
-                  </div>
-                  <Progress value={stats.totalRevenue > 0 ? (stats.cardPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
-                  <div className="flex justify-between items-center mt-4">
-                    <span className="text-sm text-muted-foreground">Bank Transfers</span>
-                    <span className="font-medium text-foreground">Rs. {stats.bankPayments.toLocaleString()}</span>
-                  </div>
-                  <Progress value={stats.totalRevenue > 0 ? (stats.bankPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
-                </div>
-              </div>
-
-              {/* Storage Usage */}
-              <StorageUsageCard />
-            </div>
-
-            {/* Referral Network Breakdown */}
-            <ReferralNetworkBreakdown 
-              stats={{
-                userSignups: stats.totalUserReferrals,
-                userConversions: stats.paidUserReferrals,
-                userRewardsClaimed: stats.userRewardsUnlocked,
-                creatorSignups: stats.creatorSignups,
-                creatorConversions: stats.creatorConversions,
-                creatorRevenue: stats.creatorRevenue,
-                totalCMOs: stats.totalCMOs,
-                cmoCreators: stats.cmoCreators,
-                cmoNetworkRevenue: stats.cmoNetworkRevenue,
-              }}
-            />
-
-            {/* Creator Leaderboard */}
+            {/* Top Performers (Collapsible) */}
             {topCreators.length > 0 && (
-              <CreatorLeaderboard creators={topCreators} showMonthly={true} />
+              <Collapsible open={showLeaderboard} onOpenChange={setShowLeaderboard}>
+                <CollapsibleTrigger asChild>
+                  <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-5 h-5 text-gold" />
+                      <span className="font-semibold text-foreground">Top Creators</span>
+                      <span className="text-xs text-muted-foreground ml-2">{topCreators.length} active creators</span>
+                    </div>
+                    {showLeaderboard ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="mt-4">
+                    <CreatorLeaderboard creators={topCreators} showMonthly={true} />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             )}
-
-            {/* Danger Zone */}
-            <div className="glass-card-premium p-6 border-destructive/30">
-              <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
-                <Trash2 className="w-5 h-5" />
-                Danger Zone
-              </h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Clear all user data, payment records, and creator accounts. Admin and CMO accounts will be preserved.
-              </p>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={isClearing}>
-                    {isClearing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
-                    Clear All Data
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete all user accounts, enrollments, payments, and creator data. Only admin and CMO accounts will be preserved.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleClearAllData} className="bg-destructive text-destructive-foreground">
-                      Yes, delete everything
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
           </main>
         </SidebarInset>
       </div>
