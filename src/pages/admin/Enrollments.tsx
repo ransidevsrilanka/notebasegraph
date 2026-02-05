@@ -483,22 +483,71 @@ const Enrollments = () => {
             throw new Error('Invalid OTP code');
           }
           
-          // Use admin-purge-data edge function for complete data deletion
-          const { data, error } = await supabase.functions.invoke('admin-purge-data');
+          // Delete in correct FK order to avoid constraint violations:
+          // 1. subject_medium_requests (depends on nothing relevant)
+          // 2. ai_credits (depends on enrollments)
+          // 3. ai_chat_messages (depends on enrollments)
+          // 4. user_subjects (depends on enrollments)
+          // 5. enrollments (parent table)
           
-          if (error) {
-            console.error('Purge error:', error);
+          try {
+            // Get all enrollment IDs and user IDs first
+            const { data: allEnrollments } = await supabase
+              .from('enrollments')
+              .select('id, user_id');
+            
+            if (allEnrollments && allEnrollments.length > 0) {
+              const enrollmentIds = allEnrollments.map(e => e.id);
+              const userIds = allEnrollments.map(e => e.user_id);
+              
+              // 1. Delete subject_medium_requests by user_id
+              await supabase
+                .from('subject_medium_requests')
+                .delete()
+                .in('user_id', userIds);
+              
+              // 2. Delete ai_credits by enrollment_id
+              await supabase
+                .from('ai_credits')
+                .delete()
+                .in('enrollment_id', enrollmentIds);
+              
+              // 3. Delete ai_chat_messages by enrollment_id
+              await supabase
+                .from('ai_chat_messages')
+                .delete()
+                .in('enrollment_id', enrollmentIds);
+              
+              // 4. Delete user_subjects by enrollment_id
+              await supabase
+                .from('user_subjects')
+                .delete()
+                .in('enrollment_id', enrollmentIds);
+              
+              // 5. Finally delete enrollments
+              const { error: deleteError } = await supabase
+                .from('enrollments')
+                .delete()
+                .in('id', enrollmentIds);
+              
+              if (deleteError) {
+                throw deleteError;
+              }
+            }
+            
+            toast.success('All enrollments deleted successfully');
+          } catch (deleteError: any) {
+            console.error('Delete error:', deleteError);
             setIsDeleting(false);
-            throw new Error(error.message || 'Failed to purge data');
+            throw new Error(deleteError.message || 'Failed to delete enrollments');
           }
           
-          toast.success(data?.message || 'All user data deleted successfully');
           setDeleteConfirmText('');
           setIsDeleting(false);
           fetchEnrollments();
         }}
         title="Confirm Delete All"
-        description="Enter the 2FA code to delete all enrollments. This action is irreversible."
+        description="Enter the 2FA code to delete all enrollments and related data. This action is irreversible."
         actionLabel="Delete All"
         variant="destructive"
         isLoading={isDeleting}
