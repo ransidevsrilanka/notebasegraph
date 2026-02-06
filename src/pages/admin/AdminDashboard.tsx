@@ -94,6 +94,7 @@ interface Stats {
   printCost: number;
   printProfit: number;
   totalPrintPages: number;
+  printCardRevenue: number; // Card payments specifically for print requests
   // Creator commissions
   creatorCommissions: number;
 }
@@ -260,6 +261,7 @@ const AdminDashboard = () => {
     printCost: 0,
     printProfit: 0,
     totalPrintPages: 0,
+    printCardRevenue: 0,
     // Creator commissions
     creatorCommissions: 0,
   });
@@ -337,7 +339,7 @@ const AdminDashboard = () => {
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }).not('cmo_id', 'is', null),
         supabase.from('creator_profiles').select('id').not('cmo_id', 'is', null),
         supabase.from('print_settings').select('print_cost_per_page').eq('is_active', true).single(),
-        supabase.from('print_requests').select('total_amount, estimated_pages').eq('payment_status', 'paid'),
+        supabase.from('print_requests').select('total_amount, estimated_pages, payment_method').eq('payment_status', 'paid'),
         supabase.from('creator_profiles').select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users').order('lifetime_paid_users', { ascending: false }).limit(10),
       ]);
 
@@ -488,6 +490,10 @@ const AdminDashboard = () => {
       const printRevenue = (printPayments || []).reduce(
         (sum, p) => sum + Number(p.total_amount || 0), 0
       );
+      // Card payments specifically for print requests (for PayHere commission)
+      const printCardRevenue = (printPayments || [])
+        .filter((p: any) => p.payment_method === 'card')
+        .reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
       const totalPrintPages = (printPayments || []).reduce(
         (sum, p) => sum + (p.estimated_pages || 0), 0
       );
@@ -586,6 +592,7 @@ const AdminDashboard = () => {
         printCost,
         printProfit,
         totalPrintPages,
+        printCardRevenue,
         creatorCommissions,
       });
 
@@ -744,8 +751,8 @@ const AdminDashboard = () => {
               const SSCL_RATE = 0.025; // 2.5%
               const ssclTax = totalRevenue * SSCL_RATE;
               
-              // Operating Expenses
-              const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
+              // Operating Expenses - Include both enrollment AND print card payments for PayHere fee
+              const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033; // 3.3% PayHere fee
               const operatingCosts = payhereCommission + stats.creatorCommissions + stats.printCost;
               
               // Gross Profit (before corporate tax, SSCL is a tax so deducted here)
@@ -801,11 +808,7 @@ const AdminDashboard = () => {
                     {/* Tax & Final Profit Section */}
                     <div className="border-t border-border/50 pt-4">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                            <p className="text-xs text-muted-foreground">SSCL (2.5%)</p>
-                            <p className="text-lg font-semibold text-amber-400">-Rs. {(ssclTax / 1000).toFixed(1)}K</p>
-                          </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               Corp Tax (30%)
