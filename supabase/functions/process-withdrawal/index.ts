@@ -1,6 +1,33 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { notifyWithdrawalRequest, notifyEdgeFunctionError, sendNotification } from "../_shared/notify.ts";
 
+// Helper function to send creator Telegram notification
+async function sendCreatorTelegram(
+  supabaseUrl: string, 
+  supabaseServiceKey: string, 
+  creatorId: string, 
+  type: string, 
+  amount?: number
+) {
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify({
+        creator_id: creatorId,
+        type,
+        amount,
+      }),
+    });
+  } catch (error) {
+    console.error('Failed to send creator Telegram notification:', error);
+    // Don't throw - this is a non-critical notification
+  }
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -392,7 +419,19 @@ async function handleApprove(
     },
   });
 
-  // Send notification
+  // Send inbox notification to creator
+  await supabase.from('messages').insert({
+    recipient_id: request.creator_id,
+    recipient_type: 'creator',
+    recipient_user_id: creator?.user_id || null,
+    sender_id: null,
+    subject: '✅ Withdrawal Approved',
+    body: `Your withdrawal request for Rs. ${request.amount.toLocaleString()} has been approved and is being processed. Net amount after fees: Rs. ${request.net_amount.toLocaleString()}.`,
+    notification_type: 'success',
+    is_read: false,
+  });
+
+  // Send Telegram notification
   await sendNotification(supabaseUrl, supabaseServiceKey, {
     type: 'withdrawal_approved',
     message: `Withdrawal of Rs.${request.net_amount.toLocaleString()} approved for ${creator?.display_name || 'Creator'}`,
@@ -404,6 +443,9 @@ async function handleApprove(
     },
     priority: 'medium',
   });
+
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_approved', request.net_amount);
 
   return new Response(JSON.stringify({ 
     success: true, 
@@ -535,7 +577,26 @@ async function handleMarkPaid(
     },
   });
 
-  // Send notification
+  // Get creator user_id for inbox notification
+  const { data: creatorData } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', request.creator_id)
+    .single();
+
+  // Send inbox notification to creator
+  await supabase.from('messages').insert({
+    recipient_id: request.creator_id,
+    recipient_type: 'creator',
+    recipient_user_id: creatorData?.user_id || null,
+    sender_id: null,
+    subject: '💰 Withdrawal Processed!',
+    body: `Your withdrawal of Rs. ${request.net_amount.toLocaleString()} has been successfully processed and paid. You can view your payment receipt in the Withdrawal History section.`,
+    notification_type: 'success',
+    is_read: false,
+  });
+
+  // Send Telegram notification
   await sendNotification(supabaseUrl, supabaseServiceKey, {
     type: 'withdrawal_paid',
     message: `Payment of Rs.${request.net_amount.toLocaleString()} completed for ${request.creator_profiles?.display_name || 'Creator'}`,
@@ -546,6 +607,9 @@ async function handleMarkPaid(
     },
     priority: 'medium',
   });
+
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_paid', request.net_amount);
 
   return new Response(JSON.stringify({ 
     success: true, 
@@ -647,7 +711,26 @@ async function handleReject(
     },
   });
 
-  // Send notification
+  // Get creator user_id for inbox notification
+  const { data: creatorData } = await supabase
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('id', request.creator_id)
+    .single();
+
+  // Send inbox notification to creator
+  await supabase.from('messages').insert({
+    recipient_id: request.creator_id,
+    recipient_type: 'creator',
+    recipient_user_id: creatorData?.user_id || null,
+    sender_id: null,
+    subject: '❌ Withdrawal Request Rejected',
+    body: `Your withdrawal request for Rs. ${request.amount.toLocaleString()} was rejected. Reason: ${rejection_reason}${admin_notes ? `. Additional notes: ${admin_notes}` : ''}`,
+    notification_type: 'warning',
+    is_read: false,
+  });
+
+  // Send Telegram notification
   await sendNotification(supabaseUrl, supabaseServiceKey, {
     type: 'withdrawal_rejected',
     message: `Withdrawal of Rs.${request.amount.toLocaleString()} rejected for ${request.creator_profiles?.display_name || 'Creator'}`,
@@ -659,6 +742,9 @@ async function handleReject(
     },
     priority: 'medium',
   });
+
+  // Send creator Telegram notification
+  await sendCreatorTelegram(supabaseUrl, supabaseServiceKey, request.creator_id, 'withdrawal_rejected', request.amount);
 
   return new Response(JSON.stringify({ 
     success: true, 

@@ -102,6 +102,86 @@
     --shadow-brand: 0 0 60px hsl(45 93% 47% / 0.15);
     --shadow-glow: 0 0 80px hsl(45 93% 47% / 0.1);
   }
+
+  /* Head of Operations Dashboard - Premium background */
+  .hoo-premium-bg {
+    position: relative;
+    background: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 3%) 100%);
+    min-height: 100vh;
+  }
+  
+  .hoo-premium-bg::before {
+    content: '';
+    position: fixed;
+    top: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .hoo-premium-bg::after {
+    content: '';
+    position: fixed;
+    bottom: 20%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, hsl(217 91% 60% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .hoo-premium-bg > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* CMO Dashboard - Premium background */
+  .cmo-premium-bg {
+    position: relative;
+    background: linear-gradient(180deg, hsl(0 0% 4%) 0%, hsl(0 0% 3%) 100%);
+    min-height: 100vh;
+  }
+  
+  .cmo-premium-bg::before {
+    content: '';
+    position: fixed;
+    top: 15%;
+    right: -10%;
+    width: 450px;
+    height: 450px;
+    background: radial-gradient(circle, hsl(262 83% 58% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .cmo-premium-bg::after {
+    content: '';
+    position: fixed;
+    bottom: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  .cmo-premium-bg > * {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 @layer base {
@@ -405,6 +485,65 @@
     animation: fade-in 0.8s ease forwards;
   }
 
+  /* Step-based marketing page animations */
+  @keyframes step-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .step-fade-in {
+    animation: step-fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .step-container {
+    animation: step-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* Shimmer effect for CTA button */
+  @keyframes shimmer-slide {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  .shimmer-button {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .shimmer-button::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.15),
+      transparent
+    );
+    animation: shimmer-slide 3s infinite;
+  }
+
+  /* Dynamic viewport height for mobile */
+  .h-dvh {
+    height: 100dvh;
+  }
+
+  @supports not (height: 100dvh) {
+    .h-dvh {
+      height: 100vh;
+    }
+  }
+
   /* Line draw animation */
   @keyframes line-draw {
     from { width: 0; }
@@ -648,6 +787,63 @@
   .stagger-delay-5 { animation-delay: 0.5s; }
   .stagger-delay-6 { animation-delay: 0.6s; }
 
+  /* Creator Dashboard Premium Background */
+  .creator-premium-bg {
+    position: relative;
+  }
+
+  .creator-premium-bg::before {
+    content: '';
+    position: absolute;
+    top: 10%;
+    left: -5%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, hsl(45 93% 47% / 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+
+  .creator-premium-bg::after {
+    content: '';
+    position: absolute;
+    bottom: 20%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, hsl(217 91% 60% / 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    filter: blur(60px);
+    pointer-events: none;
+  }
+
+  /* Animated Border Flow - no glow */
+  @keyframes border-flow {
+    0% { border-color: hsl(var(--brand) / 0.3); }
+    25% { border-color: hsl(var(--brand) / 0.6); }
+    50% { border-color: hsl(var(--brand) / 1); }
+    75% { border-color: hsl(var(--brand) / 0.6); }
+    100% { border-color: hsl(var(--brand) / 0.3); }
+  }
+
+  .animate-border-flow {
+    animation: border-flow 2s ease-in-out infinite;
+    box-shadow: none !important;
+  }
+
+  /* OTP Password Masking - Hide 2FA codes while typing */
+  .otp-password-mask [data-input-otp] {
+    -webkit-text-security: disc;
+    text-security: disc;
+  }
+  
+  .\[\&\>\*\]\:text-security-disc > * {
+    -webkit-text-security: disc !important;
+    text-security: disc !important;
+    font-family: disc, sans-serif;
+  }
+
   /* Reduced motion support */
   @media (prefers-reduced-motion: reduce) {
     .animate-shimmer,
@@ -656,6 +852,7 @@
     .animate-text-reveal,
     .animate-float,
     .animate-pulse-glow,
+    .animate-border-flow,
     .gradient-animate {
       animation: none;
     }

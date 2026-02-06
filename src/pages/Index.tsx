@@ -5,7 +5,7 @@ import StickyServices from "@/components/StickyServices";
 import TestimonialsSection from "@/components/TestimonialsSection";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import PricingSection from "@/components/PricingSection";
-import FAQSection from "@/components/FAQSection";
+import FAQCta from "@/components/FAQCta";
 import Footer from "@/components/Footer";
 
 const Index = () => {
@@ -17,7 +17,7 @@ const Index = () => {
       <StickyServices />
       <TestimonialsSection />
       <PricingSection />
-      <FAQSection />
+      <FAQCta />
       <WhyChooseUs />
       <Footer />
     </main>

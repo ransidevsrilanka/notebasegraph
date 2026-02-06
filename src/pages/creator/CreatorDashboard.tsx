@@ -39,6 +39,11 @@ import {
   Target,
   Award,
   AlertCircle,
+  Headphones,
+  Mail,
+  MessageCircle,
+  MessageSquare,
+  Send,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
@@ -134,6 +139,9 @@ const CreatorDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [dailyEarnings, setDailyEarnings] = useState<{ date: string; amount: number }[]>([]);
+  const [cmoContactInfo, setCmoContactInfo] = useState<{ email?: string; whatsapp?: string; instagram?: string; userId?: string } | null>(null);
+  const [telegramChatId, setTelegramChatId] = useState<string>('');
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
 
   // Dialog states
   const [addMethodDialogOpen, setAddMethodDialogOpen] = useState(false);
@@ -226,15 +234,23 @@ const CreatorDashboard = () => {
       }
 
       if (creatorProfile) {
-        // Get CMO name if exists
+        // Get CMO name and contact info if exists
         let cmoName: string | null = null;
         if (creatorProfile.cmo_id) {
           const { data: cmoData } = await supabase
             .from('cmo_profiles')
-            .select('display_name')
+            .select('display_name, email, whatsapp, instagram, user_id')
             .eq('id', creatorProfile.cmo_id)
             .maybeSingle();
           cmoName = cmoData?.display_name || null;
+          if (cmoData) {
+            setCmoContactInfo({
+              email: cmoData.email || undefined,
+              whatsapp: cmoData.whatsapp || undefined,
+              instagram: cmoData.instagram || undefined,
+              userId: cmoData.user_id,
+            });
+          }
         }
 
         // Get monthly stats from payment_attributions
@@ -273,21 +289,31 @@ const CreatorDashboard = () => {
           ? new Date(creatorProfile.tier_protection_until) > new Date()
           : false;
         
-        let currentCommissionRate = 12; // Default for new creators (Tier 2)
+        // Start with the creator's stored tier level (new creators start at level 2 = 12%)
         let effectiveTierLevel = creatorProfile.current_tier_level || 2;
         
-        if (isInProtectionPeriod) {
-          // During protection period, use the protected tier rate
-          const protectedTier = commissionTiers.find(t => t.tier_level === effectiveTierLevel);
-          currentCommissionRate = protectedTier?.commission_rate || 12;
-        } else {
-          // After protection period, calculate based on monthly performance
+        // Get the commission rate for the effective tier
+        const getCurrentTierRate = (level: number) => {
+          const tier = commissionTiers.find(t => t.tier_level === level);
+          return tier?.commission_rate || 12; // Default 12% for new creators
+        };
+        
+        let currentCommissionRate = getCurrentTierRate(effectiveTierLevel);
+        
+        if (!isInProtectionPeriod && commissionTiers.length > 0) {
+          // After protection period, evaluate based on monthly performance
+          // Find the highest tier they qualify for based on performance
+          let qualifiedTierLevel = 1; // Base tier
           for (const tier of commissionTiers) {
             if (monthlyCount >= tier.monthly_user_threshold) {
-              currentCommissionRate = tier.commission_rate;
-              effectiveTierLevel = tier.tier_level;
+              qualifiedTierLevel = tier.tier_level;
             }
           }
+          
+          // New creators (tier 2+) can only go down if they don't maintain performance
+          // But they keep their protected tier during protection period
+          effectiveTierLevel = Math.max(qualifiedTierLevel, 1);
+          currentCommissionRate = getCurrentTierRate(effectiveTierLevel);
         }
 
         // Build analytics object
@@ -313,6 +339,7 @@ const CreatorDashboard = () => {
         };
 
         setCreatorData(analyticsData);
+        setTelegramChatId(creatorProfile.telegram_chat_id || '');
 
         // Fetch discount codes
         const { data: dcData } = await supabase
@@ -551,6 +578,30 @@ const CreatorDashboard = () => {
     }
   };
 
+  const handleSaveTelegramChatId = async () => {
+    if (!creatorData) return;
+    
+    setIsSavingTelegram(true);
+    try {
+      const { error } = await supabase
+        .from('creator_profiles')
+        .update({ telegram_chat_id: telegramChatId.trim() || null })
+        .eq('id', creatorData.id);
+
+      if (error) throw error;
+
+      toast.success(telegramChatId.trim() 
+        ? 'Telegram notifications enabled!' 
+        : 'Telegram notifications disabled'
+      );
+    } catch (error: any) {
+      console.error('Error saving Telegram Chat ID:', error);
+      toast.error(error.message || 'Failed to save Telegram settings');
+    } finally {
+      setIsSavingTelegram(false);
+    }
+  };
+
   const resetForms = () => {
     setBankName('');
     setAccountNumber('');
@@ -737,11 +788,11 @@ const CreatorDashboard = () => {
             </div>
           </div>
 
-          <div className="glass-card p-6 relative overflow-hidden group hover:border-brand/40 transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--brand)/0.2)] animate-pulse-glow">
+          <div className="glass-card p-6 relative overflow-hidden group hover:border-brand/40 transition-all duration-300 animate-border-flow border-2">
             <div className="absolute inset-0 bg-gradient-to-br from-brand/10 to-transparent opacity-100 transition-opacity" />
             <div className="relative">
               <div className="flex items-center justify-between mb-3">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/40 to-brand/20 flex items-center justify-center border border-brand/30 shadow-lg shadow-brand/20">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand/40 to-brand/20 flex items-center justify-center border border-brand/30">
                   <Wallet className="w-6 h-6 text-brand" />
                 </div>
               </div>
@@ -750,6 +801,55 @@ const CreatorDashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Contact CMO Section */}
+        {creatorData?.cmo_id && creatorData?.cmo_name && (
+          <div className="glass-card p-6 mb-8 border-purple-500/20 hover:border-purple-500/30 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/30 to-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                  <Headphones className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">Need Support?</h3>
+                  <p className="text-sm text-muted-foreground">Contact your CMO: <span className="text-purple-400 font-medium">{creatorData.cmo_name}</span></p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {cmoContactInfo?.email && (
+                  <Button variant="outline" size="sm" asChild className="gap-2">
+                    <a href={`mailto:${cmoContactInfo.email}`}>
+                      <Mail className="w-4 h-4" />
+                      <span className="hidden sm:inline">Email</span>
+                    </a>
+                  </Button>
+                )}
+                {cmoContactInfo?.whatsapp && (
+                  <Button variant="outline" size="sm" asChild className="gap-2">
+                    <a href={`https://wa.me/${cmoContactInfo.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">
+                      <MessageCircle className="w-4 h-4" />
+                      <span className="hidden sm:inline">WhatsApp</span>
+                    </a>
+                  </Button>
+                )}
+                {cmoContactInfo?.instagram && (
+                  <Button variant="outline" size="sm" asChild className="gap-2">
+                    <a href={`https://instagram.com/${cmoContactInfo.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                      </svg>
+                      <span className="hidden sm:inline">Instagram</span>
+                    </a>
+                  </Button>
+                )}
+                <Button variant="brand" size="sm" className="gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  <span className="hidden sm:inline">Chat</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Charts Row */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -947,6 +1047,59 @@ const CreatorDashboard = () => {
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Referral Code: <span className="font-mono font-medium">{creatorData?.referral_code}</span>
+          </p>
+        </div>
+
+        {/* Telegram Notifications */}
+        <div className="glass-card p-6 mb-8 border-blue-500/20 hover:border-blue-500/30 transition-all">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+              <Send className="w-5 h-5 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Telegram Notifications</h3>
+              <p className="text-sm text-muted-foreground">Get instant alerts on your phone</p>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-blue-500/5 rounded-lg border border-blue-500/20 mb-4">
+            <p className="text-sm text-foreground mb-3">
+              <strong>How to set up:</strong>
+            </p>
+            <ol className="text-sm text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>Open Telegram and search for <span className="font-mono text-blue-400">@NotebaseCreatorBot</span></li>
+              <li>Start a chat and send <span className="font-mono text-blue-400">/start</span></li>
+              <li>The bot will reply with your Chat ID - copy it</li>
+              <li>Paste the Chat ID below and save</li>
+            </ol>
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              placeholder="Enter your Telegram Chat ID (e.g., 123456789)"
+              value={telegramChatId}
+              onChange={(e) => setTelegramChatId(e.target.value)}
+              className="font-mono"
+            />
+            <Button 
+              onClick={handleSaveTelegramChatId} 
+              disabled={isSavingTelegram}
+              variant={telegramChatId ? 'default' : 'outline'}
+            >
+              {isSavingTelegram ? 'Saving...' : 'Save'}
+            </Button>
+          </div>
+
+          {telegramChatId && (
+            <div className="mt-3 flex items-center gap-2 text-green-500 text-sm">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Connected - You'll receive notifications for commissions and withdrawals</span>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground mt-3">
+            💡 You'll receive brief alerts. Full details are always in your inbox.
           </p>
         </div>
 
@@ -1263,9 +1416,18 @@ const CreatorDashboard = () => {
             <div className="flex gap-2">
               <Input
                 type="number"
-                placeholder="Amount"
+                placeholder={`Max: LKR ${availableBalance.toLocaleString()}`}
                 value={withdrawAmount}
-                onChange={(e) => setWithdrawAmount(e.target.value)}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  // Cap the amount to available balance
+                  if (val > availableBalance) {
+                    setWithdrawAmount(availableBalance.toString());
+                  } else {
+                    setWithdrawAmount(e.target.value);
+                  }
+                }}
+                max={availableBalance}
               />
               <Button variant="outline" onClick={handleWithdrawAll}>
                 Max

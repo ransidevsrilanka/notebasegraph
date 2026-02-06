@@ -55,11 +55,14 @@ import AIUsageStats from "./pages/admin/AIUsageStats";
 import UserReferrals from "./pages/admin/UserReferrals";
 import SubjectMediumRequests from "./pages/admin/SubjectMediumRequests";
 import PrintRequests from "./pages/admin/PrintRequests";
+import PrintPayments from "./pages/admin/PrintPayments";
 import TestimonialsSettings from "./pages/admin/TestimonialsSettings";
 import AIChat from "./pages/AIChat";
+import FAQ from "./pages/FAQ";
 import NotFound from "./pages/NotFound";
+import ApplyAffiliate from "./pages/ApplyAffiliate";
+import GetStarted from "./pages/GetStarted";
 import { ChatButton } from "./components/ai-chat";
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -94,6 +97,10 @@ const App = () => (
             <Route path="/creator-signup" element={<CreatorSignup />} />
             <Route path="/demo" element={<DemoSelection />} />
             <Route path="/demo/dashboard" element={<DemoDashboard />} />
+            <Route path="/apply-affiliate" element={<ApplyAffiliate />} />
+            <Route path="/faq" element={<FAQ />} />
+            <Route path="/start" element={<GetStarted />} />
+            <Route path="/get-started" element={<GetStarted />} />
             
             {/* Subject Selection (after enrollment, before dashboard) */}
             <Route path="/select-subjects" element={
@@ -259,6 +266,11 @@ const App = () => (
             <Route path="/admin/print-requests" element={
               <ProtectedRoute requireAdmin>
                 <PrintRequests />
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/print-payments" element={
+              <ProtectedRoute requireAdmin>
+                <PrintPayments />
               </ProtectedRoute>
             } />
             <Route path="/admin/testimonials" element={

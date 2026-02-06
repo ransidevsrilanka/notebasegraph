@@ -1,18 +1,16 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import PricingSection from "@/components/PricingSection";
+import FAQSection from "@/components/FAQSection";
 
-const Pricing = () => {
+const FAQ = () => {
   return (
     <main className="min-h-screen bg-background">
       <Navbar />
-      
       <div className="pt-24" />
-      <PricingSection />
-
+      <FAQSection />
       <Footer />
     </main>
   );
 };
 
-export default Pricing;
+export default FAQ;

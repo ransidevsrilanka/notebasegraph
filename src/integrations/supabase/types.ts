@@ -302,29 +302,38 @@ export type Database = {
         Row: {
           created_at: string
           display_name: string | null
+          email: string | null
           id: string
+          instagram: string | null
           is_active: boolean | null
           is_head_ops: boolean | null
           referral_code: string | null
           user_id: string
+          whatsapp: string | null
         }
         Insert: {
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          instagram?: string | null
           is_active?: boolean | null
           is_head_ops?: boolean | null
           referral_code?: string | null
           user_id: string
+          whatsapp?: string | null
         }
         Update: {
           created_at?: string
           display_name?: string | null
+          email?: string | null
           id?: string
+          instagram?: string | null
           is_active?: boolean | null
           is_head_ops?: boolean | null
           referral_code?: string | null
           user_id?: string
+          whatsapp?: string | null
         }
         Relationships: []
       }
@@ -521,6 +530,7 @@ export type Database = {
           lifetime_paid_users: number | null
           monthly_paid_users: number | null
           referral_code: string
+          telegram_chat_id: string | null
           tier_protection_until: string | null
           total_withdrawn: number | null
           trial_expires_at: string | null
@@ -538,6 +548,7 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code: string
+          telegram_chat_id?: string | null
           tier_protection_until?: string | null
           total_withdrawn?: number | null
           trial_expires_at?: string | null
@@ -555,6 +566,7 @@ export type Database = {
           lifetime_paid_users?: number | null
           monthly_paid_users?: number | null
           referral_code?: string
+          telegram_chat_id?: string | null
           tier_protection_until?: string | null
           total_withdrawn?: number | null
           trial_expires_at?: string | null
@@ -1008,6 +1020,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           download_count: number | null
+          external_file_id: string | null
           file_size: number | null
           file_url: string | null
           id: string
@@ -1015,6 +1028,7 @@ export type Database = {
           is_model_paper: boolean | null
           min_tier: string | null
           page_count: number | null
+          storage_provider: string | null
           title: string
           topic_id: string | null
           updated_at: string
@@ -1025,6 +1039,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           download_count?: number | null
+          external_file_id?: string | null
           file_size?: number | null
           file_url?: string | null
           id?: string
@@ -1032,6 +1047,7 @@ export type Database = {
           is_model_paper?: boolean | null
           min_tier?: string | null
           page_count?: number | null
+          storage_provider?: string | null
           title: string
           topic_id?: string | null
           updated_at?: string
@@ -1042,6 +1058,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           download_count?: number | null
+          external_file_id?: string | null
           file_size?: number | null
           file_url?: string | null
           id?: string
@@ -1049,6 +1066,7 @@ export type Database = {
           is_model_paper?: boolean | null
           min_tier?: string | null
           page_count?: number | null
+          storage_provider?: string | null
           title?: string
           topic_id?: string | null
           updated_at?: string
@@ -1398,6 +1416,8 @@ export type Database = {
           receipt_url: string | null
           rejection_reason: string | null
           request_number: string
+          selected_paper_ids: string[] | null
+          selected_paper_titles: string[] | null
           shipped_at: string | null
           status: string | null
           subject_id: string | null
@@ -1427,6 +1447,8 @@ export type Database = {
           receipt_url?: string | null
           rejection_reason?: string | null
           request_number: string
+          selected_paper_ids?: string[] | null
+          selected_paper_titles?: string[] | null
           shipped_at?: string | null
           status?: string | null
           subject_id?: string | null
@@ -1456,6 +1478,8 @@ export type Database = {
           receipt_url?: string | null
           rejection_reason?: string | null
           request_number?: string
+          selected_paper_ids?: string[] | null
+          selected_paper_titles?: string[] | null
           shipped_at?: string | null
           status?: string | null
           subject_id?: string | null
@@ -1477,6 +1501,7 @@ export type Database = {
           is_active: boolean | null
           model_paper_price_per_page: number | null
           notes_price_per_page: number | null
+          print_cost_per_page: number | null
           updated_at: string | null
         }
         Insert: {
@@ -1487,6 +1512,7 @@ export type Database = {
           is_active?: boolean | null
           model_paper_price_per_page?: number | null
           notes_price_per_page?: number | null
+          print_cost_per_page?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -1497,6 +1523,7 @@ export type Database = {
           is_active?: boolean | null
           model_paper_price_per_page?: number | null
           notes_price_per_page?: number | null
+          print_cost_per_page?: number | null
           updated_at?: string | null
         }
         Relationships: []

@@ -522,10 +522,10 @@ const TestimonialsSettings = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Stream (for A/L)</Label>
-                  <Select value={studentForm.stream} onValueChange={(v) => setStudentForm({ ...studentForm, stream: v })}>
+                  <Select value={studentForm.stream || 'none'} onValueChange={(v) => setStudentForm({ ...studentForm, stream: v === 'none' ? '' : v })}>
                     <SelectTrigger><SelectValue placeholder="Select stream" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="none">None</SelectItem>
                       <SelectItem value="Science">Science</SelectItem>
                       <SelectItem value="Maths">Maths</SelectItem>
                       <SelectItem value="Commerce">Commerce</SelectItem>
@@ -538,8 +538,13 @@ const TestimonialsSettings = () => {
                   <Label>Rating *</Label>
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map((r) => (
-                      <button key={r} type="button" onClick={() => setStudentForm({ ...studentForm, rating: r })}>
-                        <Star className={`w-6 h-6 transition-colors ${r <= studentForm.rating ? 'fill-amber-400 text-amber-400' : 'fill-muted text-muted hover:fill-amber-200 hover:text-amber-200'}`} />
+                      <button 
+                        key={r} 
+                        type="button" 
+                        onClick={() => setStudentForm({ ...studentForm, rating: r })}
+                        className="cursor-pointer transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-brand/50 rounded p-0.5"
+                      >
+                        <Star className={`w-6 h-6 transition-colors ${r <= studentForm.rating ? 'fill-amber-400 text-amber-400' : 'fill-muted/30 text-muted/30 hover:fill-amber-200 hover:text-amber-200'}`} />
                       </button>
                     ))}
                   </div>

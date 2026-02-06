@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.calculate-print-price]
 verify_jwt = false
+
+[functions.send-creator-telegram]
+verify_jwt = false

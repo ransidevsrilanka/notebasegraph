@@ -58,6 +58,8 @@ interface PrintRequest {
   created_at: string;
   shipped_at: string | null;
   delivered_at: string | null;
+  selected_paper_ids: string[] | null;
+  selected_paper_titles: string[] | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -407,7 +409,7 @@ const PrintRequests = () => {
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Request #</th>
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Customer</th>
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Subject</th>
-                    <th className="text-left p-3 text-muted-foreground text-sm font-medium">Type</th>
+                    <th className="text-left p-3 text-muted-foreground text-sm font-medium">Papers</th>
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Amount</th>
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Payment</th>
                     <th className="text-left p-3 text-muted-foreground text-sm font-medium">Status</th>
@@ -424,7 +426,18 @@ const PrintRequests = () => {
                         <p className="text-muted-foreground text-xs">{request.phone}</p>
                       </td>
                       <td className="p-3 text-foreground text-sm">{request.subject_name}</td>
-                      <td className="p-3 text-foreground text-sm capitalize">{request.print_type.replace(/_/g, ' ')}</td>
+                      <td className="p-3 text-foreground text-sm">
+                        {request.selected_paper_titles && request.selected_paper_titles.length > 0 
+                          ? request.selected_paper_titles.length === 1
+                            ? request.selected_paper_titles[0]
+                            : (
+                              <span className="cursor-help" title={request.selected_paper_titles.join(', ')}>
+                                {request.selected_paper_titles.length} papers
+                              </span>
+                            )
+                          : <span className="text-muted-foreground capitalize">{request.print_type.replace(/_/g, ' ')}</span>
+                        }
+                      </td>
                       <td className="p-3 text-foreground text-sm font-medium">Rs. {request.total_amount?.toLocaleString()}</td>
                       <td className="p-3">
                         <div className="flex items-center gap-2">
