@@ -1,245 +1,355 @@
 
-# Comprehensive Platform Fixes - Upgrades, Dashboard, Tiers & Referrals
+# Critical Platform Fixes - Payment Verification, Data Visibility & Dashboard Metrics
 
-## Issues Identified & Solutions
+## Issues Identified
 
----
+### 1. Card Payment Marked as Paid Despite Failure (CRITICAL SECURITY)
 
-## Part 1: Upgrade Flow Issues
+**Root Cause Analysis:**
+The print request card payment flow uses "deferred creation" - the print request record is only created AFTER payment success. Looking at the code:
 
-### 1.1 Card Payment Option Missing for Upgrades
+1. **Frontend** (`PrintRequestDialog.tsx` lines 531-565): The `onCompleted` callback is triggered when PayHere popup closes, calling `finalize-print-request`
+2. **Problem**: PayHere's `onCompleted` callback fires when the popup **COMPLETES**, not when payment **SUCCEEDS**. A failed payment still triggers `onCompleted`!
 
-**Current Problem:**
-The `Upgrade.tsx` page shows `PaymentMethodDialog` when selecting a tier (lines 441-456), BUT there's a logic issue. The dialog opens, but after clicking card payment, the flow works. However, when coming back via URL param `/upgrade?tier=gold`, it goes directly to bank transfer flow (line 466+) without showing the payment method choice.
-
-**Solution:**
-When landing on `/upgrade?tier=X`, show `PaymentMethodDialog` first instead of immediately showing bank transfer form. Only show bank transfer details after user explicitly chooses bank transfer.
-
-### 1.2 Same Reference Number for Multiple Upgrades
-
-**Current Problem:**
-When a student upgrades from Silver → Gold, a reference number is created. If they later try Gold → Platinum, the existing request (with old reference) is reused (lines 123-149) because it only checks for `status: 'pending'`.
-
-**Solution:**
-Check if the existing request's `requested_tier` matches the new `requestedTier`. If not, create a NEW request with a new reference number:
-
+**Evidence in code (lines 531-565):**
 ```typescript
-// In useEffect checking existing request:
-if (existingRequest?.requested_tier !== requestedTier) {
-  // Create new request for the different tier
-  setExistingRequest(null); // Clear to trigger new creation
+window.payhere.onCompleted = async (orderId: string) => {
+  console.log("Card payment completed. OrderID:", orderId);
+  // NOW create the print request via edge function (payment confirmed)
+  // ...calls finalize-print-request
 }
 ```
 
-### 1.3 Upgrade Status Showing "Pending" After Card Payment
-
-**Current Problem:**
-After PayHere card payment succeeds for upgrade, the `payhere-checkout` notify handler (lines 594-638) updates enrollment tier AND sets upgrade_request status to "approved". But the frontend may still show "pending" because:
-1. User lands on page before notify callback completes
-2. The `existingRequest` state shows old data
-
-**Solution:**
-1. In `Upgrade.tsx`, add a useEffect to check for `pending_upgrade_payment` in localStorage (set in PaymentMethodDialog line 200-208)
-2. Poll for payment verification and enrollment update
-3. Show success state when upgrade is confirmed
-
----
-
-## Part 2: Admin Dashboard - Too Cluttered ("Carnival")
-
-**Current Problem:**
-The dashboard has:
-- Large Net Profit card with tax breakdown (duplicated SSCL display)
-- 6 MiniStatCards
-- Conversion Funnel + Revenue Forecast
-- 2 Charts
-- 3 more cards (Tier, Payment Methods, Storage)
-- Referral Network Breakdown
-- Creator Leaderboard
-- Danger Zone
-
-**Solution - Reorganize into Logical Sections:**
-
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│  CEO DASHBOARD - Clean Professional Layout                             │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  SECTION 1: Financial Health (Primary Focus)                           │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ Net Profit Card (simplified - no duplicate SSCL display)          │ │
-│  │ Revenue | SSCL | PayHere | Commissions | Corp Tax | Net After Tax │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                                                                         │
-│  SECTION 2: Key Metrics (3x2 Grid)                                     │
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐                                  │
-│  │Total Rev│ │This Mo. │ │Students │                                  │
-│  ├─────────┤ ├─────────┤ ├─────────┤                                  │
-│  │Card Pay │ │Bank Pay │ │Creators │                                  │
-│  └─────────┘ └─────────┘ └─────────┘                                  │
-│                                                                         │
-│  SECTION 3: Performance Charts (Side by Side)                          │
-│  ┌─────────────────────┐ ┌─────────────────────┐                       │
-│  │ Revenue Chart       │ │ Enrollments Chart   │                       │
-│  └─────────────────────┘ └─────────────────────┘                       │
-│                                                                         │
-│  SECTION 4: Business Intelligence                                       │
-│  ┌─────────────────────┐ ┌─────────────────────┐                       │
-│  │ Conversion Funnel   │ │ Revenue Forecast    │                       │
-│  └─────────────────────┘ └─────────────────────┘                       │
-│                                                                         │
-│  SECTION 5: Distribution & Details (Collapsible)                       │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                               │
-│  │ Tiers    │ │ Payments │ │ Storage  │                               │
-│  └──────────┘ └──────────┘ └──────────┘                               │
-│                                                                         │
-│  SECTION 6: Referral Insights (Collapsible)                            │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ Referral Network Breakdown                                        │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                                                                         │
-│  SECTION 7: Top Performers (Collapsible)                               │
-│  ┌───────────────────────────────────────────────────────────────────┐ │
-│  │ Creator Leaderboard                                               │ │
-│  └───────────────────────────────────────────────────────────────────┘ │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
+The `finalize-print-request` endpoint (lines 661-784) has a verification loop (lines 676-693) BUT:
+```typescript
+// If payment still not confirmed, check if it exists at all
+if (!payment) {
+  // Payment exists but not completed - might still be processing
+  // For card payments, PayHere calls notify async, so we trust the client-side completion
+  console.log("Payment exists but status is:", pendingPayment.status);
+}
+// Then proceeds to create the print request ANYWAY!
 ```
 
-**Key Changes:**
-1. Remove duplicate SSCL display (currently shown twice in profit card)
-2. Add section headers with collapse/expand for less-used sections
-3. Move "Danger Zone" to Settings page instead of dashboard
-4. Add "Print Revenue" to the key metrics grid
-
----
-
-## Part 3: SSCL Tax Calculation Fix
-
-**Current Problem:**
-Looking at lines 728-753, the SSCL is calculated correctly as 2.5% of revenue, BUT the formula deducts it BEFORE calculating gross profit, which is correct. However, I see SSCL is displayed twice:
-1. In the top metric cards (line 777-778)
-2. In the tax breakdown section (line 795-798)
-
-The tax formula is:
-```typescript
-const grossProfit = totalRevenue - operatingCosts - ssclTax;
-const corporateTax = Math.max(0, grossProfit * 0.30);
-```
-
-**This is CORRECT!** SSCL is deducted from revenue before calculating corporate tax, which is the proper approach since SSCL is a business expense.
-
-**Fix Needed:**
-Remove the duplicate SSCL display and keep only ONE instance in the tax breakdown section.
-
----
-
-## Part 4: PDF Export Issues
-
-**Problem:**
-PDF export may not be correctly exporting the right details.
+This is the bug - it trusts the client-side callback without verifying the actual payment status.
 
 **Solution:**
-Audit the PDF export functionality (likely in the creator dashboard or admin sections) and ensure all required fields are included.
+1. Do NOT trust PayHere's `onCompleted` callback for success verification
+2. The `finalize-print-request` endpoint must ONLY proceed if `payment.status === 'completed'`
+3. If payment status is not 'completed' after retries, return an error to the client
+4. Client should show appropriate error message
+
+### 2. Pricing Manipulation Prevention
+
+**Current State:**
+- Server-side pricing is already implemented in `calculate-print-price` edge function
+- BUT `finalize-print-request` blindly accepts `order_details` from the client including `totalAmount`
+
+**Solution:**
+- Validate pricing server-side by recalculating from paper IDs
+- Store `selected_paper_ids` in print_requests table for audit and display
+
+### 3. Print Requests Missing Lesson Details
+
+**Current Problem:**
+In `PrintRequests.tsx` (line 427):
+```typescript
+<td className="p-3 text-foreground text-sm capitalize">{request.print_type.replace(/_/g, ' ')}</td>
+```
+This shows "model papers only" instead of actual lesson details.
+
+**Database has:**
+- `topic_ids` (array of topic UUIDs)
+- `subject_name` (string)
+- No stored paper/lesson titles
+
+**Solution:**
+1. Add `selected_paper_titles` JSON field to store actual paper names on creation
+2. In PrintRequests admin, show paper titles instead of generic "Type"
+
+### 4. PayHere Commission Missing for Print Requests
+
+**Current Dashboard (lines 748-749):**
+```typescript
+const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
+```
+
+This only considers enrollment card payments (`stats.cardPayments`), NOT print request card payments.
+
+**Solution:**
+Add `printCardRevenue` stat and include it in PayHere commission calculation:
+```typescript
+const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033;
+```
+
+### 5. Join Requests Stats Not Working with Filters
+
+**Current Code (lines 209-213):**
+```typescript
+const stats = {
+  pending: requests.filter(r => r.status === 'pending').length,
+  approved: requests.filter(r => r.status === 'approved').length,
+  rejected: requests.filter(r => r.status === 'rejected').length,
+};
+```
+
+**Problem:** When `statusFilter === 'pending'`, only pending requests are fetched (line 97), so `requests` array has no approved/rejected items.
+
+**Solution:**
+Fetch all requests for stats, but filter for display. OR compute stats from a separate query that ignores the filter.
 
 ---
 
-## Part 5: Creator Tier Promotion Logic
+## Implementation Plan
 
-**Current Database State (from query):**
-- Tier 1 (Base): 8% commission, 0 threshold
-- Tier 2: 12% commission, 100 threshold
-- Tier 3: 15% commission, 250 threshold
-- Tier 4: 20% commission, 500 threshold
+### Part 1: Fix Payment Verification (CRITICAL)
 
-**Current Logic in `evaluate-creator-tiers` (lines 84-100):**
+**File: `supabase/functions/payhere-checkout/index.ts`**
+
+Update `finalize-print-request` endpoint to REQUIRE verified payment:
+
 ```typescript
-// Get monthly paid users count
-const { count: monthlyPaidUsers } = await supabase
-  .from('payment_attributions')
-  .select('*', { count: 'exact', head: true })
-  .eq('creator_id', creator.id)
-  .gte('created_at', currentMonthStart.toISOString());
-
-const monthlyCount = monthlyPaidUsers || 0;
-
-// Determine tier based on monthly performance
-let newTierLevel = 1; // Start at lowest tier
-for (const tier of commissionTiers) {
-  if (monthlyCount >= tier.monthly_user_threshold) {
-    newTierLevel = tier.tier_level;
+// Line 694-714 - Replace the "trust client" logic with strict verification
+if (!payment) {
+  const { data: pendingPayment } = await supabase
+    .from("payments")
+    .select("status, failure_reason")
+    .eq("order_id", order_id)
+    .maybeSingle();
+  
+  if (!pendingPayment) {
+    return new Response(
+      JSON.stringify({ 
+        error: "Payment not found", 
+        success: false,
+        user_message: "Payment verification failed. Please try again or contact support."
+      }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  
+  // CRITICAL: Payment exists but NOT completed - DO NOT proceed
+  if (pendingPayment.status !== 'completed') {
+    const failureMsg = pendingPayment.failure_reason || "Payment was not successful";
+    return new Response(
+      JSON.stringify({ 
+        error: "Payment not verified", 
+        success: false,
+        payment_status: pendingPayment.status,
+        user_message: failureMsg
+      }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 }
 ```
 
-**PROBLEM IDENTIFIED!**
-The logic uses `currentMonthStart` (first of current calendar month), NOT a rolling 30-day window!
+**File: `src/components/dashboard/PrintRequestDialog.tsx`**
 
-A creator who signs up on Jan 15 and brings 500 users by Feb 15:
-- If evaluated on Feb 1: Only ~15 days of data counted
-- If evaluated on Feb 15: Still only counts from Feb 1 (not the full 30 days)
-
-**SOLUTION:**
-Use a rolling 30-day window:
+Update `onCompleted` handler to properly handle verification failures:
 
 ```typescript
-const thirtyDaysAgo = new Date();
-thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-const { count: monthlyPaidUsers } = await supabase
-  .from('payment_attributions')
-  .select('*', { count: 'exact', head: true })
-  .eq('creator_id', creator.id)
-  .gte('created_at', thirtyDaysAgo.toISOString());
-```
-
----
-
-## Part 6: Referral Count Mismatch (3 vs 2)
-
-**Current Logic in `UserReferrals.tsx` (lines 100-138):**
-The issue is likely in how paid referrals are counted:
-
-```typescript
-// Get all payment attributions for paid referrals
-const { data: paymentAttributions } = await supabase
-  .from('payment_attributions')
-  .select('user_id');
-
-// Count referrals for each referrer
-const paidUserIds = new Set(paymentAttributions?.map(pa => pa.user_id) || []);
-
-attributions?.forEach(attr => {
-  if (attr.referral_source && referrerMap.has(attr.referral_source)) {
-    const referrer = referrerMap.get(attr.referral_source)!;
-    referrer.total_referrals++;
-    if (paidUserIds.has(attr.user_id)) {
-      referrer.paid_referrals++;
+window.payhere.onCompleted = async (orderId: string) => {
+  console.log("PayHere popup completed. OrderID:", orderId);
+  
+  const details = orderDetailsRef.current;
+  if (!details) {
+    toast.error("Order details not found. Please contact support.");
+    setIsLoading(false);
+    return;
+  }
+  
+  try {
+    const { data: result, error: createError } = await supabase.functions.invoke('payhere-checkout/finalize-print-request', {
+      body: {
+        order_id: orderId,
+        user_id: user.id,
+        order_details: details,
+      }
+    });
+    
+    if (createError || !result?.success) {
+      // Payment verification failed - show specific error
+      const errorMsg = result?.user_message || "Payment could not be verified. Please check your payment status.";
+      console.error('Payment verification failed:', result);
+      toast.error(errorMsg);
+      setIsLoading(false);
+      return;
     }
+    
+    toast.success("Payment successful! Your print order is confirmed.");
+    loadExistingOrders();
+    resetForm();
+    setViewMode('orders');
+  } catch (err) {
+    console.error('Error finalizing print request:', err);
+    toast.error("Failed to verify payment. Please contact support with order ID: " + orderId);
   }
-});
+  
+  setIsLoading(false);
+};
 ```
 
-**Potential Issue:**
-The `profiles` table is queried but profiles might not include users who signed up but haven't completed their profile. The `user_attributions` table should have ALL signups via referral.
+### Part 2: Store and Display Paper Details
 
-**Solution:**
-Ensure the count uses `user_attributions` correctly and cross-reference with actual signups, not just profiles.
+**Database Migration:**
+```sql
+ALTER TABLE print_requests 
+ADD COLUMN IF NOT EXISTS selected_paper_ids UUID[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS selected_paper_titles TEXT[] DEFAULT '{}';
+```
 
-Also, check if the student's referral code matches the format expected (USR prefix).
+**File: `supabase/functions/payhere-checkout/index.ts`**
 
----
+Update `finalize-print-request` to store paper details:
+```typescript
+const { data: printRequest, error: insertError } = await supabase
+  .from("print_requests")
+  .insert({
+    // ...existing fields
+    selected_paper_ids: order_details.selectedPapers || [],
+    selected_paper_titles: order_details.selectedPaperTitles || [],
+  })
+```
 
-## Part 7: Enrollment Deletion Order
+**File: `src/components/dashboard/PrintRequestDialog.tsx`**
 
-**Current Problem:**
-Deleting enrollments fails due to foreign key constraints. Need to delete in order:
-1. `subject_medium_requests` (by user_id)
-2. `user_subjects` (by enrollment_id)
-3. `enrollments` (by id)
+Include paper titles in order details:
+```typescript
+const orderDetails: OrderDetails = {
+  // ...existing fields
+  selectedPaperTitles: papers.filter(p => selectedPapers.includes(p.id)).map(p => p.title),
+};
+```
 
-**Solution:**
-Update the delete function in `Enrollments.tsx` to cascade deletes properly.
+**File: `src/pages/admin/PrintRequests.tsx`**
+
+Replace Type column with Paper details:
+```typescript
+// Line 409: Change "Type" header to "Papers"
+<th className="text-left p-3 text-muted-foreground text-sm font-medium">Papers</th>
+
+// Line 427: Display paper titles
+<td className="p-3 text-foreground text-sm">
+  {(request as any).selected_paper_titles?.length > 0 
+    ? (request as any).selected_paper_titles.length === 1
+      ? (request as any).selected_paper_titles[0]
+      : `${(request as any).selected_paper_titles.length} papers`
+    : request.print_type.replace(/_/g, ' ')
+  }
+</td>
+```
+
+### Part 3: Add Print Card Revenue to PayHere Commission
+
+**File: `src/pages/admin/AdminDashboard.tsx`**
+
+Add `printCardRevenue` to Stats interface and fetch:
+```typescript
+// In Stats interface (line 93):
+printCardRevenue: number;
+
+// In fetchStats function - add query for print card payments:
+const { data: printCardData } = await supabase
+  .from('print_requests')
+  .select('total_amount')
+  .eq('payment_method', 'card')
+  .eq('payment_status', 'paid');
+
+const printCardRevenue = printCardData?.reduce((sum, p) => sum + Number(p.total_amount || 0), 0) || 0;
+
+// Update PayHere commission calculation (line 748):
+const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033;
+```
+
+### Part 4: Fix Join Requests Stats with Filters
+
+**File: `src/pages/admin/JoinRequests.tsx`**
+
+Compute stats from ALL requests regardless of filter:
+```typescript
+// Add separate state for all requests stats
+const [allRequestsStats, setAllRequestsStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+
+// In fetchRequests, always fetch stats from all records:
+const fetchRequests = async () => {
+  setIsLoading(true);
+  
+  // FIRST: Get counts for ALL statuses (for stats display)
+  const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
+    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
+    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
+  ]);
+  
+  setAllRequestsStats({
+    pending: pendingRes.count || 0,
+    approved: approvedRes.count || 0,
+    rejected: rejectedRes.count || 0,
+  });
+  
+  // THEN: Fetch filtered data for list display
+  let query = supabase
+    .from('join_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (statusFilter !== 'all') {
+    query = query.eq('status', statusFilter);
+  }
+  // ...rest of fetch logic
+};
+
+// Use allRequestsStats instead of computed stats in the UI (line 233-245)
+```
+
+### Part 5: Server-Side Price Validation (Security Hardening)
+
+**File: `supabase/functions/payhere-checkout/index.ts`**
+
+Add price validation in `finalize-print-request`:
+```typescript
+// After verifying payment, validate the price matches database records
+const { data: printSettings } = await supabase
+  .from('print_settings')
+  .select('model_paper_price_per_page, base_delivery_fee')
+  .eq('is_active', true)
+  .single();
+
+if (!printSettings) {
+  return new Response(
+    JSON.stringify({ error: "Print settings not configured", success: false }),
+    { status: 500, headers: corsHeaders }
+  );
+}
+
+// Verify page count from database (not from client)
+const { data: paperData } = await supabase
+  .from('notes')
+  .select('page_count')
+  .in('id', order_details.selectedPapers);
+
+const verifiedPageCount = paperData?.reduce((sum, p) => sum + (p.page_count || 1), 0) || 0;
+const expectedPrice = (verifiedPageCount * printSettings.model_paper_price_per_page) + printSettings.base_delivery_fee;
+
+// Allow small rounding tolerance
+if (Math.abs(expectedPrice - order_details.totalAmount) > 10) {
+  console.error('Price mismatch detected:', { expected: expectedPrice, received: order_details.totalAmount });
+  await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
+    alertType: "Price Manipulation Attempt",
+    details: `Expected: ${expectedPrice}, Received: ${order_details.totalAmount}`,
+    userId: user_id,
+  });
+  return new Response(
+    JSON.stringify({ error: "Price validation failed", success: false }),
+    { status: 400, headers: corsHeaders }
+  );
+}
+
+// Use verified values
+order_details.totalPages = verifiedPageCount;
+order_details.totalAmount = expectedPrice;
+```
 
 ---
 
@@ -247,28 +357,41 @@ Update the delete function in `Enrollments.tsx` to cascade deletes properly.
 
 | File | Changes |
 |------|---------|
-| `src/pages/Upgrade.tsx` | Fix payment method flow, unique reference per tier, poll for upgrade completion |
-| `src/pages/admin/AdminDashboard.tsx` | Reorganize sections, remove duplicate SSCL, add collapsible sections |
-| `supabase/functions/evaluate-creator-tiers/index.ts` | Use rolling 30-day window instead of calendar month |
-| `src/pages/admin/UserReferrals.tsx` | Fix referral counting logic |
-| `src/pages/admin/Enrollments.tsx` | Cascade delete in correct order |
-| `src/components/PaymentMethodDialog.tsx` | Already supports upgrades - no changes needed |
+| `supabase/functions/payhere-checkout/index.ts` | Fix payment verification, add price validation, store paper titles |
+| `src/components/dashboard/PrintRequestDialog.tsx` | Handle verification failures properly, include paper titles |
+| `src/pages/admin/PrintRequests.tsx` | Show paper titles instead of generic Type |
+| `src/pages/admin/JoinRequests.tsx` | Fix stats to show all statuses regardless of filter |
+| `src/pages/admin/AdminDashboard.tsx` | Add print card revenue to PayHere commission |
+| Database Migration | Add `selected_paper_ids` and `selected_paper_titles` columns |
 
 ---
 
-## Database Considerations
+## Database Migration Required
 
-No schema changes needed - only logic fixes in application code and edge functions.
+```sql
+-- Add columns for storing paper selection details
+ALTER TABLE print_requests 
+ADD COLUMN IF NOT EXISTS selected_paper_ids UUID[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS selected_paper_titles TEXT[] DEFAULT '{}';
+```
+
+---
+
+## Security Improvements Summary
+
+1. **Payment Verification**: Never trust client-side callbacks; always verify server-side
+2. **Price Validation**: Recalculate prices from database records, not client data
+3. **Audit Trail**: Store paper IDs for verification and display
+4. **Alert System**: Notify on potential manipulation attempts
 
 ---
 
 ## Testing Checklist
 
-- [ ] Upgrade page shows payment method choice (Card/Bank)
-- [ ] Card payment for upgrade updates tier immediately
-- [ ] Different upgrade tiers get different reference numbers
-- [ ] Dashboard is organized and professional
-- [ ] SSCL shows only once in tax breakdown
-- [ ] Creator with 500 users in 30 days gets promoted to 20%
-- [ ] Referral counts match between student dashboard and admin panel
-- [ ] Enrollments can be deleted without FK errors
+- [ ] Card payment failure shows appropriate error (not marked as paid)
+- [ ] Successful card payment correctly creates print request
+- [ ] Print requests show actual paper titles in admin view
+- [ ] Join requests stats show correct counts regardless of filter
+- [ ] PayHere commission includes print request card payments
+- [ ] Price manipulation attempt is blocked and logged
+- [ ] All existing functionality continues to work
