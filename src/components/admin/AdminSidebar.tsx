@@ -93,7 +93,6 @@ const AdminSidebar = ({ stats }: AdminSidebarProps) => {
       label: 'Finance',
       items: [
         { label: 'Payments', href: '/admin/payments', icon: CreditCard, badge: 0 },
-        { label: 'Print Payments', href: '/admin/print-payments', icon: Printer, badge: 0 },
         { label: 'Reconciliation', href: '/admin/reconciliation', icon: GitCompare, badge: 0 },
         { label: 'Commission Settings', href: '/admin/commission-settings', icon: Target, badge: 0 },
         { label: 'Referral Analytics', href: '/admin/analytics', icon: BarChart3, badge: 0 },

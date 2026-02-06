@@ -40,7 +40,7 @@ const fallbackStudents: StudentTestimonial[] = [
   { id: "6", name: "Sanduni Dissanayake", grade: "A/L", stream: "Arts", year: "2024", message: "The Sinhala medium notes are excellent. Finally a platform that caters to us properly!", rating: 5, sort_order: 6 },
 ];
 
-// Teacher Card Component - Professional neutral design
+// Teacher Card Component
 const TeacherTestimonialCard = ({ testimonial }: { testimonial: TeacherTestimonial }) => {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
@@ -50,7 +50,7 @@ const TeacherTestimonialCard = ({ testimonial }: { testimonial: TeacherTestimoni
     const rect = cardRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setTilt({ x: y * 6, y: -x * 6 });
+    setTilt({ x: y * 8, y: -x * 8 });
   };
 
   const handleMouseLeave = () => setTilt({ x: 0, y: 0 });
@@ -60,24 +60,24 @@ const TeacherTestimonialCard = ({ testimonial }: { testimonial: TeacherTestimoni
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="group relative flex-shrink-0 w-[320px] md:w-[380px] p-6 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 hover:border-brand/30 transition-all duration-500 cursor-default"
+      className="group relative flex-shrink-0 w-[320px] md:w-[380px] p-6 rounded-2xl bg-glass/30 backdrop-blur-xl border border-glass-border hover:border-emerald-500/30 transition-all duration-500 cursor-default"
       style={{
         transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
         transition: tilt.x === 0 ? 'all 0.5s ease' : 'none',
       }}
     >
-      {/* Subtle glow effect on hover */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-brand/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      {/* Glow effect on hover */}
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       
       {/* Quote icon */}
-      <Quote className="absolute top-4 right-4 w-8 h-8 text-white/10 group-hover:text-brand/20 transition-colors" />
+      <Quote className="absolute top-4 right-4 w-8 h-8 text-emerald-500/20 group-hover:text-emerald-500/40 transition-colors" />
       
       <div className="relative z-10">
-        {/* Recommended Badge - Clean, professional */}
+        {/* Recommended Badge */}
         <div className="flex items-center gap-2 mb-4">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20">
-            <Award className="w-3.5 h-3.5 text-brand" />
-            <span className="text-[10px] font-bold text-white/90 uppercase tracking-wider">Recommended</span>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+            <Award className="w-3.5 h-3.5 text-emerald-400" />
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Recommended</span>
           </div>
         </div>
         
@@ -86,9 +86,9 @@ const TeacherTestimonialCard = ({ testimonial }: { testimonial: TeacherTestimoni
           "{testimonial.message}"
         </p>
         
-        {/* Author with glowing photo frame */}
+        {/* Author with larger photo */}
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white font-bold text-lg ring-2 ring-white/20 shadow-lg shadow-black/30">
+          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold text-lg ring-2 ring-emerald-500/30 shadow-lg shadow-emerald-500/20">
             {testimonial.photo_url ? (
               <img src={testimonial.photo_url} alt={testimonial.name} className="w-full h-full rounded-full object-cover" />
             ) : (
@@ -105,7 +105,7 @@ const TeacherTestimonialCard = ({ testimonial }: { testimonial: TeacherTestimoni
   );
 };
 
-// Student Card Component - Professional with gold stars
+// Student Card Component
 const StudentTestimonialCard = ({ testimonial }: { testimonial: StudentTestimonial }) => {
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const cardRef = useRef<HTMLDivElement>(null);
@@ -115,7 +115,7 @@ const StudentTestimonialCard = ({ testimonial }: { testimonial: StudentTestimoni
     const rect = cardRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
-    setTilt({ x: y * 6, y: -x * 6 });
+    setTilt({ x: y * 8, y: -x * 8 });
   };
 
   const handleMouseLeave = () => setTilt({ x: 0, y: 0 });
@@ -125,17 +125,17 @@ const StudentTestimonialCard = ({ testimonial }: { testimonial: StudentTestimoni
       ref={cardRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="group relative flex-shrink-0 w-[320px] md:w-[380px] p-6 rounded-2xl bg-white/5 backdrop-blur-xl border border-white/10 hover:border-brand/30 transition-all duration-500 cursor-default"
+      className="group relative flex-shrink-0 w-[320px] md:w-[380px] p-6 rounded-2xl bg-glass/30 backdrop-blur-xl border border-glass-border hover:border-amber-500/30 transition-all duration-500 cursor-default"
       style={{
         transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
         transition: tilt.x === 0 ? 'all 0.5s ease' : 'none',
       }}
     >
-      {/* Subtle glow effect on hover */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-brand/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      {/* Glow effect on hover */}
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-amber-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       
       {/* Quote icon */}
-      <Quote className="absolute top-4 right-4 w-8 h-8 text-white/10 group-hover:text-brand/20 transition-colors" />
+      <Quote className="absolute top-4 right-4 w-8 h-8 text-amber-500/20 group-hover:text-amber-500/40 transition-colors" />
       
       <div className="relative z-10">
         {/* Gold Stars */}
@@ -146,7 +146,7 @@ const StudentTestimonialCard = ({ testimonial }: { testimonial: StudentTestimoni
               className={`w-4 h-4 transition-all duration-300 ${
                 i < testimonial.rating 
                   ? 'fill-amber-400 text-amber-400' 
-                  : 'fill-white/10 text-white/10'
+                  : 'fill-muted text-muted'
               }`}
               style={{ transitionDelay: `${i * 50}ms` }}
             />
@@ -160,7 +160,7 @@ const StudentTestimonialCard = ({ testimonial }: { testimonial: StudentTestimoni
         
         {/* Author */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-white/20 shadow-lg shadow-black/30">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-amber-400/30">
             {testimonial.name.charAt(0)}
           </div>
           <div>
@@ -274,8 +274,8 @@ const TestimonialsSection = () => {
       <div className="absolute inset-0 bg-gradient-to-b from-vault-dark via-background to-vault-dark" />
       
       {/* Accent lines */}
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/30 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand/30 to-transparent" />
 
       <div className="container mx-auto px-4 sm:px-6 relative z-10">
         {/* Header */}
@@ -295,8 +295,8 @@ const TestimonialsSection = () => {
         {/* Teacher Recommendations Row */}
         <div className={`mb-8 transition-all duration-1000 delay-200 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
           <div className="flex items-center justify-center gap-2 mb-6">
-            <Award className="w-5 h-5 text-brand" />
-            <span className="text-sm font-bold text-white/80 uppercase tracking-wider">
+            <Award className="w-5 h-5 text-emerald-400" />
+            <span className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
               Recommended by Top Educators
             </span>
           </div>
@@ -311,7 +311,7 @@ const TestimonialsSection = () => {
         <div className={`transition-all duration-1000 delay-400 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
           <div className="flex items-center justify-center gap-2 mb-6">
             <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-            <span className="text-sm font-bold text-white/80 uppercase tracking-wider">
+            <span className="text-sm font-bold text-amber-400 uppercase tracking-wider">
               Student Reviews
             </span>
           </div>

@@ -14,11 +14,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
   Users, 
@@ -31,9 +26,6 @@ import {
   HardDrive,
   Database,
   Share2,
-  Printer,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { StatCard } from '@/components/dashboard/StatCard';
@@ -91,10 +83,6 @@ interface Stats {
   cmoNetworkRevenue: number;
   // Print request stats
   printRevenue: number;
-  printCost: number;
-  printProfit: number;
-  totalPrintPages: number;
-  printCardRevenue: number; // Card payments specifically for print requests
   // Creator commissions
   creatorCommissions: number;
 }
@@ -258,10 +246,6 @@ const AdminDashboard = () => {
     cmoNetworkRevenue: 0,
     // Print stats
     printRevenue: 0,
-    printCost: 0,
-    printProfit: 0,
-    totalPrintPages: 0,
-    printCardRevenue: 0,
     // Creator commissions
     creatorCommissions: 0,
   });
@@ -272,13 +256,9 @@ const AdminDashboard = () => {
   const [topCreators, setTopCreators] = useState<TopCreator[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [funnelStats, setFunnelStats] = useState<FunnelStats>({ totalSignups: 0, totalPaidUsers: 0 });
-  const [showDistribution, setShowDistribution] = useState(false);
-  const [showReferrals, setShowReferrals] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const fetchStats = async () => {
     try {
-      // First, get non-student roles for filtering
       const { data: nonStudentRoles } = await supabase
         .from('user_roles')
         .select('user_id')
@@ -286,34 +266,20 @@ const AdminDashboard = () => {
       
       const nonStudentUserIds = new Set((nonStudentRoles || []).map(r => r.user_id));
 
-      // BATCH 1: All independent queries in parallel (main optimization)
       const [
-        allEnrollmentsResult,
-        activeEnrollmentsResult,
-        totalCodesResult,
-        activeCodesResult,
-        totalSubjectsResult,
-        pendingUpgradesResult,
-        pendingJoinRequestsResult,
-        pendingWithdrawalsResult,
-        pendingHeadOpsRequestsResult,
-        pendingPrintRequestsResult,
-        totalCreatorsResult,
-        enrollmentTiersResult,
-        businessPhaseResult,
-        allPaymentsResult,
-        totalSignupsResult,
-        totalUserReferralsResult,
-        userRefAttributionsResult,
-        userRewardsUnlockedResult,
-        creatorSignupsResult,
-        creatorPaymentsAllResult,
-        totalCMOsResult,
-        cmoCreatorsResult,
-        cmoCreatorIdsResult,
-        printSettingsResult,
-        printPaymentsResult,
-        creatorsDataResult,
+        { data: allEnrollments },
+        { count: activeEnrollments },
+        { count: totalCodes },
+        { count: activeCodes },
+        { count: totalSubjects },
+        { count: pendingUpgrades },
+        { count: pendingJoinRequests },
+        { count: pendingWithdrawals },
+        { count: pendingHeadOpsRequests },
+        { count: pendingPrintRequests },
+        { count: totalCreators },
+        { data: enrollmentTiers },
+        { data: businessPhase },
       ] = await Promise.all([
         supabase.from('enrollments').select('user_id').eq('is_active', true),
         supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('is_active', true),
@@ -328,47 +294,7 @@ const AdminDashboard = () => {
         supabase.from('creator_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('enrollments').select('tier').eq('is_active', true),
         supabase.from('business_phases').select('*').limit(1).maybeSingle(),
-        supabase.from('payment_attributions').select('final_amount, payment_month, payment_type, creator_commission_amount'),
-        supabase.from('user_attributions').select('*', { count: 'exact', head: true }),
-        supabase.from('user_attributions').select('*', { count: 'exact', head: true }).like('referral_source', 'USR%'),
-        supabase.from('user_attributions').select('user_id').like('referral_source', 'USR%'),
-        supabase.from('referral_rewards').select('*', { count: 'exact', head: true }).eq('is_claimed', true),
-        supabase.from('user_attributions').select('*', { count: 'exact', head: true }).not('discount_code_id', 'is', null),
-        supabase.from('payment_attributions').select('final_amount, creator_id').not('creator_id', 'is', null),
-        supabase.from('cmo_profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('creator_profiles').select('*', { count: 'exact', head: true }).not('cmo_id', 'is', null),
-        supabase.from('creator_profiles').select('id').not('cmo_id', 'is', null),
-        supabase.from('print_settings').select('print_cost_per_page').eq('is_active', true).single(),
-        supabase.from('print_requests').select('total_amount, estimated_pages, payment_method').eq('payment_status', 'paid'),
-        supabase.from('creator_profiles').select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users').order('lifetime_paid_users', { ascending: false }).limit(10),
       ]);
-
-      // Extract data from results
-      const allEnrollments = allEnrollmentsResult.data;
-      const activeEnrollments = activeEnrollmentsResult.count;
-      const totalCodes = totalCodesResult.count;
-      const activeCodes = activeCodesResult.count;
-      const totalSubjects = totalSubjectsResult.count;
-      const pendingUpgrades = pendingUpgradesResult.count;
-      const pendingJoinRequests = pendingJoinRequestsResult.count;
-      const pendingWithdrawals = pendingWithdrawalsResult.count;
-      const pendingHeadOpsRequests = pendingHeadOpsRequestsResult.count;
-      const pendingPrintRequests = pendingPrintRequestsResult.count;
-      const totalCreators = totalCreatorsResult.count;
-      const enrollmentTiers = enrollmentTiersResult.data;
-      const businessPhase = businessPhaseResult.data;
-      const allPayments = allPaymentsResult.data;
-      const totalUserReferrals = totalUserReferralsResult.count;
-      const userRefAttributions = userRefAttributionsResult.data;
-      const userRewardsUnlocked = userRewardsUnlockedResult.count;
-      const creatorSignups = creatorSignupsResult.count;
-      const creatorPaymentsAll = creatorPaymentsAllResult.data;
-      const totalCMOs = totalCMOsResult.count;
-      const cmoCreators = cmoCreatorsResult.count;
-      const cmoCreatorIds = cmoCreatorIdsResult.data;
-      const printSettings = printSettingsResult.data;
-      const printPayments = printPaymentsResult.data;
-      const creatorsData = creatorsDataResult.data;
 
       const totalStudents = (allEnrollments || []).filter(
         e => !nonStudentUserIds.has(e.user_id)
@@ -378,7 +304,10 @@ const AdminDashboard = () => {
       const standardCount = (enrollmentTiers || []).filter(e => e.tier === 'standard').length;
       const lifetimeCount = (enrollmentTiers || []).filter(e => e.tier === 'lifetime').length;
 
-      // allPayments already fetched in parallel batch above
+      const { data: allPayments } = await supabase
+        .from('payment_attributions')
+        .select('final_amount, payment_month, payment_type, creator_commission_amount');
+
       const totalRevenue = (allPayments || []).reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
 
       const cardPayments = (allPayments || [])
@@ -438,7 +367,6 @@ const AdminDashboard = () => {
           value,
         };
       });
-      setRevenueData(chartData);
 
       const enrollmentChartData = Object.entries(monthlyEnrollments).map(([key, value]) => {
         const date = new Date(key + '-01');
@@ -447,15 +375,33 @@ const AdminDashboard = () => {
           value,
         };
       });
+
+      setRevenueData(chartData);
       setEnrollmentData(enrollmentChartData);
 
-      // Process funnel stats
+      // Fetch funnel stats - total signups from user_attributions and enrollments
+      const { count: totalSignups } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true });
+
       setFunnelStats({
-        totalSignups: totalSignupsResult.count || 0,
+        totalSignups: totalSignups || 0,
         totalPaidUsers: activeEnrollments || 0,
       });
 
-      // Count paid user referrals (BATCH 2 - depends on userRefAttributions)
+      // Fetch student-to-student referral stats
+      // User referrals are stored with referral_source starting with 'USR'
+      const { count: totalUserReferrals } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true })
+        .like('referral_source', 'USR%');
+
+      // Count how many user referrals converted to paid
+      const { data: userRefAttributions } = await supabase
+        .from('user_attributions')
+        .select('user_id')
+        .like('referral_source', 'USR%');
+
       let paidUserReferrals = 0;
       if (userRefAttributions && userRefAttributions.length > 0) {
         const userIds = userRefAttributions.map(a => a.user_id);
@@ -466,13 +412,45 @@ const AdminDashboard = () => {
         paidUserReferrals = count || 0;
       }
 
-      // Creator stats from already fetched data
+      // Count claimed referral rewards
+      const { count: userRewardsUnlocked } = await supabase
+        .from('referral_rewards')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_claimed', true);
+
+      // Creator referral stats - signups through creator codes
+      const { count: creatorSignups } = await supabase
+        .from('user_attributions')
+        .select('*', { count: 'exact', head: true })
+        .not('discount_code_id', 'is', null);
+
+      // Creator conversions and revenue - payments attributed to creators
+      const { data: creatorPaymentsAll } = await supabase
+        .from('payment_attributions')
+        .select('final_amount, creator_id')
+        .not('creator_id', 'is', null);
+
       const creatorConversions = creatorPaymentsAll?.length || 0;
       const creatorRevenue = (creatorPaymentsAll || []).reduce(
         (sum, p) => sum + Number(p.final_amount || 0), 0
       );
 
-      // CMO network revenue (BATCH 3 - depends on cmoCreatorIds)
+      // CMO stats
+      const { count: totalCMOs } = await supabase
+        .from('cmo_profiles')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: cmoCreators } = await supabase
+        .from('creator_profiles')
+        .select('*', { count: 'exact', head: true })
+        .not('cmo_id', 'is', null);
+
+      // CMO network revenue - revenue from creators under CMOs
+      const { data: cmoCreatorIds } = await supabase
+        .from('creator_profiles')
+        .select('id')
+        .not('cmo_id', 'is', null);
+
       let cmoNetworkRevenue = 0;
       if (cmoCreatorIds && cmoCreatorIds.length > 0) {
         const creatorIdList = cmoCreatorIds.map(c => c.id);
@@ -485,32 +463,30 @@ const AdminDashboard = () => {
         );
       }
 
-      // Print calculations from already fetched data
-      const printCostPerPage = printSettings?.print_cost_per_page || 4;
+      // Print request revenue calculation
+      const { data: printPayments } = await supabase
+        .from('print_requests')
+        .select('total_amount')
+        .eq('payment_status', 'paid');
+      
       const printRevenue = (printPayments || []).reduce(
         (sum, p) => sum + Number(p.total_amount || 0), 0
       );
-      // Card payments specifically for print requests (for PayHere commission)
-      const printCardRevenue = (printPayments || [])
-        .filter((p: any) => p.payment_method === 'card')
-        .reduce((sum, p) => sum + Number(p.total_amount || 0), 0);
-      const totalPrintPages = (printPayments || []).reduce(
-        (sum, p) => sum + (p.estimated_pages || 0), 0
-      );
-      const printCost = totalPrintPages * printCostPerPage;
-      const printProfit = printRevenue - printCost;
 
-      // Weekly revenue calculations (using already fetched allPayments)
+      // Weekly revenue calculations
       const now = new Date();
-      const dayOfWeek = now.getDay() || 7;
+      const dayOfWeek = now.getDay() || 7; // Sunday = 0, convert to 7
       
+      // Start of this week (Monday)
       const thisWeekStart = new Date(now);
       thisWeekStart.setDate(now.getDate() - dayOfWeek + 1);
       thisWeekStart.setHours(0, 0, 0, 0);
       
+      // Start of last week
       const lastWeekStart = new Date(thisWeekStart);
       lastWeekStart.setDate(lastWeekStart.getDate() - 7);
       
+      // Start of two weeks ago
       const twoWeeksAgoStart = new Date(lastWeekStart);
       twoWeeksAgoStart.setDate(twoWeeksAgoStart.getDate() - 7);
       
@@ -518,19 +494,30 @@ const AdminDashboard = () => {
       const lastWeekStartStr = lastWeekStart.toISOString().split('T')[0];
       const twoWeeksAgoStartStr = twoWeeksAgoStart.toISOString().split('T')[0];
       
+      // Calculate this week's revenue
       const thisWeekRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= thisWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
       
+      // Calculate last week's revenue
       const lastWeekRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= lastWeekStartStr && p.payment_month < thisWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
       
+      // Calculate two weeks ago revenue
       const twoWeeksAgoRevenue = (allPayments || [])
         .filter(p => p.payment_month && p.payment_month >= twoWeeksAgoStartStr && p.payment_month < lastWeekStartStr)
         .reduce((sum, p) => sum + Number(p.final_amount || 0), 0);
+      
+      // Days into current week (Monday = 1, Tuesday = 2, etc.)
+      const daysIntoWeek = dayOfWeek;
 
-      // Top creators with revenue (BATCH 4 - parallel for each creator)
+      const { data: creatorsData } = await supabase
+        .from('creator_profiles')
+        .select('id, display_name, referral_code, lifetime_paid_users, monthly_paid_users')
+        .order('lifetime_paid_users', { ascending: false })
+        .limit(10);
+
       if (creatorsData && creatorsData.length > 0) {
         const creatorsWithRevenue = await Promise.all(
           creatorsData.map(async (creator) => {
@@ -589,10 +576,6 @@ const AdminDashboard = () => {
         cmoCreators: cmoCreators || 0,
         cmoNetworkRevenue,
         printRevenue,
-        printCost,
-        printProfit,
-        totalPrintPages,
-        printCardRevenue,
         creatorCommissions,
       });
 
@@ -741,94 +724,40 @@ const AdminDashboard = () => {
 
           {/* Main Content */}
           <main className="p-6 space-y-6">
-            {/* Net Profit Card - Primary Metric with Tax Calculation */}
+            {/* Net Profit Card - Primary Metric */}
             {(() => {
               const totalRevenue = stats.totalRevenue + stats.printRevenue;
-              
-              // SSCL (2.5% on turnover - Service Provider rate at 100% liability)
-              // Reference: SSCL Act No. 25 of 2022, effective 1 Oct 2022
-              // For service providers, 100% of turnover is liable
-              const SSCL_RATE = 0.025; // 2.5%
-              const ssclTax = totalRevenue * SSCL_RATE;
-              
-              // Operating Expenses - Include both enrollment AND print card payments for PayHere fee
-              const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033; // 3.3% PayHere fee
-              const operatingCosts = payhereCommission + stats.creatorCommissions + stats.printCost;
-              
-              // Gross Profit (before corporate tax, SSCL is a tax so deducted here)
-              const grossProfit = totalRevenue - operatingCosts - ssclTax;
-              
-              // Sri Lankan Corporate Tax Rate (2025/2026) - Standard rate 30%
-              // Reference: https://www.ird.gov.lk/en/publications/SitePages/tax_chart_2526.aspx
-              const CORPORATE_TAX_RATE = 0.30;
-              const corporateTax = Math.max(0, grossProfit * CORPORATE_TAX_RATE);
-              
-              // Net Profit After All Taxes
-              const netProfitAfterTax = grossProfit - corporateTax;
-              
-              // Total Tax Burden
-              const totalTaxBurden = ssclTax + corporateTax;
+              const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
+              const profit = totalRevenue - payhereCommission - stats.creatorCommissions;
               
               return (
                 <div className="glass-card-premium p-6 bg-gradient-to-r from-green-500/10 via-brand/5 to-transparent border-green-500/30">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <TrendingUp className="w-5 h-5 text-green-500" />
-                          <span className="text-sm text-muted-foreground font-medium">Gross Profit (Before Tax)</span>
-                        </div>
-                        <p className="text-3xl sm:text-4xl font-bold text-green-500">
-                          Rs. {grossProfit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Revenue: Rs. {totalRevenue.toLocaleString()} − SSCL ({(ssclTax / 1000).toFixed(1)}K) − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K) − Print ({(stats.printCost / 1000).toFixed(1)}K)
-                        </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-muted-foreground font-medium">Net Profit</span>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                        <div className="p-3 bg-secondary/50 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Revenue</p>
-                          <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
-                        </div>
-                        <div className="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                          <p className="text-xs text-muted-foreground">SSCL (2.5%)</p>
-                          <p className="text-lg font-semibold text-amber-500">-Rs. {(ssclTax / 1000).toFixed(1)}K</p>
-                        </div>
-                        <div className="p-3 bg-secondary/50 rounded-lg">
-                          <p className="text-xs text-muted-foreground">PayHere Fee</p>
-                          <p className="text-lg font-semibold text-orange-500">-Rs. {(payhereCommission / 1000).toFixed(1)}K</p>
-                        </div>
-                        <div className="p-3 bg-secondary/50 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Commissions</p>
-                          <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Tax & Final Profit Section */}
-                    <div className="border-t border-border/50 pt-4">
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <div className="p-3 bg-red-500/10 rounded-lg border border-red-500/20">
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                              Corp Tax (30%)
-                              <span className="text-[10px] text-muted-foreground/70">*</span>
-                            </p>
-                            <p className="text-lg font-semibold text-red-400">-Rs. {(corporateTax / 1000).toFixed(1)}K</p>
-                          </div>
-                          <div className="p-3 bg-red-500/5 rounded-lg border border-red-500/10">
-                            <p className="text-xs text-muted-foreground">Total Tax Burden</p>
-                            <p className="text-lg font-semibold text-red-300">-Rs. {(totalTaxBurden / 1000).toFixed(1)}K</p>
-                          </div>
-                          <div className="p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/30">
-                            <p className="text-xs text-muted-foreground">Net After All Taxes</p>
-                            <p className="text-lg font-bold text-emerald-400">Rs. {(netProfitAfterTax / 1000).toFixed(1)}K</p>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/60 mt-3">
-                        * SSCL: 2.5% on revenue (SSCL Act 2022). Corp Tax: 30% on profit (IRD 2025/26). Estimates only - consult a tax professional.
+                      <p className="text-3xl sm:text-4xl font-bold text-green-500">
+                        Rs. {profit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Total Revenue: Rs. {totalRevenue.toLocaleString()} − PayHere ({(payhereCommission / 1000).toFixed(1)}K) − Commissions ({(stats.creatorCommissions / 1000).toFixed(1)}K)
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Revenue</p>
+                        <p className="text-lg font-semibold text-foreground">Rs. {(totalRevenue / 1000).toFixed(1)}K</p>
+                      </div>
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">PayHere Fee</p>
+                        <p className="text-lg font-semibold text-orange-500">-Rs. {(payhereCommission / 1000).toFixed(1)}K</p>
+                      </div>
+                      <div className="p-3 bg-secondary/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Commissions</p>
+                        <p className="text-lg font-semibold text-purple-500">-Rs. {(stats.creatorCommissions / 1000).toFixed(1)}K</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -882,121 +811,107 @@ const AdminDashboard = () => {
             </div>
 
             {/* Tier & Payment Breakdown */}
-            {/* Distribution & Details (Collapsible) */}
-            <Collapsible open={showDistribution} onOpenChange={setShowDistribution}>
-              <CollapsibleTrigger asChild>
-                <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-gold" />
-                    <span className="font-semibold text-foreground">Distribution & Details</span>
-                    <span className="text-xs text-muted-foreground ml-2">Tiers, Payments, Storage</span>
-                  </div>
-                  {showDistribution ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
-                  {/* Tier Distribution */}
-                  <div className="glass-card-premium p-6">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Crown className="w-5 h-5 text-gold" />
-                      Tier Distribution
-                    </h3>
-                    <div className="flex items-center justify-center mb-4">
-                      <ProgressRing
-                        progress={stats.activeEnrollments > 0 ? (stats.lifetimeCount / stats.activeEnrollments) * 100 : 0}
-                        size={120}
-                        strokeWidth={12}
-                        color="hsl(var(--gold))"
-                        label="Lifetime"
-                      />
-                    </div>
-                    <ChartLegend
-                      items={[
-                        { name: 'Starter', value: stats.starterCount, color: 'bg-muted-foreground' },
-                        { name: 'Standard', value: stats.standardCount, color: 'bg-brand' },
-                        { name: 'Lifetime', value: stats.lifetimeCount, color: 'bg-gold' },
-                      ]}
-                    />
-                  </div>
-
-                  {/* Payment Methods */}
-                  <div className="glass-card-premium p-6">
-                    <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Database className="w-5 h-5 text-brand" />
-                      Payment Methods
-                    </h3>
-                    <div className="space-y-3 mt-6">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Card Payments</span>
-                        <span className="font-medium text-foreground">Rs. {stats.cardPayments.toLocaleString()}</span>
-                      </div>
-                      <Progress value={stats.totalRevenue > 0 ? (stats.cardPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
-                      <div className="flex justify-between items-center mt-4">
-                        <span className="text-sm text-muted-foreground">Bank Transfers</span>
-                        <span className="font-medium text-foreground">Rs. {stats.bankPayments.toLocaleString()}</span>
-                      </div>
-                      <Progress value={stats.totalRevenue > 0 ? (stats.bankPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
-                    </div>
-                  </div>
-
-                  {/* Storage Usage */}
-                  <StorageUsageCard />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-
-            {/* Referral Insights (Collapsible) */}
-            <Collapsible open={showReferrals} onOpenChange={setShowReferrals}>
-              <CollapsibleTrigger asChild>
-                <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <Share2 className="w-5 h-5 text-brand" />
-                    <span className="font-semibold text-foreground">Referral Network</span>
-                    <span className="text-xs text-muted-foreground ml-2">{stats.totalUserReferrals} user referrals, {stats.creatorConversions} creator conversions</span>
-                  </div>
-                  {showReferrals ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="mt-4">
-                  <ReferralNetworkBreakdown 
-                    stats={{
-                      userSignups: stats.totalUserReferrals,
-                      userConversions: stats.paidUserReferrals,
-                      userRewardsClaimed: stats.userRewardsUnlocked,
-                      creatorSignups: stats.creatorSignups,
-                      creatorConversions: stats.creatorConversions,
-                      creatorRevenue: stats.creatorRevenue,
-                      totalCMOs: stats.totalCMOs,
-                      cmoCreators: stats.cmoCreators,
-                      cmoNetworkRevenue: stats.cmoNetworkRevenue,
-                    }}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Tier Distribution */}
+              <div className="glass-card-premium p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-gold" />
+                  Tier Distribution
+                </h3>
+                <div className="flex items-center justify-center mb-4">
+                  <ProgressRing
+                    progress={stats.activeEnrollments > 0 ? (stats.lifetimeCount / stats.activeEnrollments) * 100 : 0}
+                    size={120}
+                    strokeWidth={12}
+                    color="hsl(var(--gold))"
+                    label="Lifetime"
                   />
                 </div>
-              </CollapsibleContent>
-            </Collapsible>
+                <ChartLegend
+                  items={[
+                    { name: 'Starter', value: stats.starterCount, color: 'bg-muted-foreground' },
+                    { name: 'Standard', value: stats.standardCount, color: 'bg-brand' },
+                    { name: 'Lifetime', value: stats.lifetimeCount, color: 'bg-gold' },
+                  ]}
+                />
+              </div>
 
-            {/* Top Performers (Collapsible) */}
-            {topCreators.length > 0 && (
-              <Collapsible open={showLeaderboard} onOpenChange={setShowLeaderboard}>
-                <CollapsibleTrigger asChild>
-                  <button className="w-full glass-card-premium p-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-5 h-5 text-gold" />
-                      <span className="font-semibold text-foreground">Top Creators</span>
-                      <span className="text-xs text-muted-foreground ml-2">{topCreators.length} active creators</span>
-                    </div>
-                    {showLeaderboard ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="mt-4">
-                    <CreatorLeaderboard creators={topCreators} showMonthly={true} />
+              {/* Payment Methods */}
+              <div className="glass-card-premium p-6">
+                <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+                  <Database className="w-5 h-5 text-green-400" />
+                  Payment Methods
+                </h3>
+                <div className="space-y-3 mt-6">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-muted-foreground">Card Payments</span>
+                    <span className="font-medium text-foreground">Rs. {stats.cardPayments.toLocaleString()}</span>
                   </div>
-                </CollapsibleContent>
-              </Collapsible>
+                  <Progress value={stats.totalRevenue > 0 ? (stats.cardPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
+                  <div className="flex justify-between items-center mt-4">
+                    <span className="text-sm text-muted-foreground">Bank Transfers</span>
+                    <span className="font-medium text-foreground">Rs. {stats.bankPayments.toLocaleString()}</span>
+                  </div>
+                  <Progress value={stats.totalRevenue > 0 ? (stats.bankPayments / stats.totalRevenue) * 100 : 0} className="h-2" />
+                </div>
+              </div>
+
+              {/* Storage Usage */}
+              <StorageUsageCard />
+            </div>
+
+            {/* Referral Network Breakdown */}
+            <ReferralNetworkBreakdown 
+              stats={{
+                userSignups: stats.totalUserReferrals,
+                userConversions: stats.paidUserReferrals,
+                userRewardsClaimed: stats.userRewardsUnlocked,
+                creatorSignups: stats.creatorSignups,
+                creatorConversions: stats.creatorConversions,
+                creatorRevenue: stats.creatorRevenue,
+                totalCMOs: stats.totalCMOs,
+                cmoCreators: stats.cmoCreators,
+                cmoNetworkRevenue: stats.cmoNetworkRevenue,
+              }}
+            />
+
+            {/* Creator Leaderboard */}
+            {topCreators.length > 0 && (
+              <CreatorLeaderboard creators={topCreators} showMonthly={true} />
             )}
+
+            {/* Danger Zone */}
+            <div className="glass-card-premium p-6 border-destructive/30">
+              <h3 className="font-semibold text-destructive mb-4 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Danger Zone
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Clear all user data, payment records, and creator accounts. Admin and CMO accounts will be preserved.
+              </p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" disabled={isClearing}>
+                    {isClearing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                    Clear All Data
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete all user accounts, enrollments, payments, and creator data. Only admin and CMO accounts will be preserved.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearAllData} className="bg-destructive text-destructive-foreground">
+                      Yes, delete everything
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </main>
         </SidebarInset>
       </div>

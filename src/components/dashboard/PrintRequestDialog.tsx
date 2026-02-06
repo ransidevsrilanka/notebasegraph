@@ -529,13 +529,12 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
       
       // Set up PayHere callbacks
       window.payhere.onCompleted = async (orderId: string) => {
-        console.log("PayHere popup completed. OrderID:", orderId);
+        console.log("Card payment completed. OrderID:", orderId);
         
-        // Verify payment server-side - DO NOT trust client callback
+        // NOW create the print request via edge function (payment confirmed)
         const details = orderDetailsRef.current;
         if (!details) {
           toast.error("Order details not found. Please contact support.");
-          setIsLoading(false);
           return;
         }
         
@@ -544,29 +543,22 @@ const PrintRequestDialog = ({ open, onOpenChange }: PrintRequestDialogProps) => 
             body: {
               order_id: orderId,
               user_id: user.id,
-              order_details: {
-                ...details,
-                selectedPaperTitles: papers.filter(p => details.selectedPapers.includes(p.id)).map(p => p.title),
-              },
+              order_details: details,
             }
           });
           
-          if (createError || !result?.success) {
-            // Payment verification failed - show specific error
-            const errorMsg = result?.user_message || "Payment could not be verified. Please check your payment status.";
-            console.error('Payment verification failed:', result);
-            toast.error(errorMsg);
-            setIsLoading(false);
-            return;
+          if (!createError && result?.success) {
+            toast.success("Payment successful! Your print order is confirmed.");
+            loadExistingOrders();
+            resetForm();
+            setViewMode('orders');
+          } else {
+            console.error('Failed to create print request:', createError);
+            toast.error("Payment received but order creation failed. Please contact support with order ID: " + orderId);
           }
-          
-          toast.success("Payment successful! Your print order is confirmed.");
-          loadExistingOrders();
-          resetForm();
-          setViewMode('orders');
         } catch (err) {
           console.error('Error finalizing print request:', err);
-          toast.error("Failed to verify payment. Please contact support with order ID: " + orderId);
+          toast.error("Payment received but order creation failed. Please contact support.");
         }
         
         setIsLoading(false);

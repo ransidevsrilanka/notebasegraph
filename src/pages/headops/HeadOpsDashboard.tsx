@@ -32,8 +32,7 @@ import {
   Plus,
   CheckCircle2,
   Circle,
-  UserPlus,
-  Crown
+  UserPlus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -562,21 +561,17 @@ const HeadOpsDashboard = () => {
   }
 
   return (
-    <main className="min-h-screen bg-background dashboard-theme hoo-premium-bg">
-      {/* Premium Header */}
-      <header className="bg-gradient-to-r from-card via-card/95 to-card border-b border-border/50 backdrop-blur-xl sticky top-0 z-50">
-        <div className="absolute inset-0 bg-gradient-to-r from-brand/5 via-transparent to-purple-500/5" />
-        <div className="container mx-auto px-4 py-4 relative">
+    <main className="min-h-screen bg-background dashboard-theme">
+      {/* Header */}
+      <header className="bg-card/50 border-b border-border backdrop-blur-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand to-brand-light flex items-center justify-center shadow-lg shadow-brand/25">
-                  <Crown className="w-4 h-4 text-primary-foreground" />
-                </div>
-                <span className="font-display text-xl font-bold text-foreground">Head of Ops</span>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-brand/20 text-brand text-xs font-medium hidden sm:block">
-                Operations
+              <Link to="/" className="font-display text-xl font-bold text-foreground">
+                Head of Ops Dashboard
+              </Link>
+              <span className="px-2 py-0.5 rounded bg-brand/20 text-brand text-xs font-medium">
+                Head of Operations
               </span>
             </div>
             <div className="flex items-center gap-4">
@@ -600,82 +595,77 @@ const HeadOpsDashboard = () => {
           </p>
         </div>
 
-        {/* Welcome with Icon Badge */}
-        <div className="mb-8 flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand/20 to-brand/10 flex items-center justify-center border border-brand/20 ring-2 ring-brand/10">
-            <Crown className="w-7 h-7 text-brand" />
-          </div>
-          <div>
-            <h1 className="font-display text-2xl font-bold text-foreground">
-              Welcome back, {profile?.full_name || 'Head of Ops'}
-            </h1>
-            <p className="text-muted-foreground">
-              Manage operations and grow your personal creator network
-            </p>
-          </div>
+        {/* Welcome */}
+        <div className="mb-8">
+          <h1 className="font-display text-2xl font-bold text-foreground mb-1">
+            Welcome back, {profile?.full_name || 'Head of Ops'}
+          </h1>
+          <p className="text-muted-foreground">
+            Manage operations and grow your personal creator network
+          </p>
         </div>
 
-        {/* Premium Stats Cards */}
+        {/* Overview Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-purple-500/10 via-transparent to-transparent border-purple-500/20">
-            <div className="w-11 h-11 rounded-xl bg-purple-500/20 flex items-center justify-center mb-3 ring-2 ring-purple-500/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center mb-2">
               <Users className="w-5 h-5 text-purple-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{myStats.totalCreators}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">My Creators</p>
+            <p className="text-xl font-bold text-foreground">{myStats.totalCreators}</p>
+            <p className="text-xs text-muted-foreground">My Creators</p>
           </div>
 
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-green-500/10 via-transparent to-transparent border-green-500/20">
-            <div className="w-11 h-11 rounded-xl bg-green-500/20 flex items-center justify-center mb-3 ring-2 ring-green-500/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center mb-2">
               <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{myStats.totalPaidUsersThisMonth}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">My Paid This Month</p>
+            <p className="text-xl font-bold text-foreground">{myStats.totalPaidUsersThisMonth}</p>
+            <p className="text-xs text-muted-foreground">My Paid This Month</p>
           </div>
 
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-brand/10 via-transparent to-transparent border-brand/20">
-            <div className="w-11 h-11 rounded-xl bg-brand/20 flex items-center justify-center mb-3 ring-2 ring-brand/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-brand/20 flex items-center justify-center mb-2">
               <DollarSign className="w-5 h-5 text-brand" />
             </div>
-            <p className="text-2xl font-bold text-foreground">LKR {myStats.totalRevenueGenerated.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">My Revenue</p>
+            <p className="text-xl font-bold text-foreground">LKR {myStats.totalRevenueGenerated.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">My Revenue</p>
           </div>
 
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-blue-500/10 via-transparent to-transparent border-blue-500/20">
-            <div className="w-11 h-11 rounded-xl bg-blue-500/20 flex items-center justify-center mb-3 ring-2 ring-blue-500/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center mb-2">
               <BarChart3 className="w-5 h-5 text-blue-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{cmos.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Total CMOs</p>
+            <p className="text-xl font-bold text-foreground">{cmos.length}</p>
+            <p className="text-xs text-muted-foreground">Total CMOs</p>
           </div>
 
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-emerald-500/10 via-transparent to-transparent border-emerald-500/20">
-            <div className="w-11 h-11 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-3 ring-2 ring-emerald-500/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center mb-2">
               <Target className="w-5 h-5 text-emerald-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{activeCreators.length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">All Creators</p>
+            <p className="text-xl font-bold text-foreground">{activeCreators.length}</p>
+            <p className="text-xs text-muted-foreground">All Creators</p>
           </div>
 
-          <div className="glass-card-premium p-5 bg-gradient-to-br from-yellow-500/10 via-transparent to-transparent border-yellow-500/20">
-            <div className="w-11 h-11 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-3 ring-2 ring-yellow-500/30">
+          <div className="glass-card p-4">
+            <div className="w-10 h-10 rounded-xl bg-yellow-500/20 flex items-center justify-center mb-2">
               <Clock className="w-5 h-5 text-yellow-500" />
             </div>
-            <p className="text-2xl font-bold text-foreground">{myRequests.filter(r => r.status === 'pending').length}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Pending Requests</p>
+            <p className="text-xl font-bold text-foreground">{myRequests.filter(r => r.status === 'pending').length}</p>
+            <p className="text-xs text-muted-foreground">Pending Requests</p>
           </div>
         </div>
 
-        {/* Enhanced Tabs */}
+        {/* Main Content Tabs */}
         <Tabs defaultValue="my-performance" className="space-y-6" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid grid-cols-3 md:grid-cols-7 w-full bg-secondary/30 p-1 gap-1">
-            <TabsTrigger value="my-performance" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">My Performance</TabsTrigger>
-            <TabsTrigger value="my-creators" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">My Creators</TabsTrigger>
-            <TabsTrigger value="all-creators" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">All Creators</TabsTrigger>
-            <TabsTrigger value="cmos" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">CMOs</TabsTrigger>
-            <TabsTrigger value="content" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">Content</TabsTrigger>
-            <TabsTrigger value="financials" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">Financials</TabsTrigger>
-            <TabsTrigger value="requests" className="data-[state=active]:bg-brand/20 data-[state=active]:text-brand data-[state=active]:shadow-sm">Requests</TabsTrigger>
+          <TabsList className="grid grid-cols-3 md:grid-cols-7 w-full bg-secondary/50">
+            <TabsTrigger value="my-performance">My Performance</TabsTrigger>
+            <TabsTrigger value="my-creators">My Creators</TabsTrigger>
+            <TabsTrigger value="all-creators">All Creators</TabsTrigger>
+            <TabsTrigger value="cmos">CMOs</TabsTrigger>
+            <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="financials">Financials</TabsTrigger>
+            <TabsTrigger value="requests">Requests</TabsTrigger>
           </TabsList>
 
           {/* MY PERFORMANCE TAB */}

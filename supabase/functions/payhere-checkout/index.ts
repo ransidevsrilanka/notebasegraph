@@ -692,92 +692,28 @@ serve(async (req) => {
         }
       }
 
-      // CRITICAL: If payment still not confirmed, DO NOT proceed
-      // Never trust client-side callbacks - only server-verified payment status
+      // If payment still not confirmed, check if it exists at all
       if (!payment) {
         const { data: pendingPayment } = await supabase
           .from("payments")
-          .select("status, failure_reason")
+          .select("status")
           .eq("order_id", order_id)
           .maybeSingle();
         
         if (!pendingPayment) {
           console.error("Payment not found:", order_id);
           return new Response(
-            JSON.stringify({ 
-              error: "Payment not found", 
-              success: false,
-              user_message: "Payment verification failed. Please try again or contact support."
-            }),
+            JSON.stringify({ error: "Payment not found", success: false }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
         
-        // Payment exists but NOT completed - DO NOT proceed
-        // This catches cases where PayHere callback fires but payment actually failed
-        if (pendingPayment.status !== 'completed') {
-          const failureMsg = pendingPayment.failure_reason || "Payment was not successful. Please try again.";
-          console.error("Payment not verified:", order_id, "Status:", pendingPayment.status);
-          return new Response(
-            JSON.stringify({ 
-              error: "Payment not verified", 
-              success: false,
-              payment_status: pendingPayment.status,
-              user_message: failureMsg
-            }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-        
-        // Payment is now confirmed, proceed
-        payment = pendingPayment;
+        // Payment exists but not completed - might still be processing
+        // For card payments, PayHere calls notify async, so we trust the client-side completion
+        console.log("Payment exists but status is:", pendingPayment.status);
       }
 
-      // Server-side price validation to prevent manipulation
-      const { data: printSettings } = await supabase
-        .from('print_settings')
-        .select('model_paper_price_per_page, base_delivery_fee')
-        .eq('is_active', true)
-        .single();
-
-      if (!printSettings) {
-        console.error("Print settings not configured");
-        return new Response(
-          JSON.stringify({ error: "Print settings not configured", success: false }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Verify page count from database (not from client)
-      let verifiedPageCount = order_details.totalPages;
-      let verifiedPaperTitles: string[] = order_details.selectedPaperTitles || [];
-      
-      if (order_details.selectedPapers && order_details.selectedPapers.length > 0) {
-        const { data: paperData } = await supabase
-          .from('notes')
-          .select('id, page_count, title')
-          .in('id', order_details.selectedPapers);
-        
-        if (paperData && paperData.length > 0) {
-          verifiedPageCount = paperData.reduce((sum, p) => sum + (p.page_count || 1), 0);
-          verifiedPaperTitles = paperData.map(p => p.title);
-        }
-      }
-
-      const expectedPrice = (verifiedPageCount * printSettings.model_paper_price_per_page) + printSettings.base_delivery_fee;
-
-      // Allow small rounding tolerance (Rs. 10)
-      if (Math.abs(expectedPrice - order_details.totalAmount) > 10) {
-        console.error('Price mismatch detected:', { expected: expectedPrice, received: order_details.totalAmount });
-        // Log security alert but still proceed with verified amount
-        await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
-          alertType: "Price Mismatch Warning",
-          details: `Expected: Rs.${expectedPrice}, Received: Rs.${order_details.totalAmount}. Using verified amount.`,
-          userId: user_id,
-        });
-      }
-
-      // Create the print request record with verified values
+      // Create the print request record
       const requestNumber = `PR-${order_id.slice(-8).toUpperCase()}`;
       
       const { data: printRequest, error: insertError } = await supabase
@@ -793,16 +729,14 @@ serve(async (req) => {
           subject_id: order_details.selectedSubject,
           subject_name: order_details.subjectName,
           topic_ids: order_details.allTopics ? [] : order_details.selectedTopics,
-          estimated_pages: verifiedPageCount,
-          estimated_price: expectedPrice - printSettings.base_delivery_fee,
-          delivery_fee: printSettings.base_delivery_fee,
-          total_amount: expectedPrice, // Use server-verified amount
+          estimated_pages: order_details.totalPages,
+          estimated_price: order_details.estimatedPrice,
+          delivery_fee: order_details.deliveryFee,
+          total_amount: order_details.totalAmount,
           payment_method: 'card',
           payment_status: 'paid',
           status: 'confirmed',
           order_id: order_id,
-          selected_paper_ids: order_details.selectedPapers || [],
-          selected_paper_titles: verifiedPaperTitles,
         })
         .select()
         .single();

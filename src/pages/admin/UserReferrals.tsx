@@ -92,11 +92,10 @@ const UserReferrals = () => {
       return;
     }
 
-    // Get all user attributions (signups via referral) - filter only USR prefixed codes
+    // Get all user attributions (signups via referral)
     const { data: attributions } = await supabase
       .from('user_attributions')
-      .select('id, user_id, referral_source')
-      .like('referral_source', 'USR%');
+      .select('id, user_id, referral_source');
 
     // Get all payment attributions for paid referrals
     const { data: paymentAttributions } = await supabase
@@ -112,8 +111,7 @@ const UserReferrals = () => {
     const referrerMap = new Map<string, ReferrerData>();
     
     profiles.forEach(profile => {
-      // Only include USR prefixed codes (user-to-user referrals)
-      if (profile.referral_code && profile.referral_code.startsWith('USR')) {
+      if (profile.referral_code) {
         referrerMap.set(profile.referral_code, {
           user_id: profile.user_id,
           email: profile.email || 'Unknown',
@@ -126,15 +124,13 @@ const UserReferrals = () => {
       }
     });
 
-    // Create a set of paid user IDs for quick lookup
+    // Count referrals for each referrer
     const paidUserIds = new Set(paymentAttributions?.map(pa => pa.user_id) || []);
     
-    // Count referrals for each referrer
     attributions?.forEach(attr => {
       if (attr.referral_source && referrerMap.has(attr.referral_source)) {
         const referrer = referrerMap.get(attr.referral_source)!;
         referrer.total_referrals++;
-        // Check if this referred user has made a payment
         if (paidUserIds.has(attr.user_id)) {
           referrer.paid_referrals++;
         }

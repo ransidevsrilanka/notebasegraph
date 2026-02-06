@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -6,18 +6,49 @@ import {
   ChevronRight, 
   ChevronLeft,
   BookOpen,
+  BarChart3,
   Sparkles,
-  GraduationCap,
-  Bot
+  GraduationCap
 } from 'lucide-react';
-import { useBranding } from '@/hooks/useBranding';
 
 interface TourStep {
   id: string;
   title: string;
   description: string;
   icon: React.ReactNode;
+  position: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 }
+
+const tourSteps: TourStep[] = [
+  {
+    id: 'welcome',
+    title: 'Welcome to Zen Notes!',
+    description: 'This is your personalized dashboard where you can access all your study materials, track progress, and ace your exams.',
+    icon: <GraduationCap className="w-6 h-6" />,
+    position: 'center'
+  },
+  {
+    id: 'subjects',
+    title: 'Your Subjects',
+    description: 'Here you can see all your selected subjects. Click on any subject to explore topics and study notes.',
+    icon: <BookOpen className="w-6 h-6" />,
+    position: 'center'
+  },
+  {
+    id: 'progress',
+    title: 'Track Your Progress',
+    description: 'Monitor your study progress, view statistics, and stay on top of your learning journey.',
+    icon: <BarChart3 className="w-6 h-6" />,
+    position: 'center'
+  },
+  {
+    id: 'cta',
+    title: 'Ready to Get Started?',
+    description: 'Sign up now to unlock all features, access premium notes, and join thousands of successful students!',
+    icon: <Sparkles className="w-6 h-6" />,
+    position: 'center'
+  }
+];
 
 interface DemoTourProps {
   onComplete: () => void;
@@ -25,36 +56,8 @@ interface DemoTourProps {
 
 const DemoTour = ({ onComplete }: DemoTourProps) => {
   const navigate = useNavigate();
-  const { branding } = useBranding();
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
-
-  const tourSteps: TourStep[] = [
-    {
-      id: 'welcome',
-      title: `Welcome to ${branding.siteName}!`,
-      description: 'Your personalized dashboard for accessing study materials, notes, and exam preparation resources.',
-      icon: <GraduationCap className="w-6 h-6" />,
-    },
-    {
-      id: 'subjects',
-      title: 'Your Subjects',
-      description: 'Browse all your selected subjects. Click on any subject to explore topics and study notes.',
-      icon: <BookOpen className="w-6 h-6" />,
-    },
-    {
-      id: 'ai-tutor',
-      title: '24/7 AI Tutor',
-      description: 'Get instant help with any topic. Our AI tutor is available around the clock to answer your questions.',
-      icon: <Bot className="w-6 h-6" />,
-    },
-    {
-      id: 'cta',
-      title: 'Ready to Get Started?',
-      description: 'Sign up now to unlock all features, access premium notes, and join thousands of successful students!',
-      icon: <Sparkles className="w-6 h-6" />,
-    }
-  ];
 
   const step = tourSteps[currentStep];
   const isLastStep = currentStep === tourSteps.length - 1;
@@ -79,6 +82,9 @@ const DemoTour = ({ onComplete }: DemoTourProps) => {
     onComplete();
   };
 
+  const handleSignUp = () => {
+    navigate('/paid-signup');
+  };
 
   if (!isVisible) return null;
 
@@ -127,22 +133,27 @@ const DemoTour = ({ onComplete }: DemoTourProps) => {
             {step.description}
           </p>
 
-          {/* Actions - Fixed overflow */}
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Actions */}
+          <div className="flex items-center gap-3">
             {!isFirstStep && (
-              <Button variant="ghost" size="sm" onClick={handlePrev} className="gap-1">
+              <Button variant="ghost" onClick={handlePrev} className="gap-2">
                 <ChevronLeft className="w-4 h-4" />
                 Back
               </Button>
             )}
-            <div className="flex-1 min-w-0" />
+            <div className="flex-1" />
             {isLastStep ? (
-              <Button variant="brand" size="sm" onClick={handleComplete} className="gap-1">
-                <Sparkles className="w-4 h-4" />
-                Explore Now
-              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={handleComplete}>
+                  Continue Exploring
+                </Button>
+                <Button variant="brand" onClick={handleSignUp} className="gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Sign Up Now
+                </Button>
+              </div>
             ) : (
-              <Button variant="brand" size="sm" onClick={handleNext} className="gap-1">
+              <Button variant="brand" onClick={handleNext} className="gap-2">
                 Next
                 <ChevronRight className="w-4 h-4" />
               </Button>

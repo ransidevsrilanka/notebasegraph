@@ -39,8 +39,6 @@ const UpgradePage = () => {
   const [existingRequest, setExistingRequest] = useState<any>(null);
   const [requestFlowStarted, setRequestFlowStarted] = useState(false);
   const [requestCreating, setRequestCreating] = useState(false);
-  const [showBankTransfer, setShowBankTransfer] = useState(false);
-  const [isPollingForUpgrade, setIsPollingForUpgrade] = useState(false);
 
   const [isUploading, setIsUploading] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
@@ -87,19 +85,11 @@ const UpgradePage = () => {
         .limit(1)
         .maybeSingle();
 
-      if (!error) {
-        // Only use existing request if it matches the current requested tier
-        // Otherwise, clear it to create a new one with new reference
-        if (data && requestedTier && data.requested_tier !== requestedTier) {
-          setExistingRequest(null);
-        } else {
-          setExistingRequest(data ?? null);
-        }
-      }
+      if (!error) setExistingRequest(data ?? null);
     };
 
     checkExistingRequest();
-  }, [user?.id, requestedTier]);
+  }, [user?.id]);
 
   // Set requested tier from URL params
   useEffect(() => {
@@ -116,8 +106,6 @@ const UpgradePage = () => {
         const currentPrice = pricing[enrollment.tier].price;
         const priceDiff = targetPrice - currentPrice;
         setAmount(Math.round(priceDiff * 1.1));
-        // Show payment method dialog when landing via URL param
-        setPaymentDialogOpen(true);
         return;
       }
     }
@@ -126,61 +114,14 @@ const UpgradePage = () => {
     setAmount(0);
   }, [enrollment?.tier, pricing, searchParams]);
 
-  // Poll for upgrade completion after card payment
-  useEffect(() => {
-    if (!enrollment || !user) return;
-    
-    const pendingUpgrade = localStorage.getItem('pending_upgrade_payment');
-    if (!pendingUpgrade) return;
-    
-    try {
-      const parsed = JSON.parse(pendingUpgrade);
-      if (Date.now() - parsed.timestamp > 5 * 60 * 1000) {
-        // Expired after 5 minutes
-        localStorage.removeItem('pending_upgrade_payment');
-        return;
-      }
-      
-      setIsPollingForUpgrade(true);
-      
-      const pollInterval = setInterval(async () => {
-        // Check if enrollment tier has been updated
-        const { data: currentEnrollment } = await supabase
-          .from('enrollments')
-          .select('tier')
-          .eq('id', enrollment.id)
-          .single();
-        
-        if (currentEnrollment && currentEnrollment.tier === parsed.tier) {
-          // Upgrade completed!
-          clearInterval(pollInterval);
-          localStorage.removeItem('pending_upgrade_payment');
-          setIsPollingForUpgrade(false);
-          toast.success('Upgrade completed successfully!');
-          navigate('/dashboard', { replace: true });
-        }
-      }, 2000); // Poll every 2 seconds
-      
-      // Stop polling after 60 seconds
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setIsPollingForUpgrade(false);
-      }, 60000);
-      
-      return () => clearInterval(pollInterval);
-    } catch (e) {
-      localStorage.removeItem('pending_upgrade_payment');
-    }
-  }, [enrollment?.id, user?.id]);
-
   // Redirect if highest tier
   useEffect(() => {
     if (isHighestTier) navigate('/dashboard', { replace: true });
   }, [isHighestTier, navigate]);
 
-  // Create request record when landing on page with tier param AND bank transfer selected
+  // Create request record when landing on page with tier param (if no existing request)
   useEffect(() => {
-    if (!user || !enrollment || !requestedTier || existingRequest || requestCreating || !showBankTransfer) return;
+    if (!user || !enrollment || !requestedTier || existingRequest || requestCreating) return;
 
     const createRequest = async () => {
       setRequestCreating(true);
@@ -205,7 +146,7 @@ const UpgradePage = () => {
     };
 
     createRequest();
-  }, [user?.id, enrollment?.id, requestedTier, existingRequest, amount, requestCreating, showBankTransfer]);
+  }, [user?.id, enrollment?.id, requestedTier, existingRequest, amount, requestCreating]);
 
   // Upload receipt when file is selected
   useEffect(() => {
@@ -391,29 +332,6 @@ const UpgradePage = () => {
   const currentIndex = TIER_ORDER.indexOf(enrollment.tier);
   const availableUpgrades = TIER_ORDER.slice(currentIndex + 1);
 
-  // Show processing state when polling for upgrade
-  if (isPollingForUpgrade) {
-    return (
-      <main className="min-h-screen bg-background">
-        <Navbar />
-        <section className="pt-24 pb-12">
-          <div className="container mx-auto px-4 max-w-lg">
-            <div className="glass-card p-8 text-center">
-              <div className="w-16 h-16 rounded-full bg-brand/20 flex items-center justify-center mx-auto mb-6 animate-pulse">
-                <Crown className="w-8 h-8 text-brand" />
-              </div>
-              <h1 className="font-display text-2xl font-bold text-foreground mb-3">Processing Your Upgrade</h1>
-              <p className="text-muted-foreground mb-6">Please wait while we verify your payment...</p>
-              <div className="flex justify-center">
-                <div className="w-8 h-8 border-2 border-brand border-t-transparent rounded-full animate-spin"></div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
   // Persistent backend-controlled state: once receipt is submitted (receipt_url present), show ONLY static review message.
   if (existingRequest?.status === 'pending' && existingRequest?.receipt_url) {
     return (
@@ -472,7 +390,7 @@ const UpgradePage = () => {
   }
 
   // Tier selection screen
-  if (!requestedTier || (requestedTier && paymentDialogOpen && !showBankTransfer)) {
+  if (!requestedTier) {
     return (
       <main className="min-h-screen bg-background">
         <Navbar />
@@ -499,8 +417,6 @@ const UpgradePage = () => {
                     onClick={() => {
                       setRequestedTier(tier);
                       setAmount(finalAmount);
-                      setShowBankTransfer(false);
-                      setExistingRequest(null); // Clear to create fresh request for new tier
                       setPaymentDialogOpen(true);
                     }}
                     className="glass-card p-6 text-left hover:border-brand/40 transition-all"
@@ -527,7 +443,7 @@ const UpgradePage = () => {
             open={paymentDialogOpen}
             onOpenChange={(open) => {
               setPaymentDialogOpen(open);
-              if (!open && !showBankTransfer) setRequestedTier(null);
+              if (!open) setRequestedTier(null);
             }}
             tier={requestedTier}
             tierName={getTierDisplayName(requestedTier)}
@@ -535,17 +451,14 @@ const UpgradePage = () => {
             userEmail={user?.email || ""}
             userName={profile?.full_name || user?.email?.split("@")[0] || "Customer"}
             enrollmentId={enrollment.id}
-            onBankTransfer={() => {
-              setPaymentDialogOpen(false);
-              setShowBankTransfer(true);
-            }}
+            onBankTransfer={() => navigate(`/upgrade?tier=${requestedTier}`)}
           />
         )}
       </main>
     );
   }
 
-  // Bank transfer flow (only shown after explicitly choosing bank transfer)
+  // Confirm + explicit request flow (no auto prompts)
   const canStart = !isUploading && !!requestedTier;
   const resumeNeeded = !!existingRequest && !existingRequest.receipt_url;
   const referenceNumber = existingRequest?.reference_number;

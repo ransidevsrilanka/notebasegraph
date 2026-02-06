@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -178,8 +178,8 @@ const PaidSignup = () => {
         navigate('/pricing');
       }
     } else {
-      // Silent redirect instead of error toast
-      navigate('/pricing', { replace: true });
+      toast.error("No payment found. Please complete payment first.");
+      navigate('/pricing');
     }
   }, [navigate, verifyPayment, verificationError]);
 
@@ -791,13 +791,6 @@ const PaidSignup = () => {
                     {isLoading ? "Creating account..." : "Continue"}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
-
-                  <p className="text-[11px] text-muted-foreground text-center mt-3">
-                    By signing up, you agree to our{' '}
-                    <Link to="/terms-of-service" className="text-brand hover:underline">Terms of Service</Link>
-                    {' '}and{' '}
-                    <Link to="/privacy-policy" className="text-brand hover:underline">Privacy Policy</Link>.
-                  </p>
                 </form>
               </div>
             )}

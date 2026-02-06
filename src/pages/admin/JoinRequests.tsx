@@ -73,9 +73,6 @@ const JoinRequests = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   
-  // Separate state for stats (always shows ALL counts regardless of filter)
-  const [allStats, setAllStats] = useState({ pending: 0, approved: 0, rejected: 0 });
-  
   // Dialog states
   const [selectedRequest, setSelectedRequest] = useState<JoinRequest | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
@@ -91,20 +88,6 @@ const JoinRequests = () => {
   const fetchRequests = async () => {
     setIsLoading(true);
     
-    // FIRST: Get counts for ALL statuses (for stats display - always accurate)
-    const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
-      supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-      supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
-    ]);
-    
-    setAllStats({
-      pending: pendingRes.count || 0,
-      approved: approvedRes.count || 0,
-      rejected: rejectedRes.count || 0,
-    });
-    
-    // THEN: Fetch filtered data for list display
     let query = supabase
       .from('join_requests')
       .select('*')
@@ -223,6 +206,12 @@ const JoinRequests = () => {
     );
   });
 
+  const stats = {
+    pending: requests.filter(r => r.status === 'pending').length,
+    approved: requests.filter(r => r.status === 'approved').length,
+    rejected: requests.filter(r => r.status === 'rejected').length,
+  };
+
   return (
     <main className="min-h-screen bg-background dashboard-theme admin-premium-bg">
       <header className="bg-vault-surface/80 backdrop-blur-sm border-b border-border relative z-10">
@@ -240,18 +229,18 @@ const JoinRequests = () => {
       </header>
 
       <div className="container mx-auto px-4 py-8">
-        {/* Stats - Using allStats which always shows correct counts */}
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-orange-500">{allStats.pending}</p>
+            <p className="text-2xl font-bold text-orange-500">{stats.pending}</p>
             <p className="text-xs text-muted-foreground">Pending</p>
           </div>
           <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-green-500">{allStats.approved}</p>
+            <p className="text-2xl font-bold text-green-500">{stats.approved}</p>
             <p className="text-xs text-muted-foreground">Approved</p>
           </div>
           <div className="glass-card p-4 text-center">
-            <p className="text-2xl font-bold text-red-500">{allStats.rejected}</p>
+            <p className="text-2xl font-bold text-red-500">{stats.rejected}</p>
             <p className="text-xs text-muted-foreground">Rejected</p>
           </div>
         </div>

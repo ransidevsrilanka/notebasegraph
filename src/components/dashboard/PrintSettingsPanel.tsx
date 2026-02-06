@@ -12,7 +12,6 @@ interface PrintSettings {
   model_paper_price_per_page: number;
   base_delivery_fee: number;
   cod_extra_fee: number;
-  print_cost_per_page: number;
 }
 
 const PrintSettingsPanel = () => {
@@ -24,7 +23,6 @@ const PrintSettingsPanel = () => {
   const [modelPaperPrice, setModelPaperPrice] = useState(8);
   const [deliveryFee, setDeliveryFee] = useState(200);
   const [codFee, setCodFee] = useState(50);
-  const [printCost, setPrintCost] = useState(4);
 
   useEffect(() => {
     loadSettings();
@@ -43,7 +41,6 @@ const PrintSettingsPanel = () => {
       setModelPaperPrice(data.model_paper_price_per_page);
       setDeliveryFee(data.base_delivery_fee);
       setCodFee(data.cod_extra_fee);
-      setPrintCost(data.print_cost_per_page || 4);
     }
     setIsLoading(false);
   };
@@ -59,7 +56,6 @@ const PrintSettingsPanel = () => {
         model_paper_price_per_page: modelPaperPrice,
         base_delivery_fee: deliveryFee,
         cod_extra_fee: codFee,
-        print_cost_per_page: printCost,
         updated_at: new Date().toISOString(),
       })
       .eq('id', settings.id);
@@ -87,7 +83,7 @@ const PrintSettingsPanel = () => {
         Print Request Pricing
       </h3>
       
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="notesPrice">Notes Price (per page)</Label>
           <div className="relative">
@@ -113,23 +109,6 @@ const PrintSettingsPanel = () => {
               type="number"
               value={modelPaperPrice}
               onChange={(e) => setModelPaperPrice(parseFloat(e.target.value) || 0)}
-              className="pl-10"
-              min={0}
-              step={0.5}
-            />
-          </div>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="printCost">Print Cost (per page)</Label>
-          <p className="text-xs text-muted-foreground">Your actual printing cost</p>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">Rs.</span>
-            <Input
-              id="printCost"
-              type="number"
-              value={printCost}
-              onChange={(e) => setPrintCost(parseFloat(e.target.value) || 0)}
               className="pl-10"
               min={0}
               step={0.5}

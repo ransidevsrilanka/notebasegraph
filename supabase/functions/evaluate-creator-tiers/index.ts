@@ -81,15 +81,12 @@ Deno.serve(async (req) => {
           }
         }
 
-      // Get paid users count for this creator using ROLLING 30-day window
-      // This ensures fair evaluation regardless of when the creator signed up
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      
+        // Get monthly paid users count for this creator
         const { count: monthlyPaidUsers } = await supabase
           .from('payment_attributions')
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', creator.id)
-        .gte('created_at', thirtyDaysAgo.toISOString());
+          .gte('created_at', currentMonthStart.toISOString());
 
         const monthlyCount = monthlyPaidUsers || 0;
         const currentTierLevel = creator.current_tier_level || 2; // Default Tier 2
@@ -108,18 +105,16 @@ Deno.serve(async (req) => {
         if (newTierLevel !== currentTierLevel) {
           const isPromotion = newTierLevel > currentTierLevel;
           
-          // The tier change takes effect for the NEXT 30-day period
-          // Whether promoted or demoted, give them 30 days at the new tier
-          const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
-          
           // Update the creator's tier
           const { error: updateError } = await supabase
             .from('creator_profiles')
             .update({
               current_tier_level: newTierLevel,
               monthly_paid_users: monthlyCount,
-              // ALWAYS give 30-day protection for the new tier (both promotion AND demotion)
-              tier_protection_until: thirtyDaysFromNow,
+              // If promoted, give 30 days protection for new tier
+              tier_protection_until: isPromotion 
+                ? new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                : null,
             })
             .eq('id', creator.id);
 

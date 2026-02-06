@@ -462,13 +462,13 @@ const CreatorOnboardingTour = ({ referralCode, onComplete }: CreatorOnboardingTo
             {steps[currentStep].content}
           </div>
 
-          {/* Navigation - Fixed overflow with flex-wrap */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* Navigation */}
+          <div className="flex items-center gap-3">
             {currentStep > 0 && (
               <Button
                 variant="outline"
                 onClick={handleBack}
-                className="flex-1 min-w-[100px]"
+                className="flex-1"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back
@@ -477,7 +477,7 @@ const CreatorOnboardingTour = ({ referralCode, onComplete }: CreatorOnboardingTo
             <Button
               variant="brand"
               onClick={handleNext}
-              className="flex-1 min-w-[100px]"
+              className="flex-1"
             >
               {currentStep === steps.length - 1 ? (
                 <>
