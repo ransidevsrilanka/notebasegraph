@@ -1416,6 +1416,8 @@ export type Database = {
           receipt_url: string | null
           rejection_reason: string | null
           request_number: string
+          selected_paper_ids: string[] | null
+          selected_paper_titles: string[] | null
           shipped_at: string | null
           status: string | null
           subject_id: string | null
@@ -1445,6 +1447,8 @@ export type Database = {
           receipt_url?: string | null
           rejection_reason?: string | null
           request_number: string
+          selected_paper_ids?: string[] | null
+          selected_paper_titles?: string[] | null
           shipped_at?: string | null
           status?: string | null
           subject_id?: string | null
@@ -1474,6 +1478,8 @@ export type Database = {
           receipt_url?: string | null
           rejection_reason?: string | null
           request_number?: string
+          selected_paper_ids?: string[] | null
+          selected_paper_titles?: string[] | null
           shipped_at?: string | null
           status?: string | null
           subject_id?: string | null
