@@ -19,6 +19,7 @@ interface PaymentMethodDialogProps {
   userName?: string;
   enrollmentId?: string;
   isNewUser?: boolean;
+  isUpgrade?: boolean; // When true, skip the "already enrolled" check
   onBankTransfer: () => void;
 }
 
@@ -67,6 +68,7 @@ const PaymentMethodDialog = ({
   userName,
   enrollmentId,
   isNewUser = false,
+  isUpgrade = false,
   onBankTransfer,
 }: PaymentMethodDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -74,7 +76,8 @@ const PaymentMethodDialog = ({
   const { enrollment } = useAuth();
 
   // Check if user already has an active enrollment
-  const hasActiveEnrollment = !!enrollment && enrollment.is_active;
+  // Skip this check if we're in upgrade mode (user NEEDS enrollment to upgrade)
+  const hasActiveEnrollment = !isUpgrade && !!enrollment && enrollment.is_active;
 
   // Defensive rendering: avoid runtime crashes that would leave only the overlay visible
   const safeAmount = Number.isFinite(amount) ? amount : 0;

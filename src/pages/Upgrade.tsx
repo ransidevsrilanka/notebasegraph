@@ -535,6 +535,7 @@ const UpgradePage = () => {
             userEmail={user?.email || ""}
             userName={profile?.full_name || user?.email?.split("@")[0] || "Customer"}
             enrollmentId={enrollment.id}
+            isUpgrade={true}
             onBankTransfer={() => {
               setPaymentDialogOpen(false);
               setShowBankTransfer(true);
