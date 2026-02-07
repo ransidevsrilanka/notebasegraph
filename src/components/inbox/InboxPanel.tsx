@@ -43,10 +43,11 @@ const InboxPanel = ({ isOpen, onClose, onMessagesRead }: InboxPanelProps) => {
     if (!user) return;
     setIsLoading(true);
 
+    // Use recipient_user_id to match auth user ID (works for both students and creators)
     const { data } = await supabase
       .from('messages')
       .select('*')
-      .eq('recipient_id', user.id)
+      .eq('recipient_user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50);
 

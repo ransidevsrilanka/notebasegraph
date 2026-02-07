@@ -141,6 +141,7 @@ const CreatorDashboard = () => {
   const [dailyEarnings, setDailyEarnings] = useState<{ date: string; amount: number }[]>([]);
   const [cmoContactInfo, setCmoContactInfo] = useState<{ email?: string; whatsapp?: string; instagram?: string; userId?: string } | null>(null);
   const [telegramChatId, setTelegramChatId] = useState<string>('');
+  const [savedTelegramChatId, setSavedTelegramChatId] = useState<string | null>(null);
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
 
   // Dialog states
@@ -340,6 +341,7 @@ const CreatorDashboard = () => {
 
         setCreatorData(analyticsData);
         setTelegramChatId(creatorProfile.telegram_chat_id || '');
+        setSavedTelegramChatId(creatorProfile.telegram_chat_id || null);
 
         // Fetch discount codes
         const { data: dcData } = await supabase
@@ -583,14 +585,18 @@ const CreatorDashboard = () => {
     
     setIsSavingTelegram(true);
     try {
+      const trimmedId = telegramChatId.trim() || null;
       const { error } = await supabase
         .from('creator_profiles')
-        .update({ telegram_chat_id: telegramChatId.trim() || null })
+        .update({ telegram_chat_id: trimmedId })
         .eq('id', creatorData.id);
 
       if (error) throw error;
 
-      toast.success(telegramChatId.trim() 
+      // Update saved state to match what's now in the database
+      setSavedTelegramChatId(trimmedId);
+      
+      toast.success(trimmedId 
         ? 'Telegram notifications enabled!' 
         : 'Telegram notifications disabled'
       );
@@ -842,10 +848,6 @@ const CreatorDashboard = () => {
                     </a>
                   </Button>
                 )}
-                <Button variant="brand" size="sm" className="gap-2">
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="hidden sm:inline">Chat</span>
-                </Button>
               </div>
             </div>
           </div>
@@ -1091,7 +1093,7 @@ const CreatorDashboard = () => {
             </Button>
           </div>
 
-          {telegramChatId && (
+          {savedTelegramChatId && savedTelegramChatId === telegramChatId.trim() && (
             <div className="mt-3 flex items-center gap-2 text-green-500 text-sm">
               <CheckCircle2 className="w-4 h-4" />
               <span>Connected - You'll receive notifications for commissions and withdrawals</span>

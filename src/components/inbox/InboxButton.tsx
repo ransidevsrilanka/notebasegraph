@@ -15,7 +15,7 @@ const InboxButton = () => {
 
     fetchUnreadCount();
 
-    // Subscribe to realtime changes
+    // Subscribe to realtime changes - use recipient_user_id for auth user matching
     const channel = supabase
       .channel('inbox-messages')
       .on(
@@ -24,7 +24,7 @@ const InboxButton = () => {
           event: '*',
           schema: 'public',
           table: 'messages',
-          filter: `recipient_id=eq.${user.id}`,
+          filter: `recipient_user_id=eq.${user.id}`,
         },
         () => {
           fetchUnreadCount();
@@ -40,10 +40,11 @@ const InboxButton = () => {
   const fetchUnreadCount = async () => {
     if (!user) return;
 
+    // Use recipient_user_id to match auth user ID (works for both students and creators)
     const { count } = await supabase
       .from('messages')
       .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', user.id)
+      .eq('recipient_user_id', user.id)
       .eq('is_read', false);
 
     setUnreadCount(count || 0);

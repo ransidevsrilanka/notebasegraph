@@ -349,6 +349,28 @@ serve(async (req) => {
         if (creatorData.cmo_id) {
           await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
         }
+        
+        // Send Telegram notification to creator for commission earned
+        if (creatorCommissionAmount > 0) {
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                creator_id: creatorId,
+                type: "commission",
+                amount: creatorCommissionAmount,
+                tier: tier,
+              }),
+            });
+          } catch (telegramError) {
+            console.error("Failed to send Telegram notification:", telegramError);
+            // Don't fail the main operation for telegram errors
+          }
+        }
       }
 
       // Update discount code stats if applicable
@@ -486,6 +508,28 @@ serve(async (req) => {
         // Handle CMO commission
         if (creatorData.cmo_id) {
           await updateCMOPayout(supabase, creatorData.cmo_id, final_amount, paymentMonth);
+        }
+        
+        // Send Telegram notification to creator for commission earned
+        if (creatorCommissionAmount > 0) {
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                creator_id: creatorId,
+                type: "commission",
+                amount: creatorCommissionAmount,
+                tier: tier,
+              }),
+            });
+          } catch (telegramError) {
+            console.error("Failed to send Telegram notification:", telegramError);
+            // Don't fail the main operation for telegram errors
+          }
         }
       }
 
@@ -715,6 +759,28 @@ serve(async (req) => {
         if (creatorData.cmo_id) {
           await updateCMOPayout(supabase, creatorData.cmo_id, request.amount, paymentMonthStr);
         }
+        
+        // Send Telegram notification to creator for commission earned
+        if (creatorCommissionAmount > 0) {
+          try {
+            await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({
+                creator_id: creatorId,
+                type: "commission",
+                amount: creatorCommissionAmount,
+                tier: request.tier,
+              }),
+            });
+          } catch (telegramError) {
+            console.error("Failed to send Telegram notification:", telegramError);
+            // Don't fail the main operation for telegram errors
+          }
+        }
       }
 
       // Update join request status
@@ -921,6 +987,28 @@ serve(async (req) => {
           // CMO commission
           if (creatorData.cmo_id) {
             await updateCMOPayout(supabase, creatorData.cmo_id, request.amount, paymentMonthStr);
+          }
+          
+          // Send Telegram notification to creator for commission earned
+          if (creatorCommissionAmount > 0) {
+            try {
+              await fetch(`${supabaseUrl}/functions/v1/send-creator-telegram`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${supabaseServiceKey}`,
+                },
+                body: JSON.stringify({
+                  creator_id: creatorId,
+                  type: "commission",
+                  amount: creatorCommissionAmount,
+                  tier: request.requested_tier,
+                }),
+              });
+            } catch (telegramError) {
+              console.error("Failed to send Telegram notification:", telegramError);
+              // Don't fail the main operation for telegram errors
+            }
           }
         }
       }
