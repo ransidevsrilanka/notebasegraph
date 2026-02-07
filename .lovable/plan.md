@@ -1,397 +1,259 @@
 
-# Critical Platform Fixes - Payment Verification, Data Visibility & Dashboard Metrics
+# Comprehensive Platform Audit & Bug Fixes
 
-## Issues Identified
+## Executive Summary
+This plan addresses 8 critical issues affecting user experience, creator trust, and system integrity. All fixes focus on professional polish and correct functionality.
 
-### 1. Card Payment Marked as Paid Despite Failure (CRITICAL SECURITY)
+---
 
-**Root Cause Analysis:**
-The print request card payment flow uses "deferred creation" - the print request record is only created AFTER payment success. Looking at the code:
+## Issues Identified & Solutions
 
-1. **Frontend** (`PrintRequestDialog.tsx` lines 531-565): The `onCompleted` callback is triggered when PayHere popup closes, calling `finalize-print-request`
-2. **Problem**: PayHere's `onCompleted` callback fires when the popup **COMPLETES**, not when payment **SUCCEEDS**. A failed payment still triggers `onCompleted`!
-
-**Evidence in code (lines 531-565):**
-```typescript
-window.payhere.onCompleted = async (orderId: string) => {
-  console.log("Card payment completed. OrderID:", orderId);
-  // NOW create the print request via edge function (payment confirmed)
-  // ...calls finalize-print-request
-}
-```
-
-The `finalize-print-request` endpoint (lines 661-784) has a verification loop (lines 676-693) BUT:
-```typescript
-// If payment still not confirmed, check if it exists at all
-if (!payment) {
-  // Payment exists but not completed - might still be processing
-  // For card payments, PayHere calls notify async, so we trust the client-side completion
-  console.log("Payment exists but status is:", pendingPayment.status);
-}
-// Then proceeds to create the print request ANYWAY!
-```
-
-This is the bug - it trusts the client-side callback without verifying the actual payment status.
-
-**Solution:**
-1. Do NOT trust PayHere's `onCompleted` callback for success verification
-2. The `finalize-print-request` endpoint must ONLY proceed if `payment.status === 'completed'`
-3. If payment status is not 'completed' after retries, return an error to the client
-4. Client should show appropriate error message
-
-### 2. Pricing Manipulation Prevention
-
-**Current State:**
-- Server-side pricing is already implemented in `calculate-print-price` edge function
-- BUT `finalize-print-request` blindly accepts `order_details` from the client including `totalAmount`
-
-**Solution:**
-- Validate pricing server-side by recalculating from paper IDs
-- Store `selected_paper_ids` in print_requests table for audit and display
-
-### 3. Print Requests Missing Lesson Details
+### 1. "You're Already Enrolled" Popup Showing on Upgrade Page (INCORRECT BEHAVIOR)
 
 **Current Problem:**
-In `PrintRequests.tsx` (line 427):
-```typescript
-<td className="p-3 text-foreground text-sm capitalize">{request.print_type.replace(/_/g, ' ')}</td>
-```
-This shows "model papers only" instead of actual lesson details.
+The `PaymentMethodDialog` component (line 77) checks `hasActiveEnrollment = !!enrollment && enrollment.is_active`. When this is true, it shows the "You're Already Enrolled!" popup with a "Back to Dashboard" button.
 
-**Database has:**
-- `topic_ids` (array of topic UUIDs)
-- `subject_name` (string)
-- No stored paper/lesson titles
+This logic is WRONG for the Upgrade page context:
+- On `/pricing` page: If user has enrollment → show popup (CORRECT)
+- On `/upgrade` page: If user has enrollment → they NEED the enrollment to upgrade (INCORRECT - shows popup)
+
+The popup should only appear on the **Pricing page**, not the **Upgrade page**.
+
+**Root Cause (PaymentMethodDialog.tsx lines 76-77, 319-348):**
+```typescript
+const hasActiveEnrollment = !!enrollment && enrollment.is_active;
+// ...
+{hasActiveEnrollment ? (
+  <div className="py-6 flex flex-col items-center">
+    <CheckCircle2 className="w-16 h-16 text-green-500 mb-4" />
+    <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+  </div>
+) : (
+  // Show payment options
+)}
+```
 
 **Solution:**
-1. Add `selected_paper_titles` JSON field to store actual paper names on creation
-2. In PrintRequests admin, show paper titles instead of generic "Type"
+Add an `isUpgrade` prop to `PaymentMethodDialog` and only show the enrollment check popup when NOT in upgrade mode.
 
-### 4. PayHere Commission Missing for Print Requests
-
-**Current Dashboard (lines 748-749):**
-```typescript
-const payhereCommission = stats.cardPayments * 0.033; // 3.3% PayHere fee
-```
-
-This only considers enrollment card payments (`stats.cardPayments`), NOT print request card payments.
-
-**Solution:**
-Add `printCardRevenue` stat and include it in PayHere commission calculation:
-```typescript
-const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033;
-```
-
-### 5. Join Requests Stats Not Working with Filters
-
-**Current Code (lines 209-213):**
-```typescript
-const stats = {
-  pending: requests.filter(r => r.status === 'pending').length,
-  approved: requests.filter(r => r.status === 'approved').length,
-  rejected: requests.filter(r => r.status === 'rejected').length,
-};
-```
-
-**Problem:** When `statusFilter === 'pending'`, only pending requests are fetched (line 97), so `requests` array has no approved/rejected items.
-
-**Solution:**
-Fetch all requests for stats, but filter for display. OR compute stats from a separate query that ignores the filter.
+**Files to Modify:**
+- `src/components/PaymentMethodDialog.tsx` - Add `isUpgrade?: boolean` prop, disable enrollment check when true
+- `src/pages/Upgrade.tsx` - Pass `isUpgrade={true}` to PaymentMethodDialog
 
 ---
 
-## Implementation Plan
+### 2. Creator Inbox Notifications Not Appearing
 
-### Part 1: Fix Payment Verification (CRITICAL)
-
-**File: `supabase/functions/payhere-checkout/index.ts`**
-
-Update `finalize-print-request` endpoint to REQUIRE verified payment:
-
+**Current Problem:**
+The `InboxButton.tsx` and `InboxPanel.tsx` components filter messages by:
 ```typescript
-// Line 694-714 - Replace the "trust client" logic with strict verification
-if (!payment) {
-  const { data: pendingPayment } = await supabase
-    .from("payments")
-    .select("status, failure_reason")
-    .eq("order_id", order_id)
-    .maybeSingle();
-  
-  if (!pendingPayment) {
-    return new Response(
-      JSON.stringify({ 
-        error: "Payment not found", 
-        success: false,
-        user_message: "Payment verification failed. Please try again or contact support."
-      }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-  
-  // CRITICAL: Payment exists but NOT completed - DO NOT proceed
-  if (pendingPayment.status !== 'completed') {
-    const failureMsg = pendingPayment.failure_reason || "Payment was not successful";
-    return new Response(
-      JSON.stringify({ 
-        error: "Payment not verified", 
-        success: false,
-        payment_status: pendingPayment.status,
-        user_message: failureMsg
-      }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-}
+.eq('recipient_id', user.id)  // Uses auth user.id
 ```
 
-**File: `src/components/dashboard/PrintRequestDialog.tsx`**
-
-Update `onCompleted` handler to properly handle verification failures:
-
-```typescript
-window.payhere.onCompleted = async (orderId: string) => {
-  console.log("PayHere popup completed. OrderID:", orderId);
-  
-  const details = orderDetailsRef.current;
-  if (!details) {
-    toast.error("Order details not found. Please contact support.");
-    setIsLoading(false);
-    return;
-  }
-  
-  try {
-    const { data: result, error: createError } = await supabase.functions.invoke('payhere-checkout/finalize-print-request', {
-      body: {
-        order_id: orderId,
-        user_id: user.id,
-        order_details: details,
-      }
-    });
-    
-    if (createError || !result?.success) {
-      // Payment verification failed - show specific error
-      const errorMsg = result?.user_message || "Payment could not be verified. Please check your payment status.";
-      console.error('Payment verification failed:', result);
-      toast.error(errorMsg);
-      setIsLoading(false);
-      return;
-    }
-    
-    toast.success("Payment successful! Your print order is confirmed.");
-    loadExistingOrders();
-    resetForm();
-    setViewMode('orders');
-  } catch (err) {
-    console.error('Error finalizing print request:', err);
-    toast.error("Failed to verify payment. Please contact support with order ID: " + orderId);
-  }
-  
-  setIsLoading(false);
-};
-```
-
-### Part 2: Store and Display Paper Details
-
-**Database Migration:**
+But the database trigger `notify_creator_on_commission()` inserts messages with:
 ```sql
-ALTER TABLE print_requests 
-ADD COLUMN IF NOT EXISTS selected_paper_ids UUID[] DEFAULT '{}',
-ADD COLUMN IF NOT EXISTS selected_paper_titles TEXT[] DEFAULT '{}';
+recipient_id = NEW.creator_id,  -- Creator profile UUID (NOT auth user UUID)
+recipient_user_id = creator_user_id  -- Auth user UUID
 ```
 
-**File: `supabase/functions/payhere-checkout/index.ts`**
+**Evidence from database:**
+- Message has `recipient_id = f1783e89...` (creator profile ID)
+- Message has `recipient_user_id = 6e511d75...` (auth user ID)
+- Query filters by `user.id` which is `6e511d75...`
+- But query uses `recipient_id` NOT `recipient_user_id`
 
-Update `finalize-print-request` to store paper details:
-```typescript
-const { data: printRequest, error: insertError } = await supabase
-  .from("print_requests")
-  .insert({
-    // ...existing fields
-    selected_paper_ids: order_details.selectedPapers || [],
-    selected_paper_titles: order_details.selectedPaperTitles || [],
-  })
-```
+**The mismatch:** Creator messages are stored with `recipient_id = creator_profile.id`, but the UI queries with `recipient_id = auth.user.id`.
 
-**File: `src/components/dashboard/PrintRequestDialog.tsx`**
+**Solution:**
+Update `InboxButton.tsx` and `InboxPanel.tsx` to query by `recipient_user_id` instead of (or in addition to) `recipient_id`.
 
-Include paper titles in order details:
-```typescript
-const orderDetails: OrderDetails = {
-  // ...existing fields
-  selectedPaperTitles: papers.filter(p => selectedPapers.includes(p.id)).map(p => p.title),
-};
-```
-
-**File: `src/pages/admin/PrintRequests.tsx`**
-
-Replace Type column with Paper details:
-```typescript
-// Line 409: Change "Type" header to "Papers"
-<th className="text-left p-3 text-muted-foreground text-sm font-medium">Papers</th>
-
-// Line 427: Display paper titles
-<td className="p-3 text-foreground text-sm">
-  {(request as any).selected_paper_titles?.length > 0 
-    ? (request as any).selected_paper_titles.length === 1
-      ? (request as any).selected_paper_titles[0]
-      : `${(request as any).selected_paper_titles.length} papers`
-    : request.print_type.replace(/_/g, ' ')
-  }
-</td>
-```
-
-### Part 3: Add Print Card Revenue to PayHere Commission
-
-**File: `src/pages/admin/AdminDashboard.tsx`**
-
-Add `printCardRevenue` to Stats interface and fetch:
-```typescript
-// In Stats interface (line 93):
-printCardRevenue: number;
-
-// In fetchStats function - add query for print card payments:
-const { data: printCardData } = await supabase
-  .from('print_requests')
-  .select('total_amount')
-  .eq('payment_method', 'card')
-  .eq('payment_status', 'paid');
-
-const printCardRevenue = printCardData?.reduce((sum, p) => sum + Number(p.total_amount || 0), 0) || 0;
-
-// Update PayHere commission calculation (line 748):
-const payhereCommission = (stats.cardPayments + stats.printCardRevenue) * 0.033;
-```
-
-### Part 4: Fix Join Requests Stats with Filters
-
-**File: `src/pages/admin/JoinRequests.tsx`**
-
-Compute stats from ALL requests regardless of filter:
-```typescript
-// Add separate state for all requests stats
-const [allRequestsStats, setAllRequestsStats] = useState({ pending: 0, approved: 0, rejected: 0 });
-
-// In fetchRequests, always fetch stats from all records:
-const fetchRequests = async () => {
-  setIsLoading(true);
-  
-  // FIRST: Get counts for ALL statuses (for stats display)
-  const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
-    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-    supabase.from('join_requests').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
-  ]);
-  
-  setAllRequestsStats({
-    pending: pendingRes.count || 0,
-    approved: approvedRes.count || 0,
-    rejected: rejectedRes.count || 0,
-  });
-  
-  // THEN: Fetch filtered data for list display
-  let query = supabase
-    .from('join_requests')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (statusFilter !== 'all') {
-    query = query.eq('status', statusFilter);
-  }
-  // ...rest of fetch logic
-};
-
-// Use allRequestsStats instead of computed stats in the UI (line 233-245)
-```
-
-### Part 5: Server-Side Price Validation (Security Hardening)
-
-**File: `supabase/functions/payhere-checkout/index.ts`**
-
-Add price validation in `finalize-print-request`:
-```typescript
-// After verifying payment, validate the price matches database records
-const { data: printSettings } = await supabase
-  .from('print_settings')
-  .select('model_paper_price_per_page, base_delivery_fee')
-  .eq('is_active', true)
-  .single();
-
-if (!printSettings) {
-  return new Response(
-    JSON.stringify({ error: "Print settings not configured", success: false }),
-    { status: 500, headers: corsHeaders }
-  );
-}
-
-// Verify page count from database (not from client)
-const { data: paperData } = await supabase
-  .from('notes')
-  .select('page_count')
-  .in('id', order_details.selectedPapers);
-
-const verifiedPageCount = paperData?.reduce((sum, p) => sum + (p.page_count || 1), 0) || 0;
-const expectedPrice = (verifiedPageCount * printSettings.model_paper_price_per_page) + printSettings.base_delivery_fee;
-
-// Allow small rounding tolerance
-if (Math.abs(expectedPrice - order_details.totalAmount) > 10) {
-  console.error('Price mismatch detected:', { expected: expectedPrice, received: order_details.totalAmount });
-  await notifySecurityAlert(supabaseUrl, supabaseServiceKey, {
-    alertType: "Price Manipulation Attempt",
-    details: `Expected: ${expectedPrice}, Received: ${order_details.totalAmount}`,
-    userId: user_id,
-  });
-  return new Response(
-    JSON.stringify({ error: "Price validation failed", success: false }),
-    { status: 400, headers: corsHeaders }
-  );
-}
-
-// Use verified values
-order_details.totalPages = verifiedPageCount;
-order_details.totalAmount = expectedPrice;
-```
+**Files to Modify:**
+- `src/components/inbox/InboxButton.tsx` - Change filter to use `recipient_user_id`
+- `src/components/inbox/InboxPanel.tsx` - Change query to use `recipient_user_id`
 
 ---
 
-## Summary of Files to Modify
+### 3. Telegram "Connected" Status Showing Before Save
+
+**Current Problem (CreatorDashboard.tsx lines 1094-1099):**
+```typescript
+{telegramChatId && (
+  <div className="mt-3 flex items-center gap-2 text-green-500 text-sm">
+    <CheckCircle2 className="w-4 h-4" />
+    <span>Connected - You'll receive notifications...</span>
+  </div>
+)}
+```
+
+The `telegramChatId` state is populated from user input, NOT from a confirmed database save. So typing in the input shows "Connected" immediately.
+
+**Solution:**
+Track the SAVED Telegram ID separately from the input value. Only show "Connected" if the saved value matches the input and is non-empty.
+
+**Files to Modify:**
+- `src/pages/creator/CreatorDashboard.tsx` - Add `savedTelegramChatId` state, update "Connected" condition
+
+---
+
+### 4. Creator Telegram Notifications Not Being Sent
+
+**Current Problem:**
+The `send-creator-telegram` edge function exists and is configured, but there are no logs, suggesting it's either:
+1. Not being called
+2. Failing silently
+3. The bot token is incorrect
+
+**Analysis:**
+- `CREATOR_TELEGRAM_BOT_TOKEN` secret exists
+- `process-withdrawal/index.ts` calls `send-creator-telegram` (line 13) ✅
+- BUT: `payhere-checkout` does NOT call it for commission notifications ❌
+
+When a payment is processed, the database trigger creates an inbox message, but no Telegram notification is sent.
+
+**Solution:**
+Add a call to `send-creator-telegram` in the `payhere-checkout` notify handler after commission is attributed to the creator.
+
+**Files to Modify:**
+- `supabase/functions/payhere-checkout/index.ts` - Add Telegram notification after commission attribution
+
+---
+
+### 5. CMO Chat Button Not Working
+
+**Current Problem (CreatorDashboard.tsx lines 845-848):**
+```typescript
+<Button variant="brand" size="sm" className="gap-2">
+  <MessageSquare className="w-4 h-4" />
+  <span className="hidden sm:inline">Chat</span>
+</Button>
+```
+
+The Chat button has no `onClick` handler and no routing. It's just a static button that does nothing.
+
+**Solution Options:**
+1. Implement an in-app chat system (complex)
+2. Link to an existing messaging system
+3. Remove the button if chat isn't implemented
+4. Add a modal explaining how to contact CMO (email/WhatsApp/Instagram already shown)
+
+**Recommended:** Since email, WhatsApp, and Instagram buttons already exist, the Chat button is redundant. Remove it or implement a simple "Contact via..." modal.
+
+**Files to Modify:**
+- `src/pages/creator/CreatorDashboard.tsx` - Remove non-functional Chat button or add onClick handler
+
+---
+
+### 6. Purge All Data Button Audit
+
+**Current Status:**
+The `admin-purge-data` edge function exists with comprehensive logic. Based on the project memories, it:
+- Requires "DELETE ALL" confirmation
+- Requires 2FA/OTP verification
+- Clears 16+ tables
+- Preserves admin roles
+- Clears storage buckets (except notes)
+
+**Verification Needed:**
+Check if the purge button in the dashboard correctly calls this function with proper safeguards.
+
+**Files to Check:**
+- `src/pages/admin/AdminDashboard.tsx` - Verify purge functionality exists and works
+- `supabase/functions/admin-purge-data/index.ts` - Confirm logic is complete
+
+---
+
+### 7. General Audit: Ensure Everything Has Purpose
+
+**Items to Review:**
+1. **Unused Features:** Remove any dead code or non-functional buttons
+2. **Error Handling:** Ensure all operations have proper error messages
+3. **Loading States:** Verify all async operations show loading indicators
+4. **Empty States:** Ensure tables/lists show appropriate messages when empty
+5. **Consistency:** Button styles, spacing, and terminology should be consistent
+
+---
+
+### 8. Professional Polish Checklist
+
+**UI/UX Improvements:**
+- Remove "Chat" button or implement it properly
+- Fix Telegram "Connected" status to only show after successful save
+- Ensure all toast messages are professional and helpful
+- Verify all error messages are user-friendly
+
+**Backend Reliability:**
+- Add Telegram notifications for commissions
+- Fix inbox filtering for creators
+- Verify all notification triggers are working
+
+---
+
+## Implementation Summary
 
 | File | Changes |
 |------|---------|
-| `supabase/functions/payhere-checkout/index.ts` | Fix payment verification, add price validation, store paper titles |
-| `src/components/dashboard/PrintRequestDialog.tsx` | Handle verification failures properly, include paper titles |
-| `src/pages/admin/PrintRequests.tsx` | Show paper titles instead of generic Type |
-| `src/pages/admin/JoinRequests.tsx` | Fix stats to show all statuses regardless of filter |
-| `src/pages/admin/AdminDashboard.tsx` | Add print card revenue to PayHere commission |
-| Database Migration | Add `selected_paper_ids` and `selected_paper_titles` columns |
+| `src/components/PaymentMethodDialog.tsx` | Add `isUpgrade` prop to disable enrollment check on upgrade flows |
+| `src/pages/Upgrade.tsx` | Pass `isUpgrade={true}` to PaymentMethodDialog |
+| `src/components/inbox/InboxButton.tsx` | Change filter from `recipient_id` to `recipient_user_id` |
+| `src/components/inbox/InboxPanel.tsx` | Change query from `recipient_id` to `recipient_user_id` |
+| `src/pages/creator/CreatorDashboard.tsx` | Fix Telegram "Connected" status logic; Remove/fix Chat button |
+| `supabase/functions/payhere-checkout/index.ts` | Add call to `send-creator-telegram` on commission |
 
 ---
 
-## Database Migration Required
+## Technical Details
 
-```sql
--- Add columns for storing paper selection details
-ALTER TABLE print_requests 
-ADD COLUMN IF NOT EXISTS selected_paper_ids UUID[] DEFAULT '{}',
-ADD COLUMN IF NOT EXISTS selected_paper_titles TEXT[] DEFAULT '{}';
+### PaymentMethodDialog Fix
+```typescript
+interface PaymentMethodDialogProps {
+  // ...existing props
+  isUpgrade?: boolean; // NEW: Skip enrollment check for upgrades
+}
+
+// In component:
+const showEnrollmentCheck = hasActiveEnrollment && !isUpgrade;
 ```
 
----
+### Inbox Filter Fix
+```typescript
+// InboxButton.tsx line 27 & InboxPanel.tsx line 49
+// Change from:
+.eq('recipient_id', user.id)
+// To:
+.eq('recipient_user_id', user.id)
+```
 
-## Security Improvements Summary
+### Telegram Status Fix
+```typescript
+// Track saved vs unsaved state
+const [savedTelegramId, setSavedTelegramId] = useState<string | null>(null);
+const [telegramChatId, setTelegramChatId] = useState('');
 
-1. **Payment Verification**: Never trust client-side callbacks; always verify server-side
-2. **Price Validation**: Recalculate prices from database records, not client data
-3. **Audit Trail**: Store paper IDs for verification and display
-4. **Alert System**: Notify on potential manipulation attempts
+// On fetch:
+setSavedTelegramId(creatorProfile.telegram_chat_id || null);
+setTelegramChatId(creatorProfile.telegram_chat_id || '');
+
+// On save success:
+setSavedTelegramId(telegramChatId.trim() || null);
+
+// In UI - only show connected if saved matches input:
+{savedTelegramId && savedTelegramId === telegramChatId && (
+  <div className="mt-3 flex items-center gap-2 text-green-500 text-sm">
+    <CheckCircle2 className="w-4 h-4" />
+    <span>Connected</span>
+  </div>
+)}
+```
 
 ---
 
 ## Testing Checklist
 
-- [ ] Card payment failure shows appropriate error (not marked as paid)
-- [ ] Successful card payment correctly creates print request
-- [ ] Print requests show actual paper titles in admin view
-- [ ] Join requests stats show correct counts regardless of filter
-- [ ] PayHere commission includes print request card payments
-- [ ] Price manipulation attempt is blocked and logged
-- [ ] All existing functionality continues to work
+- [ ] Upgrade page shows payment options (not "Already Enrolled" popup)
+- [ ] Pricing page shows "Already Enrolled" for enrolled users
+- [ ] Creator inbox shows commission notifications
+- [ ] Telegram "Connected" only shows after saving
+- [ ] Creator receives Telegram notification on commission
+- [ ] CMO contact section works (email, WhatsApp, Instagram buttons)
+- [ ] Purge data function works with proper safeguards
+- [ ] All buttons have a purpose and functionality
